@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QToolTip,
     QSlider,
     QTextEdit,
+    QDialog,
 )
 from PyQt6.QtCore import Qt, QTimer, QPointF, QLineF, QRectF
 from PyQt6.QtGui import QPen, QBrush, QColor, QFont, QPainter
@@ -130,6 +131,52 @@ class WaypointItem(QGraphicsEllipseItem):
             self.parent_window.show_info(self.info_text)
             event.accept()
         super().mousePressEvent(event)
+
+
+# Custom Dialog Klasse für konsistente QSS-Anwendung
+class CustomMessageBox(QDialog):
+    """
+    Ein eigener Dialog, der das "Projekt: Piep" QSS korrekt anwendet,
+    da QMessageBox oft Probleme macht.
+    """
+
+    def __init__(self, title, text, icon_type="warning", parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle(title)
+
+        # Wichtig: Setzt den ObjektNamen für das QSS
+        self.setObjectName("CustomMessageBox")
+
+        # Verhindert, dass der Benutzer die Größe ändert
+        self.setFixedSize(350, 150)
+
+        # Hauptlayout
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+
+        # 1. Titel-Label (optional, wenn der Fenstertitel reicht, aber gut für Styling)
+        # title_label = QLabel(title)
+        # title_label.setObjectName("DialogTitleLabel")
+        # layout.addWidget(title_label)
+
+        # 2. Text-Label
+        self.text_label = QLabel(text)
+        self.text_label.setObjectName("DialogTextLabel")
+        self.text_label.setWordWrap(True)  # Wichtig für lange Texte
+        layout.addWidget(self.text_label, 1)  # Mit Stretch
+
+        # 3. Knopf-Layout
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()  # Knöpfe nach rechts schieben
+
+        self.ok_button = QPushButton("OK")
+        self.ok_button.setObjectName("DialogOKButton")  # Für QSS
+        self.ok_button.clicked.connect(self.accept)  # Schließt den Dialog
+        button_layout.addWidget(self.ok_button)
+
+        layout.addLayout(button_layout)
 
 
 # 4. Das Hauptfenster
@@ -335,11 +382,14 @@ class MainWindow(QMainWindow):
     def on_start(self):
         """Startet die Simulation."""
         if self.is_running or len(self.waypoints) < 2:
-            print(
-                "Nicht genügend Wegpunkte (min 2) oder Simulation läuft bereits."
+            msg = CustomMessageBox(
+                "Simulation kann nicht starten",
+                "Bitte setzen Sie mindestens zwei Wegpunkte (Start und Ziel).",
+                parent=self,
             )
-            return
+            msg.exec()  # Führt den Dialog aus
 
+            return  # Funktion hier abbrechen
         print(
             f"Simulation gestartet. Geschwindigkeit: {self.actor_speed} px/s"
         )
@@ -586,6 +636,37 @@ if __name__ == "__main__":
             border: 1px solid {COLOR_BORDER.name()};
             border-radius: 4px;
         }}
+        CustomMessageBox#CustomMessageBox {
+            background-color: #FFFFFF; /* Weißer Hintergrund */
+            border: 2px solid #00B0D0; /* Türkiser Akzent-Rand */
+            border-radius: 4px;
+        }
+
+        /* Der Text in unserem Dialog */
+        CustomMessageBox QLabel#DialogTextLabel {
+            color: #333333; /* Dunkler Text */
+            background-color: transparent; /* Wichtig, damit der BG nicht übermalt wird */
+            font-size: 10pt;
+        }
+
+        /* Der OK-Knopf in unserem Dialog */
+        CustomMessageBox QPushButton#DialogOKButton {
+            /* Wir verwenden denselben Stil wie unsere "Stop/Reset"-Knöpfe */
+            background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                            stop:0 #00B0D0, stop:1 #0090C0);
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            font-size: 10pt;
+            font-weight: bold;
+            border-radius: 4px;
+            min-width: 80px;
+        }
+
+        CustomMessageBox QPushButton#DialogOKButton:hover {
+            background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                            stop:0 #00C0E0, stop:1 #00A0C0);
+        }
         """
     )
 
