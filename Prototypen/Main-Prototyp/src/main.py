@@ -128,9 +128,15 @@ class AutoFitGraphicsView(QGraphicsView):
         # Stattdessen manuell nach Bedarf aufrufen.
         if self.scene() and not self.sceneRect().isEmpty():
             # Wähle die korrekte Ansicht basierend auf dem Zustand
-            if self.window().is_q1_maximized and self.window().item_q1:
+            # self.window() greift auf die MainWindow-Instanz zu
+            main_window = self.window()
+            if (
+                main_window
+                and main_window.is_q1_maximized
+                and main_window.item_q1
+            ):
                 self.fitInView(
-                    self.window().item_q1.boundingRect(),
+                    main_window.item_q1.boundingRect(),
                     Qt.AspectRatioMode.KeepAspectRatio,
                 )
             else:
@@ -272,7 +278,9 @@ class MainWindow(QMainWindow):
         self.minimize_q1_button.setObjectName(
             "MinimizeButton"
         )  # Gleicher Stil
-        # <<< GEÄNDERT: Button verbindet sich mit Q1-Zoom-Funktion >>>
+
+        # <<< KORREKTUR 1: Button-Verbindung >>>
+        # Dieser Button muss den Q1-Zoom umschalten
         self.minimize_q1_button.clicked.connect(self.toggle_q1_fullscreen)
         self.minimize_q1_button.hide()
         layout.addWidget(self.minimize_q1_button)
@@ -368,9 +376,12 @@ class MainWindow(QMainWindow):
 
         if self.is_q1_maximized:
             # --- Q1 MAXIMIEREN ---
-            self.item_q2.hide()
-            self.item_q3.hide()
-            self.item_q4.hide()
+            if self.item_q2:
+                self.item_q2.hide()
+            if self.item_q3:
+                self.item_q3.hide()
+            if self.item_q4:
+                self.item_q4.hide()
 
             # Q1-Minimieren-Button anzeigen
             self.minimize_q1_button.show()
@@ -387,15 +398,17 @@ class MainWindow(QMainWindow):
             else:
                 # Fall B: Waren in der MINIATUR-Ansicht
                 self.bottom_left_group.setTitle("Kassenbereich (Vollbild)")
-                self.bottom_left_group.setEnabled(
-                    False
-                )  # Klick auf GroupBox deaktivieren
+                # <<< KORREKTUR 2: Diese Zeile entfernt >>>
+                # self.bottom_left_group.setEnabled(False) # Deaktiviert Klick auf GroupBox
 
         else:
             # --- Q1 MINIMIEREN (Zurück zum vorherigen Zustand) ---
-            self.item_q2.show()
-            self.item_q3.show()
-            self.item_q4.show()
+            if self.item_q2:
+                self.item_q2.show()
+            if self.item_q3:
+                self.item_q3.show()
+            if self.item_q4:
+                self.item_q4.show()
 
             self.minimize_q1_button.hide()
 
@@ -411,42 +424,20 @@ class MainWindow(QMainWindow):
             else:
                 # Fall B: Zurück zur MINIATUR-Ansicht
                 self.bottom_left_group.setTitle("Live-Simulation (Miniatur)")
-                self.bottom_left_group.setEnabled(
-                    True
-                )  # Klick auf GroupBox aktivieren
+                # <<< KORREKTUR 2: Diese Zeile entfernt >>>
+                # self.bottom_left_group.setEnabled(True) # Klick auf GroupBox aktivieren
 
     def toggle_simulation_fullscreen(self):
         """
         Schaltet die Sichtbarkeit der Quadranten um (GESAMTE KARTE).
-        Wird NICHT aufgerufen, wenn Q1 maximiert ist (da GroupBox deaktiviert ist).
+        Wird von der GroupBox oder dem Karten-Minimieren-Button ausgelöst.
         """
 
-        # Wenn Q1 maximiert ist, soll der Klick auf den "Zurück"-Button
-        # (der mit DIESER Funktion verbunden ist, ups, Fehler)
-        # eigentlich Q1 minimieren.
-        # Besser: Wir trennen die Logik.
-
-        # --- Logik-Korrektur ---
-        # self.minimize_q1_button MUSS mit self.toggle_q1_fullscreen verbunden sein.
-        # self.minimize_sim_button MUSS mit self.toggle_simulation_fullscreen verbunden sein.
-        # self.item_q1 MUSS mit self.toggle_q1_fullscreen verbunden sein.
-        # self.bottom_left_group MUSS mit self.toggle_simulation_fullscreen verbunden sein.
-
-        # (Ich korrigiere das im Code oben bei der Erstellung der Buttons)
-        # Ah, ich sehe in meinem Code oben, dass ich `minimize_q1_button`
-        # fälschlicherweise mit `toggle_simulation_fullscreen` verbunden habe.
-        # Das ist der Fehler aus der letzten Iteration.
-        # Ich korrigiere das jetzt gedanklich und im finalen Code.
-        # `self.minimize_q1_button.clicked.connect(self.toggle_q1_fullscreen)` ist KORREKT.
-
-        # Diese Funktion wird also NUR von der GroupBox oder dem Karten-Minimieren-Button ausgelöst.
-        # Wenn Q1 maximiert ist, ist die GroupBox deaktiviert.
-        # Wenn Q1 maximiert ist, ist der Karten-Minimieren-Button versteckt.
-        # -> Diese Funktion kann also NICHT aufgerufen werden, wenn Q1 maximiert ist.
-        # -> Die Logik ist einfacher:
-
+        # Wenn Q1 maximiert ist, soll ein Klick auf die GroupBox
+        # (die jetzt nicht mehr deaktiviert ist)
+        # AUCH als "Zurück" von Q1 fungieren.
         if self.is_q1_maximized:
-            # Sollte nie passieren, aber als Sicherheit
+            self.toggle_q1_fullscreen()
             return
 
         self.is_sim_maximized = not self.is_sim_maximized
@@ -459,7 +450,6 @@ class MainWindow(QMainWindow):
             self.minimize_sim_button.show()
             self.bottom_left_group.setTitle("Live-Simulation (Vollbild)")
 
-            # Q1 bleibt klickbar (Absicht!)
             if self.item_q1:
                 self.item_q1.setEnabled(True)
 
@@ -475,7 +465,6 @@ class MainWindow(QMainWindow):
             if self.item_q1:
                 self.item_q1.setEnabled(True)
 
-            # Sicherstellen, dass die Ansicht zurückgesetzt wird
             self.sim_view.fitInView(
                 self.sim_scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio
             )
