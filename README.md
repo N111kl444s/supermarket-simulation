@@ -1,14 +1,16 @@
-# Gravity Rollers - Murmel-Simulation (Berufsschulprojekt FIAE 2025)
+# Piep - Der Takt der Kasse | Supermarkt-Simulation (Berufsschulprojekt FIAE 2026)
 
-Dieses Repository enthält das Unreal Engine 5 Projekt "Gravity Rollers", eine Murmel-Simulation, die im Rahmen der Projektarbeit für Fachinformatiker Anwendungsentwicklung an der Berufsschule Technik in Rostock entwickelt wird.
+Dieses Repository enthält das Python-Projekt "Piep - Der Takt der Kasse", eine Supermarkt-Simulation, die im Rahmen der Projektarbeit für Fachinformatiker Anwendungsentwicklung an der Berufsschule Technik in Rostock entwickelt wird.
 
-## Projektanfroderungen
-* [Anforderungsdokument](https://github.com/Benny159/GravatyRollers/blob/main/Documentation/REQUIREMENTS.md)
-* [IHK-Standards](https://www.ihk.de/rostock/aus-und-weiterbildung/pruefungen/abschlusspruefung/dokumentation-projektarbeit-2646884)
+## Projektanforderungen
+
+* [Anforderungsdokument (REQUIREMENTS.md)](docs/REQUIREMENTS.md) (Basierend auf dem Projektauftrag)
+* [Clean-Code-Kriterien (CLEAN_CODE.md)](docs/CLEAN_CODE.md) (Unsere Definition nach LF 11)
+* [IHK-Standards (Externer Link)](https://www.ihk.de/rostock/aus-und-weiterbildung/pruefungen/abschlusspruefung/dokumentation-projektarbeit-2646884)
 
 ## 📝 Projektbeschreibung
 
-Die Anwendung ist eine **zeitabhängige Simulation** einer Murmelbahn in einem Kinderzimmer-Setting. Der Benutzer kann die physikalischen Parameter für **mehrere Murmeln individuell konfigurieren**, um deren Rennen auf einer prozedural generierten Strecke zu simulieren und die Ergebnisse direkt miteinander zu vergleichen. Die Anwendung dient dazu, die Auswirkungen verschiedener Eingabeparameter und Zufallsfaktoren auf das Ergebnis eines physikalischen Systems visuell darzustellen und auszuwerten.
+Die Anwendung ist eine **zeitabhängige, diskrete Ereignissimulation** eines komplexen Supermarkt-Kassenbereichs. Der Benutzer kann die Rahmenbedingungen (Parameter) für den Supermarktbetrieb konfigurieren, um die Auswirkungen auf Warteschlangen, Kassenauslastung und Kundenzufriedenheit zu analysieren. Die Anwendung dient dazu, die Auswirkungen verschiedener Eingabeparameter und Zufallsfaktoren auf ein Warteschlangensystem visuell darzustellen und auszuwerten.
 
 Das Projekt wird entwickelt, um alle funktionalen und nicht-funktionalen Anforderungen des Projektauftrags zu erfüllen.
 
@@ -16,69 +18,70 @@ Das Projekt wird entwickelt, um alle funktionalen und nicht-funktionalen Anforde
 
 Das Projekt implementiert die folgenden, im Projektauftrag geforderten Features:
 
-*  **Physik-Simulation:** Eine realistische, zeitabhängige Simulation, bei der die Zeit gemessen wird, die Murmeln für eine Strecke benötigen.
-* **Mehrfach-Konfiguration:** Anwender können mehrere Murmeln für einen einzigen Simulationslauf anlegen und deren physikalische Eigenschaften individuell einstellen.
-*  **Umfassende Eingabeparameter:** Für jede Murmel können **mindestens sieben physikalische Eigenschaften** über eine Benutzeroberfläche eingestellt werden, um deren Verhalten zu beeinflussen. Dazu gehören unter anderem:
-    * **Größe (`Size`):** Verändert das Volumen und die Kollisionsabfrage der Murmel.
-    * **Masse (`Weight` & `MaterialDensity`):** Beeinflusst die Trägheit und wie die Murmel auf Kräfte reagiert.
-    * **Reibung (`Friction`):** Bestimmt, wie stark die Murmel vom Untergrund abgebremst wird.
-    * **Elastizität (`Restitution`):** Definiert, wie stark die Murmel bei Kollisionen abprallt ("Bounciness").
-    * **Winkeldämpfung (`AngularDamping`):** Steuert, wie schnell die Rotation der Murmel verlangsamt wird.
-    * **Massenverteilung (`MassDistribution`):** Erlaubt eine exzentrische Masseverteilung, die zu einem "Eiern" der Murmel führt.
-    * **Oberflächenrauheit (`SurfaceRoughness`):** Simuliert den Luftwiderstand bzw. die Dämpfung durch die Oberfläche.
-*  **Zufallsereignisse:** Die Simulation integriert mindestens drei verschiedene Zufallsverteilungen, um unvorhersehbare Ereignisse zu modellieren:
-    * **Gleichverteilung:** Für die prozedurale und faire Generierung der Rennstrecke aus einem Pool vordefinierter Segmente.
-    * **Normalverteilung:** Zur Simulation von variablen, leichten Umwelteinflüssen wie "Windstößen", die kontinuierlich auf die Murmeln einwirken.
-    * **Exponentialverteilung:** Steuert die unregelmäßigen Zeitabstände zwischen **seismischen Stößen** (z.B. ein Kind, das am Tisch wackelt). Diese globalen Ereignisse beeinflussen alle Murmeln gleichzeitig durch eine plötzliche Krafteinwirkung und werden durch einen Kamera-Shake visualisiert.
-*  **Variable Simulationsgeschwindigkeit:** Die Abspielgeschwindigkeit der Simulation kann in mehreren Stufen (Pause, 0.5x, 1.0x, 2.0x, 4.0x) gesteuert werden, um die Anforderung von mindestens 3 Stufen zu erfüllen.
-*  **Visuelle Auswertung:** Nach Abschluss eines Rennens werden die Ergebnisse (Zeit, Platzierung) aller Murmeln in einer grafischen Übersicht dargestellt und in Relation zu den gewählten Startparametern gesetzt.
-*  **Intuitive GUI:** Eine grafische Benutzeroberfläche, die nach den Interaktionsprinzipien der **ISO 9241-110** gestaltet ist und einen klaren Anwendungsfluss (Menü → Konfiguration → Auswertung) bietet.
+* **Diskrete Ereignissimulation:** Eine logische, zeitabhängige Simulation (mittels **`SimPy`**), die Kundenankünfte, intelligente Kassenwahl, Wartezeiten und Abfertigungsprozesse (basierend auf Kassentyp und Personalrolle) modelliert.
+* **Simulationsmodi:** Die Dauer kann flexibel gesteuert werden über:
+    * Einen "Endlos-Modus" (läuft bis Abbruch).
+    * Eine definierte Zeitspanne (z.B. "Laden öffnet um 08:00" / "schließt um 20:00").
+* **Variable Simulationsgeschwindigkeit:** Die Abspielgeschwindigkeit der Simulation kann in **mindestens 3 Stufen** (z.B. Pause, 1x, 10x, 100x) gesteuert werden.
+* **Umfassende Eingabeparameter:** Die Simulation wird durch eine Vielzahl von Parametern (übertrifft die Anforderung von 7) gesteuert:
+    * **Kassen-Setup:**
+        * Anzahl Kassen (Typ: Bedient)
+        * Anzahl Kassen (Typ: Barrierefrei)
+        * Anzahl Kassen (Typ: SB-Kasse)
+    * **Personal-Setup:**
+        * Dynamische Rollenzuweisung (Profi/Azubi) für jede einzelne bediente Kasse.
+    * **Kunden-Setup:**
+        * Kundendichte (Kunden pro Stunde).
+        * Anteil Rollstuhlfahrer (in %).
+    * **Geschwindigkeiten (Scan-Logik):**
+        * Scangeschwindigkeit: Profi
+        * Scangeschwindigkeit: Azubi
+        * Scangeschwindigkeit: Rollstuhlfahrer (an SB-Kasse)
+    * **SB-Kassen-Logik:**
+        * Wahrscheinlichkeit einer SB-Störung (in %).
+        * Artikellimit für SB-Kassen.
+* **Zufallsverteilungen (Erweiterte Steuerung):** Die Simulation integriert **drei verschiedene Zufallsverteilungen** und erlaubt dem Nutzer (optional mit der Bedingung, dass jede Verteilung einmal vorhanden ist) die Konfiguration:
+    1.  **Kundenankunft:** (Default: **Exponentialverteilung**). *Erweitert: Nutzer kann Verteilung wählen.*
+    2.  **Artikelanzahl:** (Default: **Normalverteilung**). *Erweitert: Nutzer kann Verteilung wählen.*
+        * Mittelwert für Artikelanzahl (Default: 20)
+    3.  **Bezahlvorgang-Dauer:** (Default: **Gleichverteilung**). *Erweitert: Nutzer kann Verteilung wählen.*
+        * Minimalzeit (Default: 10 Sek.)
+        * Maximalzeit (Default: 30 Sek.)
+* **Visuelle Auswertung & Darstellung:** Die Simulationsergebnisse werden dynamisch (live) und in einer finalen Übersicht grafisch mit **`PyQtGraph`** dargestellt (z.B. Auslastung der Kassen, mittlere Wartezeit).
+* **Kleine Animation:** Eine simple 2D-Visualisierung (mittels `QGraphicsView`) zeigt schematisch die Kassen (mit Rollen-Symbolen) und die sich aufbauenden Warteschlangen.
+* **Intuitive GUI:** Eine grafische Benutzeroberfläche (mittels **`PyQt6`**), die nach den Interaktionsprinzipien der **ISO 9241-110** gestaltet ist.
 
 ## 🛠️ Technisches Konzept & Architektur
 
-Das Projekt wird mit einem Hybrid-Ansatz aus C++ und Blueprints umgesetzt, um Performance und Flexibilität zu kombinieren.
+Das Projekt wird in Python 3 umgesetzt und folgt einer klaren Trennung von Logik (SimPy) und Darstellung (PyQt6), um die Kriterien für Clean Code und Testbarkeit zu erfüllen.
 
-* **Kernlogik in C++:**
-    * Die `AMarble`-Klasse dient als zentrale Logikeinheit für die Murmeln. Alle physikalischen Eigenschaften sind hier als `UPROPERTY` deklariert, um sie in Blueprints zugänglich zu machen. Die Berechnungen finden in C++ statt, um maximale Performance zu gewährleisten.
-    * Physikalische Materialien werden zur Laufzeit dynamisch in der `CreatePhysicsMaterial()`-Methode erzeugt, um die Parameter (Reibung, Elastizität) direkt anwenden zu können.
-    * Die Generierung der Zufallszahlen für die verschiedenen Verteilungen wird in einer C++ Helper-Klasse gekapselt.
-
-* **Blueprints & UMG:**
-    * Die gesamte Benutzeroberfläche (UI), inklusive Startmenü, Simulations-HUD und Auswertungsbildschirm, wird mit dem **Unreal Motion Graphics (UMG)** Framework in Blueprints erstellt.
-    * Einzelne Streckensegmente, Hindernisse und visuelle Effekte werden als Actor-Blueprints implementiert, um ein modulares und leicht erweiterbares System zu schaffen.
-    * Die Steuerung des Spielablaufs (z.B. das Starten der Simulation, das Wechseln der Geschwindigkeit) wird über einen Blueprint-basierten `GameMode` gesteuert.
-
-* **Performance für Schulrechner:**
-    *  Um die Lauffähigkeit auf den Zielsystemen zu garantieren, wird auf **statisches, gebackenes Lighting** gesetzt.
-    * Assets sind bewusst **Low-Poly** gehalten.
-    * Die Physikberechnungen werden durch einfache Kollisionskörper (Spheres, Capsules) optimiert.
+* **Kernlogik (Model):** Die zeitabhängige, diskrete Ereignissimulation wird mit **`SimPy`** realisiert. `SimPy` verwaltet die Prozesslogik, die Zeitsteuerung und die Ressourcen (Kassen).
+* **Benutzeroberfläche (View):** Die gesamte GUI wird mit **`PyQt6`** erstellt. `QGraphicsView` wird für die 2D-Animation genutzt.
+* **Visualisierung:** Live-Plots und finale Auswertungsdiagramme werden mit **`PyQtGraph`** implementiert, da es für die Darstellung von Live-Daten in PyQt optimiert ist.
+* **Zufall/Daten:** Die Generierung der Zufallsverteilungen (exponentiell, normal, uniform) wird über die **`NumPy`**-Bibliothek realisiert.
+* **Deployment:** Um die Anforderung "ausführbare Datei" und "Lauffähigkeit auf Schulrechnern" zu erfüllen, wird die Anwendung mittels **`PyInstaller`** in eine einzelne `.exe`-Datei kompiliert.
 
 ## 🖱️ UI/UX-Konzept
 
- Die Benutzeroberfläche und das Nutzererlebnis stehen im Fokus und orientieren sich an der **ISO 9241-110**.
+Die Benutzeroberfläche orientiert sich an der **ISO 9241-110**.
 
-* **UI-Fluss:**
-    1.  **Startmenü:** Einfacher Einstiegspunkt zum Starten der Simulation.
-    2.  **Simulations-UI:** Hauptansicht mit einer Top-Down-Perspektive zur Konfiguration der Strecke und der Murmel-Parameter über klar beschriftete Schieberegler. Enthält Steuerungselemente für Start, Pause und Geschwindigkeit.
-    3.  **Auswertungs-UI:** Separater Bildschirm nach dem Rennen zur Anzeige von Zeit und Platzierung, visualisiert durch Balkendiagramme.
+* **UI-Fluss (Tab-basiert):**
+    1.  **Tab "Konfiguration":** Enthält alle Eingabeparameter (Kassenanzahl, Rollen, Kundendaten). Enthält einen "Experten-Modus"-Button, der die Parameter der Zufallsverteilungen (Defaults) freischaltet.
+    2.  **Tab "Simulation":** Zeigt die Live-Plots (Wartezeit-Entwicklung) und die 2D-Animation der Warteschlangen. Enthält die Steuerungselemente (Start, Pause, Geschwindigkeit).
+    3.  **Tab "Auswertung":** (Nach Simulationsende) Zeigt eine Zusammenfassung der wichtigsten Kennzahlen (KPIs) und finale Graphen (z.B. Histogramm der Wartezeiten, Balkendiagramm der Kassenauslastung).
 
-* **Kameraführung:**
-    * **Konfigurationsphase:** Eine statische Top-Down-Kamera für den Überblick.
-    * **Simulationsphase:** Eine dynamische Verfolgerkamera, die sich optional auf eine der Murmeln fokussieren kann, oder eine Gesamtansicht der Strecke bietet.
+## 🚀 Tech Stack (Bestätigt)
 
-* **Visuelle Effekte:**
-    *  Ein **Partikel-Trail** an den Murmeln zur Visualisierung der Geschwindigkeit.
-    *  Zusätzliche Effekte bei Kollisionen oder der Aktivierung von Streckenelementen (z.B. Boost-Pads), um dem Nutzer klares Feedback zu geben und die Anforderung einer passenden Animation zu erfüllen.
-
-## 🚀 Tech Stack
-
-* **Engine:** Unreal Engine 5
-* **Sprache:** C++ / Blueprints (Hybrid-Ansatz)
-* **Physik:** Unreal Chaos Physics
-*  **Plattform:** Windows (64-bit)
+* **Sprache:** Python (Version 3.10+)
+* **GUI:** PyQt6
+* **Simulation (Kern):** SimPy
+* **Visualisierung (Plots):** PyQtGraph
+* **Daten/Zufall:** NumPy
+* **Deployment:** PyInstaller
+* **Plattform:** Windows (64-bit)
 
 ## 📂 Projektmanagement
 
-*  **Vorgehensmodell:** Das Projekt folgt dem **Wasserfallmodell**, da die Anforderungen von Beginn an klar und unveränderlich definiert sind.
-*  **Abgabetermin:** 06.02.2025
-*  **Dokumentation:** Die vollständige Projektdokumentation nach IHK-Standard und ein digitales Benutzerhandbuch werden separat erstellt.
+* **Vorgehensmodell:** Das Projekt folgt dem **Wasserfallmodell**, da die Anforderungen (siehe `REQUIREMENTS.md`) von Beginn an klar und unveränderlich durch den Projektauftrag definiert sind.
+* **Abgabetermin:** 06.02.2026
+* **Dokumentation:** Die vollständige Projektdokumentation nach IHK-Standard und ein digitales Benutzerhandbuch werden separat erstellt.
