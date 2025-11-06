@@ -5,6 +5,7 @@ Dieses Repository enthält das Python-Projekt "Piep - Der Takt der Kasse", eine 
 ## Projektanforderungen
 
 * [Anforderungsdokument (REQUIREMENTS.md)](docs/REQUIREMENTS.md) (Basierend auf dem Projektauftrag)
+* [Architektur-Dokument (ARCHITECTURE.md)](docs/ARCHITECTURE.md) (Unser MVC-Design)
 * [Clean-Code-Kriterien (CLEAN_CODE.md)](docs/CLEAN_CODE.md) (Unsere Definition nach LF 11)
 * [IHK-Standards (Externer Link)](https://www.ihk.de/rostock/aus-und-weiterbildung/pruefungen/abschlusspruefung/dokumentation-projektarbeit-2646884)
 
@@ -33,13 +34,14 @@ Das Projekt implementiert die folgenden, im Projektauftrag geforderten Features:
     * **Kunden-Setup:**
         * Kundendichte (Kunden pro Stunde).
         * Anteil Rollstuhlfahrer (in %).
+        * Basis-Affinität für SB-Nutzung (in %): (Steuert, wie viele Kunden *generell* bereit sind, eine SB-Kasse zu nutzen, sofern die Bedingungen (z.B. Artikellimit) erfüllt sind).
     * **Geschwindigkeiten (Scan-Logik):**
         * Scangeschwindigkeit: Profi
         * Scangeschwindigkeit: Azubi
         * Scangeschwindigkeit: Rollstuhlfahrer (an SB-Kasse)
     * **SB-Kassen-Logik:**
         * Wahrscheinlichkeit einer SB-Störung (in %).
-        * Artikellimit für SB-Kassen.
+        * Artikellimit für SB-Kassen. (Mit einer Checkbox wird geschaut, ob Artikellimit überhaupt eingestellt werden soll - Wenn ja, dann erscheint ein Feld wo man das Limit festlegen kann.)
 * **Zufallsverteilungen (Erweiterte Steuerung):** Die Simulation integriert **drei verschiedene Zufallsverteilungen** und erlaubt dem Nutzer (optional mit der Bedingung, dass jede Verteilung einmal vorhanden ist) die Konfiguration:
     1.  **Kundenankunft:** (Default: **Exponentialverteilung**). *Erweitert: Nutzer kann Verteilung wählen.*
     2.  **Artikelanzahl:** (Default: **Normalverteilung**). *Erweitert: Nutzer kann Verteilung wählen.*
