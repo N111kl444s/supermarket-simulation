@@ -825,8 +825,9 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
 
     # --- Globales Stylesheet "PROJEKT: PIEP" ---
+    # WICHTIG: Das 'f' vor den Anführungszeichen ermöglicht die Variablen!
     app.setStyleSheet(
-        """
+        f"""
         QWidget {{
             font-family: 'Segoe UI', 'Sans-Serif';
             font-size: 10pt;
