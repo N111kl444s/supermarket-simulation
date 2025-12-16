@@ -1,0 +1,47 @@
+{
+    "show_routes": false,
+    "show_shelves": false,
+    "show_checkouts": true,
+    "show_cashiers": true,
+    "show_waiting_area": true,
+    "offset_cashier_left": [
+        -15,
+        8
+    ],
+    "offset_cashier_right": [
+        45,
+        8
+    ],
+    "offset_light_normal_left": [
+        36,
+        2
+    ],
+    "offset_light_normal_right": [
+        36,
+        2
+    ],
+    "offset_light_sb_left": [
+        36,
+        2
+    ],
+    "offset_light_sb_right": [
+        36,
+        2
+    ],
+    "offset_queue_left": [
+        5,
+        -60
+    ],
+    "offset_queue_right": [
+        35,
+        -60
+    ],
+    "offset_queue_sb_left": [
+        5,
+        -60
+    ],
+    "offset_queue_sb_right": [
+        35,
+        -60
+    ]
+}
