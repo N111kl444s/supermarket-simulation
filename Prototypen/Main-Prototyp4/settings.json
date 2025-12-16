@@ -1,0 +1,30 @@
+{
+    "show_routes": true,
+    "show_shelves": true,
+    "show_checkouts": true,
+    "show_cashiers": true,
+    "offset_cashier_left": [
+        -20,
+        7
+    ],
+    "offset_cashier_right": [
+        45,
+        7
+    ],
+    "offset_queue_left": [
+        50,
+        10
+    ],
+    "offset_queue_right": [
+        -10,
+        10
+    ],
+    "offset_queue_sb_left": [
+        50,
+        10
+    ],
+    "offset_queue_sb_right": [
+        50,
+        10
+    ]
+}
