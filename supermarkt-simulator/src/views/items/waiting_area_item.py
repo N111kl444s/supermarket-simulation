@@ -5,7 +5,7 @@ Waiting area visualization.
 from PyQt6.QtWidgets import QGraphicsRectItem
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPen, QBrush
-from config import *
+from config import COLOR_WAITING_AREA, COLOR_SUCCESS
 
 
 class WaitingAreaItem(QGraphicsRectItem):
@@ -20,5 +20,6 @@ class WaitingAreaItem(QGraphicsRectItem):
         """
         super().__init__(rect)
         self.setBrush(QBrush(COLOR_WAITING_AREA))
-        self.setPen(QPen(COLOR_GREEN, 2, Qt.PenStyle.DashLine))
+        # Updated to use COLOR_SUCCESS instead of COLOR_GREEN
+        self.setPen(QPen(COLOR_SUCCESS, 2, Qt.PenStyle.DashLine))
         self.setZValue(2)

@@ -1,256 +1,333 @@
 """
-Dialog windows for user interaction.
-
-Contains modal dialogs for editing object positions and configuring global settings.
+Dialogs for the application (Visibility, Offsets, Object Positioning, Checkout Config).
+Refactored: Split SettingsDialog into VisibilityDialog and OffsetDialog.
+Refactored: OffsetDialog made larger (taller).
 """
 
 from PyQt6.QtWidgets import (
     QDialog,
-    QFormLayout,
-    QSpinBox,
-    QPushButton,
     QVBoxLayout,
-    QTabWidget,
-    QWidget,
-    QCheckBox,
-    QGridLayout,
+    QFormLayout,
+    QDialogButtonBox,
+    QSpinBox,
+    QDoubleSpinBox,
     QLabel,
+    QComboBox,
+    QCheckBox,
+    QGroupBox,
+    QWidget,
+    QHBoxLayout,
+    QPushButton,
+    QScrollArea,
 )
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
+from config import COLOR_SUCCESS, COLOR_ERROR
 
 
-class ObjectPositionDialog(QDialog):
+class OffsetWidget(QWidget):
     """
-    Dialog for manual editing of object coordinates (X/Y).
-
-    @ivar position_changed: Signal emitted when coordinates are adjusted.
-    @type position_changed: pyqtSignal(float, float)
+    Helper widget to edit an X/Y offset pair.
+    Emits valueChanged signal when either spinbox changes.
     """
 
-    position_changed = pyqtSignal(float, float)
+    valueChanged = pyqtSignal()
 
-    def __init__(self, item_name, current_x, current_y, parent=None):
-        """
-        Initializes the dialog.
-
-        @param item_name: Display name of the object being edited.
-        @type item_name: str
-        @param current_x: Initial X coordinate.
-        @type current_x: float
-        @param current_y: Initial Y coordinate.
-        @type current_y: float
-        @param parent: Parent widget (usually the MainWindow).
-        @type parent: QWidget
-        """
+    def __init__(self, x, y, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"Pos. bearbeiten: {item_name}")
-        self.resize(300, 150)
-        self.layout = QFormLayout(self)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        self.spin_x = QSpinBox()
-        self.spin_x.setRange(0, 2000)
-        self.spin_x.setValue(int(current_x))
-        self.spin_x.valueChanged.connect(self.on_change)
+        self.sb_x = QSpinBox()
+        self.sb_x.setRange(-300, 300)  # Increased range
+        self.sb_x.setValue(int(x))
+        self.sb_x.setSuffix(" px")
+        self.sb_x.setToolTip("X-Offset")
 
-        self.spin_y = QSpinBox()
-        self.spin_y.setRange(0, 2000)
-        self.spin_y.setValue(int(current_y))
-        self.spin_y.valueChanged.connect(self.on_change)
+        self.sb_y = QSpinBox()
+        self.sb_y.setRange(-300, 300)
+        self.sb_y.setValue(int(y))
+        self.sb_y.setSuffix(" px")
+        self.sb_y.setToolTip("Y-Offset")
 
-        self.layout.addRow("Position X:", self.spin_x)
-        self.layout.addRow("Position Y:", self.spin_y)
+        layout.addWidget(QLabel("X:"))
+        layout.addWidget(self.sb_x)
+        layout.addWidget(QLabel("Y:"))
+        layout.addWidget(self.sb_y)
 
-        btn_close = QPushButton("Fertig")
-        btn_close.clicked.connect(self.accept)
-        self.layout.addRow(btn_close)
+        # Connect signals
+        self.sb_x.valueChanged.connect(self.valueChanged.emit)
+        self.sb_y.valueChanged.connect(self.valueChanged.emit)
 
-    def on_change(self):
-        """
-        Emits the position_changed signal with the current spinbox values.
-        """
-        self.position_changed.emit(self.spin_x.value(), self.spin_y.value())
+    def get_values(self):
+        return [self.sb_x.value(), self.sb_y.value()]
 
 
-class SettingsDialog(QDialog):
+class VisibilityDialog(QDialog):
     """
-    Dialog for global simulation settings.
-
-    Allows toggling visibility layers and adjusting layout offsets for queues and lights.
-
-    @ivar settings_changed: Signal emitted immediately when a setting changes.
-    @type settings_changed: pyqtSignal(dict)
+    Dialog specifically for toggling visibility of simulation elements.
     """
 
     settings_changed = pyqtSignal(dict)
 
     def __init__(self, current_settings, parent=None):
-        """
-        Initializes the settings dialog.
-
-        @param current_settings: Dictionary containing current simulation settings.
-        @type current_settings: dict
-        @param parent: Parent widget.
-        @type parent: QWidget
-        """
         super().__init__(parent)
-        self.setWindowTitle("Einstellungen")
-        self.resize(500, 700)
+        self.setWindowTitle("Sichtbarkeit")
+        self.resize(300, 250)
         self.settings = current_settings.copy()
+        self.widgets = {}
         self.setup_ui()
 
     def setup_ui(self):
-        """
-        Constructs the tabbed UI (View settings and Layout settings).
-        """
         layout = QVBoxLayout(self)
-        tabs = QTabWidget()
 
-        # TAB 1: View
-        tab_view = QWidget()
-        form_view = QFormLayout(tab_view)
+        gb_view = QGroupBox("Elemente anzeigen")
+        fl_view = QFormLayout(gb_view)
 
-        self.chk_routes = QCheckBox()
-        self.chk_routes.setChecked(self.settings["show_routes"])
+        view_keys = [
+            "show_routes",
+            "show_shelves",
+            "show_checkouts",
+            "show_cashiers",
+            "show_waiting_area",
+        ]
 
-        self.chk_shelves = QCheckBox()
-        self.chk_shelves.setChecked(self.settings["show_shelves"])
+        for key in view_keys:
+            cb = QCheckBox()
+            cb.setChecked(self.settings.get(key, True))
+            cb.clicked.connect(self.emit_settings)
+            fl_view.addRow(key.replace("show_", "Zeige "), cb)
+            self.widgets[key] = cb
 
-        self.chk_checkouts = QCheckBox()
-        self.chk_checkouts.setChecked(self.settings["show_checkouts"])
+        layout.addWidget(gb_view)
 
-        self.chk_cashiers = QCheckBox()
-        self.chk_cashiers.setChecked(self.settings["show_cashiers"])
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(
+            self.accept
+        )  # Close acts as OK here since we have live updates
+        layout.addWidget(buttons)
 
-        self.chk_waiting = QCheckBox()
-        self.chk_waiting.setChecked(
-            self.settings.get("show_waiting_area", True)
+    def emit_settings(self):
+        self.settings_changed.emit(self.get_settings())
+
+    def get_settings(self):
+        for k, w in self.widgets.items():
+            self.settings[k] = w.isChecked()
+        return self.settings
+
+
+class OffsetDialog(QDialog):
+    """
+    Dialog specifically for tweaking global positioning offsets.
+    Made taller as requested.
+    """
+
+    settings_changed = pyqtSignal(dict)
+
+    def __init__(self, current_settings, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Globale Offsets")
+        self.resize(450, 700)  # Taller window
+        self.settings = current_settings.copy()
+        self.widgets = {}
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+
+        # -- Group: Warteschlange (Queue) --
+        gb_queue = QGroupBox("Warteschlangen-Startpunkt")
+        fl_queue = QFormLayout(gb_queue)
+        self.add_offset_row(fl_queue, "Normal (Links)", "offset_queue_left")
+        self.add_offset_row(fl_queue, "Normal (Rechts)", "offset_queue_right")
+        self.add_offset_row(fl_queue, "SB (Links)", "offset_queue_sb_left")
+        self.add_offset_row(fl_queue, "SB (Rechts)", "offset_queue_sb_right")
+        content_layout.addWidget(gb_queue)
+
+        # -- Group: Kassierer (Cashier) --
+        gb_cashier = QGroupBox("Kassierer-Position")
+        fl_cashier = QFormLayout(gb_cashier)
+        self.add_offset_row(
+            fl_cashier, "Normal (Links)", "offset_cashier_left"
         )
-
-        self.chk_routes.toggled.connect(
-            lambda v: self.update_setting("show_routes", v)
+        self.add_offset_row(
+            fl_cashier, "Normal (Rechts)", "offset_cashier_right"
         )
-        self.chk_shelves.toggled.connect(
-            lambda v: self.update_setting("show_shelves", v)
+        content_layout.addWidget(gb_cashier)
+
+        # -- Group: Status-Licht (Light) --
+        gb_light = QGroupBox("Status-Licht")
+        fl_light = QFormLayout(gb_light)
+        self.add_offset_row(
+            fl_light, "Normal (Links)", "offset_light_normal_left"
         )
-        self.chk_checkouts.toggled.connect(
-            lambda v: self.update_setting("show_checkouts", v)
+        self.add_offset_row(
+            fl_light, "Normal (Rechts)", "offset_light_normal_right"
         )
-        self.chk_cashiers.toggled.connect(
-            lambda v: self.update_setting("show_cashiers", v)
+        self.add_offset_row(fl_light, "SB (Links)", "offset_light_sb_left")
+        self.add_offset_row(fl_light, "SB (Rechts)", "offset_light_sb_right")
+        content_layout.addWidget(gb_light)
+
+        content_layout.addStretch()
+        scroll.setWidget(content_widget)
+        layout.addWidget(scroll)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(self.accept)
+        layout.addWidget(buttons)
+
+    def add_offset_row(self, layout, label, key):
+        val = self.settings.get(key, [0, 0])
+        widget = OffsetWidget(val[0], val[1])
+        widget.valueChanged.connect(self.emit_settings)
+        layout.addRow(label + ":", widget)
+        self.widgets[key] = widget
+
+    def emit_settings(self):
+        self.settings_changed.emit(self.get_settings())
+
+    def get_settings(self):
+        for k, w in self.widgets.items():
+            self.settings[k] = w.get_values()
+        return self.settings
+
+
+class ObjectPositionDialog(QDialog):
+    """
+    Dialog to edit the position of an object.
+    """
+
+    position_changed = pyqtSignal(float, float)
+
+    def __init__(self, name, x, y, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Bearbeiten: {name}")
+        self.x = x
+        self.y = y
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+
+        self.sb_x = QDoubleSpinBox()
+        self.sb_x.setRange(-1000, 3000)
+        self.sb_x.setValue(self.x)
+
+        self.sb_y = QDoubleSpinBox()
+        self.sb_y.setRange(-1000, 3000)
+        self.sb_y.setValue(self.y)
+
+        form.addRow("X:", self.sb_x)
+        form.addRow("Y:", self.sb_y)
+        layout.addLayout(form)
+
+        self.sb_x.valueChanged.connect(self.emit_change)
+        self.sb_y.valueChanged.connect(self.emit_change)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def emit_change(self):
+        self.position_changed.emit(self.sb_x.value(), self.sb_y.value())
+
+
+class CheckoutConfigDialog(QDialog):
+    """
+    Dialog to configure a specific checkout (Status, Skill, Queue Limit).
+    """
+
+    def __init__(self, checkout_data, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Konfiguration Kasse #{checkout_data.get('id')}")
+        self.data = checkout_data.copy()
+        self.is_open = self.data.get("open", True)
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+
+        # Status Toggle
+        status_widget = QWidget()
+        status_layout = QHBoxLayout(status_widget)
+        status_layout.setContentsMargins(0, 0, 0, 0)
+        status_layout.setSpacing(10)
+
+        self.btn_open = QPushButton("Geöffnet")
+        self.btn_open.setCheckable(True)
+        self.btn_open.setFixedHeight(30)
+        self.btn_open.clicked.connect(lambda: self.set_status(True))
+
+        self.btn_closed = QPushButton("Geschlossen")
+        self.btn_closed.setCheckable(True)
+        self.btn_closed.setFixedHeight(30)
+        self.btn_closed.clicked.connect(lambda: self.set_status(False))
+
+        status_layout.addWidget(self.btn_open)
+        status_layout.addWidget(self.btn_closed)
+        form.addRow("Status:", status_widget)
+
+        # Skill (Normal only)
+        self.combo_skill = None
+        if self.data.get("type") == "Normal":
+            self.combo_skill = QComboBox()
+            self.combo_skill.addItems(["Azubi", "Erfahren", "Profi"])
+            current_skill = self.data.get("skill", "Azubi")
+            self.combo_skill.setCurrentText(
+                current_skill if current_skill else "Azubi"
+            )
+            form.addRow("Kassierer-Skill:", self.combo_skill)
+
+        # Queue
+        self.sb_queue = QSpinBox()
+        self.sb_queue.setRange(1, 50)
+        self.sb_queue.setValue(self.data.get("max_queue", 5))
+        form.addRow("Max. Warteschlange:", self.sb_queue)
+
+        layout.addLayout(form)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel
         )
-        self.chk_waiting.toggled.connect(
-            lambda v: self.update_setting("show_waiting_area", v)
-        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
 
-        form_view.addRow("Routen anzeigen:", self.chk_routes)
-        form_view.addRow("Regale anzeigen:", self.chk_shelves)
-        form_view.addRow("Kassen anzeigen:", self.chk_checkouts)
-        form_view.addRow("Kassierer & Licht:", self.chk_cashiers)
-        form_view.addRow("Wartebereich:", self.chk_waiting)
-        tabs.addTab(tab_view, "Ansicht")
+        self.update_toggle_buttons()
 
-        # TAB 2: Layout
-        tab_layout = QWidget()
-        grid = QGridLayout(tab_layout)
+    def set_status(self, open_status):
+        self.is_open = open_status
+        self.update_toggle_buttons()
 
-        def add_pos_row(title, key_l, key_r, start_row):
-            grid.addWidget(QLabel(f"<b>{title}</b>"), start_row, 0, 1, 4)
-            grid.addWidget(QLabel("Links X:"), start_row + 1, 0)
-            slx = self.create_spin(key_l, 0)
-            grid.addWidget(slx, start_row + 1, 1)
+    def update_toggle_buttons(self):
+        base_style = "border-radius: 4px; padding: 6px;"
+        if self.is_open:
+            self.btn_open.setStyleSheet(
+                f"background-color: {COLOR_SUCCESS.name()}; color: white; font-weight: bold; border: 1px solid {COLOR_SUCCESS.name()};"
+            )
+            self.btn_open.setChecked(True)
+            self.btn_closed.setStyleSheet(base_style)
+            self.btn_closed.setChecked(False)
+        else:
+            self.btn_open.setStyleSheet(base_style)
+            self.btn_open.setChecked(False)
+            self.btn_closed.setStyleSheet(
+                f"background-color: {COLOR_ERROR.name()}; color: white; font-weight: bold; border: 1px solid {COLOR_ERROR.name()};"
+            )
+            self.btn_closed.setChecked(True)
 
-            grid.addWidget(QLabel("Links Y:"), start_row + 1, 2)
-            sly = self.create_spin(key_l, 1)
-            grid.addWidget(sly, start_row + 1, 3)
-
-            grid.addWidget(QLabel("Rechts X:"), start_row + 2, 0)
-            srx = self.create_spin(key_r, 0)
-            grid.addWidget(srx, start_row + 2, 1)
-
-            grid.addWidget(QLabel("Rechts Y:"), start_row + 2, 2)
-            sry = self.create_spin(key_r, 1)
-            grid.addWidget(sry, start_row + 2, 3)
-
-            return start_row + 4
-
-        row = 0
-        row = add_pos_row(
-            "Kassierer Position",
-            "offset_cashier_left",
-            "offset_cashier_right",
-            row,
-        )
-        row = add_pos_row(
-            "Licht Position (Normal)",
-            "offset_light_normal_left",
-            "offset_light_normal_right",
-            row,
-        )
-        row = add_pos_row(
-            "Licht Position (SB)",
-            "offset_light_sb_left",
-            "offset_light_sb_right",
-            row,
-        )
-        row = add_pos_row(
-            "Warteschlange (Normal)",
-            "offset_queue_left",
-            "offset_queue_right",
-            row,
-        )
-        row = add_pos_row(
-            "Warteschlange (SB)",
-            "offset_queue_sb_left",
-            "offset_queue_sb_right",
-            row,
-        )
-
-        tabs.addTab(tab_layout, "Layout")
-        layout.addWidget(tabs)
-
-        btn_close = QPushButton("Schließen")
-        btn_close.clicked.connect(self.accept)
-        layout.addWidget(btn_close)
-
-    def create_spin(self, key, index):
-        """
-        Creates a configured QSpinBox for a specific setting key.
-
-        @param key: Dictionary key in self.settings.
-        @type key: str
-        @param index: Index in the coordinate list (0 for x, 1 for y).
-        @type index: int
-        @return: The configured spinbox.
-        @rtype: QSpinBox
-        """
-        sb = QSpinBox()
-        sb.setRange(-200, 200)
-        sb.setValue(self.settings[key][index])
-        sb.valueChanged.connect(lambda v: self.update_offset(key, index, v))
-        return sb
-
-    def update_setting(self, key, value):
-        """
-        Updates a boolean setting.
-
-        @param key: Setting key.
-        @type key: str
-        @param value: New value.
-        @type value: bool
-        """
-        self.settings[key] = value
-        self.settings_changed.emit(self.settings)
-
-    def update_offset(self, key, index, value):
-        """
-        Updates a coordinate setting.
-
-        @param key: Setting key.
-        @type key: str
-        @param index: List index (0 or 1).
-        @type index: int
-        @param value: New coordinate value.
-        @type value: int
-        """
-        self.settings[key][index] = value
-        self.settings_changed.emit(self.settings)
+    def get_data(self):
+        self.data["open"] = self.is_open
+        self.data["max_queue"] = self.sb_queue.value()
+        if self.data["type"] == "Normal" and self.combo_skill:
+            self.data["skill"] = self.combo_skill.currentText()
+        return self.data

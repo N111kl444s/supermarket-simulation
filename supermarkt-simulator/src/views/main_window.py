@@ -1,5 +1,6 @@
 """
-Main window module.
+Main window module for the application GUI.
+Refactored: Split Settings button into Visibility and Offsets buttons.
 """
 
 from PyQt6.QtWidgets import (
@@ -9,57 +10,41 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QPushButton,
     QLabel,
-    QTextEdit,
     QGroupBox,
     QFormLayout,
     QSpinBox,
-    QCheckBox,
-    QStackedWidget,
     QListWidget,
-    QTableWidget,
-    QHeaderView,
     QTabWidget,
+    QComboBox,
+    QSplitter,
+    QFrame,
+    QAbstractItemView,
 )
 from PyQt6.QtCore import Qt, QRectF
-from PyQt6.QtGui import QPixmap, QBrush
+from PyQt6.QtGui import QPixmap, QBrush, QColor
 
 import pyqtgraph as pg
 
 from config import *
 from .ui_components import (
-    ClickableGroupBox,
     ClickablePixmapItem,
     AutoFitGraphicsView,
 )
 from .scene import RouteEditorScene
+from .styles import get_application_style
 
 
 class MainWindow(QMainWindow):
     """
-    The main application window.
-
-    Constructs the four-quadrant layout and manages UI state (e.g., admin mode toggle).
-    Events are delegated to the controller.
-
-    @ivar controller: Reference to the MainController.
-    @type controller: MainController
-    @ivar is_sim_maximized: Flag if simulation view is full-screen.
-    @type is_sim_maximized: bool
-    @ivar is_admin_mode: Flag if admin editing mode is active.
-    @type is_admin_mode: bool
+    The main application window using a modern 'Workbench' layout.
     """
 
     def __init__(self):
-        """
-        Initializes the main window and its UI components.
-        """
         super().__init__()
-        self.setWindowTitle("Prototyp 18: Refactoring (MVC 1:1)")
-        self.setGeometry(100, 100, 1400, 900)
+        self.setWindowTitle("Supermarkt Simulator - Workbench")
+        self.setGeometry(100, 100, 1600, 900)
 
-        # UI State
-        self.is_sim_maximized = False
-        self.is_q1_maximized = False
+        # Flags for Editor State
         self.is_admin_mode = False
         self.is_drawing_mode = False
         self.is_placing_shelves = False
@@ -69,193 +54,263 @@ class MainWindow(QMainWindow):
         self.current_checkout_orientation = "Right"
         self.highlight_queues = False
 
+        # Scene Setup
         self.sim_scene = RouteEditorScene()
         self.sim_scene.main_window = self
         self.sim_view = None
         self.controller = None
 
         self.setup_ui()
+        self.setStyleSheet(get_application_style())
 
     def set_controller(self, c):
-        """
-        Injects the controller dependency and connects scene signals.
-
-        @param c: The main controller.
-        @type c: MainController
-        """
         self.controller = c
-        self.sim_scene.clicked_point.connect(
-            self.controller.handle_scene_click
-        )
-        self.sim_scene.waiting_area_created.connect(
-            self.controller.handle_waiting_area_created
-        )
 
     def setup_ui(self):
+        # Central Widget Container
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # 1. TOP TOOLBAR AREA
+        self.create_top_toolbar(main_layout)
+
+        # 2. CONTENT AREA (Splitter)
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_layout.addWidget(self.splitter)
+
+        # 2a. Left Sidebar
+        self.sidebar_widget = self.create_sidebar()
+        self.splitter.addWidget(self.sidebar_widget)
+
+        # 2b. Main Canvas (Simulation)
+        self.canvas_widget = self.create_canvas()
+        self.splitter.addWidget(self.canvas_widget)
+
+        self.splitter.setSizes([350, 1250])
+        self.splitter.setCollapsible(0, False)
+
+    def create_top_toolbar(self, parent_layout):
+        toolbar_frame = QFrame()
+        toolbar_frame.setObjectName("ToolbarFrame")
+        toolbar_frame.setFixedHeight(70)
+
+        layout = QHBoxLayout(toolbar_frame)
+        layout.setContentsMargins(20, 10, 20, 10)
+        layout.setSpacing(15)
+        layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+
+        # -- Left: Map Selection --
+        lbl_map = QLabel("Map:")
+        lbl_map.setFixedHeight(30)
+
+        self.map_combo = QComboBox()
+        self.map_combo.setFixedWidth(250)
+        self.map_combo.setFixedHeight(30)
+
+        layout.addWidget(lbl_map)
+        layout.addWidget(self.map_combo)
+
+        # -- Center: Simulation Control --
+        layout.addStretch()
+        self.start_sim_button = QPushButton("Simulation Starten")
+        self.start_sim_button.setFixedWidth(220)
+        self.start_sim_button.setFixedHeight(36)
+
+        self.start_sim_button.setStyleSheet(
+            f"""
+            QPushButton {{
+                background-color: {COLOR_SUCCESS.name()}; 
+                color: white; 
+                font-weight: bold; 
+                border: none;
+                border-radius: 4px;
+                margin: 2px;
+            }}
+            QPushButton:hover {{
+                background-color: #059669; 
+                margin-top: 1px; 
+            }}
         """
-        Constructs the main grid layout (4 quadrants).
-        """
-        w = QWidget()
-        self.setCentralWidget(w)
-        ml = QVBoxLayout(w)
-        ml.setSpacing(10)
-        ml.setContentsMargins(10, 10, 10, 10)
+        )
 
-        # Top Row
-        self.top_row_widget = QWidget()
-        tr = QHBoxLayout(self.top_row_widget)
-        tr.setContentsMargins(0, 0, 0, 0)
-        self.top_left_group_box = self.create_top_left_quadrant()
-        self.top_right_group_box = self.create_top_right_quadrant()
-        tr.addWidget(self.top_left_group_box, 1)
-        tr.addWidget(self.top_right_group_box, 1)
+        layout.addWidget(self.start_sim_button)
 
-        # Bottom Row
-        self.bottom_row_widget = QWidget()
-        br = QHBoxLayout(self.bottom_row_widget)
-        br.setContentsMargins(0, 0, 0, 0)
-        self.bottom_left_group_box = self.create_bottom_left_quadrant()
-        self.bottom_right_group_box = self.create_bottom_right_quadrant()
-        br.addWidget(self.bottom_left_group_box, 1)
-        br.addWidget(self.bottom_right_group_box, 1)
+        layout.addStretch()
 
-        ml.addWidget(self.top_row_widget, 1)
-        ml.addWidget(self.bottom_row_widget, 1)
+        # -- Right: View Controls --
+        self.btn_reset_zoom = QPushButton("Ansicht zurücksetzen")
+        self.btn_reset_zoom.setFixedHeight(30)
+        layout.addWidget(self.btn_reset_zoom)
 
-    def create_top_left_quadrant(self):
-        """
-        Creates the 'Controls' quadrant (Top-Left).
-        Contains Simulation params and Admin tools in a StackedWidget.
+        parent_layout.addWidget(toolbar_frame)
 
-        @return: The configured group box.
-        @rtype: QGroupBox
-        """
-        gb = QGroupBox("Eingabeparameter")
-        l = QVBoxLayout(gb)
-        l.setContentsMargins(5, 5, 5, 5)
-        l.setSpacing(10)
+    def create_sidebar(self):
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(5, 5, 5, 5)
 
-        self.admin_mode_checkbox = QCheckBox("Admin-Modus")
-        self.admin_mode_checkbox.toggled.connect(self.toggle_admin_mode_ui)
-        l.addWidget(self.admin_mode_checkbox)
+        self.control_tabs = QTabWidget()
+        layout.addWidget(self.control_tabs)
 
-        self.top_left_stack = QStackedWidget()
-        l.addWidget(self.top_left_stack)
+        # --- TAB 1: SIMULATION ---
+        self.tab_sim = QWidget()
+        l_sim = QVBoxLayout(self.tab_sim)
+        l_sim.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        # Page 0: Simulation
-        sim_w = QWidget()
-        sl = QVBoxLayout(sim_w)
-        fl = QFormLayout()
+        gb_params = QGroupBox("Parameter")
+        f_params = QFormLayout(gb_params)
         self.actor_count_input = QSpinBox()
         self.actor_count_input.setValue(10)
-        self.actor_count_input.setRange(1, 200)
-        fl.addRow("Kunden:", self.actor_count_input)
-        sl.addLayout(fl)
+        self.actor_count_input.setRange(1, 500)
+        f_params.addRow("Kundenanzahl:", self.actor_count_input)
+        l_sim.addWidget(gb_params)
 
-        sl.addWidget(QLabel("Kassen:"))
-        self.checkout_table = QTableWidget()
-        self.checkout_table.setColumnCount(5)
-        self.checkout_table.setHorizontalHeaderLabels(
-            ["ID", "Typ", "Stat", "Skill", "Max Q"]
+        l_sim.addWidget(
+            QLabel(
+                "<i>Tipp: Klicke auf eine Kasse,<br>um sie zu konfigurieren.</i>"
+            )
         )
-        self.checkout_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
+
+        l_sim.addSpacing(10)
+        gb_mini_metrics = QGroupBox("Status")
+        l_mm = QFormLayout(gb_mini_metrics)
+        self.lbl_runtime = QLabel("0.00 s")
+        self.lbl_queue_count = QLabel("0")
+        l_mm.addRow("Laufzeit:", self.lbl_runtime)
+        l_mm.addRow("Warteschlange:", self.lbl_queue_count)
+        l_sim.addWidget(gb_mini_metrics)
+
+        self.control_tabs.addTab(self.tab_sim, "Sim")
+
+        # --- TAB 2: EDITOR ---
+        self.tab_config = QWidget()
+        l_conf = QVBoxLayout(self.tab_config)
+        l_conf.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # Map Management
+        gb_map = QGroupBox("Map-Verwaltung")
+        l_map_actions = QHBoxLayout(gb_map)
+        self.btn_new_map = QPushButton("Neu")
+        self.btn_save_map = QPushButton("Speichern")
+        self.btn_delete_map = QPushButton("Löschen")
+        self.btn_delete_map.setStyleSheet(
+            f"color: {COLOR_ERROR.name()}; border-color: {COLOR_ERROR.name()};"
         )
-        sl.addWidget(self.checkout_table)
 
-        self.start_sim_button = QPushButton("Start")
-        # Connection handling is done in Controller
-        sl.addWidget(self.start_sim_button)
+        l_map_actions.addWidget(self.btn_new_map)
+        l_map_actions.addWidget(self.btn_save_map)
+        l_map_actions.addWidget(self.btn_delete_map)
+        l_conf.addWidget(gb_map)
 
-        # Page 1: Admin
-        adm_w = QWidget()
-        al = QVBoxLayout(adm_w)
-        self.settings_button = QPushButton("Layout anpassen...")
+        # Tools
+        l_conf.addWidget(QLabel("Werkzeuge:"))
         self.new_route_button = QPushButton("Route zeichnen")
         self.place_shelves_button = QPushButton("Regale platzieren")
         self.waiting_area_button = QPushButton("Wartebereich")
 
-        cl = QHBoxLayout()
-        self.btn_kl = QPushButton("K(L)")
-        self.btn_kr = QPushButton("K(R)")
-        self.btn_sl = QPushButton("SB(L)")
-        self.btn_sr = QPushButton("SB(R)")
-        cl.addWidget(self.btn_kl)
-        cl.addWidget(self.btn_kr)
-        cl.addWidget(self.btn_sl)
-        cl.addWidget(self.btn_sr)
+        # New split buttons for Settings
+        self.btn_visibility = QPushButton("👁️ Sichtbarkeit")
+        self.btn_offsets = QPushButton("📏 Globale Offsets")
 
-        al.addWidget(self.settings_button)
-        al.addWidget(self.new_route_button)
-        al.addWidget(self.place_shelves_button)
-        al.addWidget(self.waiting_area_button)
-        al.addLayout(cl)
-        al.addStretch()
+        l_conf.addWidget(self.new_route_button)
+        l_conf.addWidget(self.place_shelves_button)
+        l_conf.addWidget(self.waiting_area_button)
+        l_conf.addSpacing(5)
+        l_conf.addWidget(self.btn_visibility)
+        l_conf.addWidget(self.btn_offsets)
 
-        self.top_left_stack.addWidget(sim_w)
-        self.top_left_stack.addWidget(adm_w)
-        return gb
+        l_conf.addSpacing(15)
+        l_conf.addWidget(QLabel("Kasse hinzufügen:"))
+        grid_k = QHBoxLayout()
+        self.btn_kl = QPushButton("Normal (L)")
+        self.btn_kr = QPushButton("Normal (R)")
+        self.btn_sl = QPushButton("SB (L)")
+        self.btn_sr = QPushButton("SB (R)")
 
-    def create_top_right_quadrant(self):
-        """
-        Creates the 'Metrics' quadrant (Top-Right).
+        grid_k.addWidget(self.btn_kl)
+        grid_k.addWidget(self.btn_kr)
+        grid_k.addWidget(self.btn_sl)
+        grid_k.addWidget(self.btn_sr)
+        l_conf.addLayout(grid_k)
 
-        @return: The configured group box.
-        @rtype: QGroupBox
-        """
-        gb = QGroupBox("Ausgabe")
-        l = QVBoxLayout(gb)
-        values_layout = QFormLayout()
-
-        self.lbl_runtime = QLabel("0.00 s")
-        self.lbl_queue_count = QLabel("0")
-
-        values_layout.addRow("Gesamtlaufzeit:", self.lbl_runtime)
-        values_layout.addRow("Kunden im Wartebereich:", self.lbl_queue_count)
-        l.addLayout(values_layout)
-
-        self.plot_widget = pg.PlotWidget()
-        self.plot_widget.setBackground(COLOR_WHITE_BG)
-        l.addWidget(self.plot_widget)
-        return gb
-
-    def create_bottom_left_quadrant(self):
-        """
-        Creates the 'Simulation View' quadrant (Bottom-Left).
-
-        @return: The configured group box.
-        @rtype: ClickableGroupBox
-        """
-        gb = ClickableGroupBox("Simulation")
-        gb.clicked.connect(self.toggle_simulation_fullscreen)
-        l = QVBoxLayout(gb)
-
-        self.minimize_sim_button = QPushButton("Minimieren")
-        self.minimize_sim_button.clicked.connect(
-            self.toggle_simulation_fullscreen
+        # Editor Action Toolbar
+        self.admin_toolbar = QGroupBox("Aktion aktiv")
+        self.admin_toolbar.setStyleSheet(
+            f"border: 1px solid {COLOR_ORANGE.name()};"
         )
-        self.minimize_sim_button.hide()
-        l.addWidget(self.minimize_sim_button)
-
-        self.minimize_q1_button = QPushButton("Minimieren")
-        self.minimize_q1_button.clicked.connect(self.toggle_q1_fullscreen)
-        self.minimize_q1_button.hide()
-        l.addWidget(self.minimize_q1_button)
-
-        self.admin_toolbar = QWidget()
-        tl = QHBoxLayout(self.admin_toolbar)
-        self.btn_save_admin = QPushButton("Speichern")
+        l_adm = QVBoxLayout(self.admin_toolbar)
+        self.btn_save_admin = QPushButton("Bestätigen")
+        self.btn_save_admin.setStyleSheet(
+            f"color: {COLOR_SUCCESS.name()}; font-weight: bold;"
+        )
         self.btn_cancel_admin = QPushButton("Abbrechen")
-        tl.addWidget(self.btn_save_admin)
-        tl.addWidget(self.btn_cancel_admin)
-        l.addWidget(self.admin_toolbar)
+        self.btn_cancel_admin.setStyleSheet(f"color: {COLOR_ERROR.name()};")
+        l_adm.addWidget(self.btn_save_admin)
+        l_adm.addWidget(self.btn_cancel_admin)
+
+        l_conf.addSpacing(20)
+        l_conf.addWidget(self.admin_toolbar)
         self.admin_toolbar.hide()
 
-        self.sim_scene.setBackgroundBrush(QBrush(COLOR_LIGHT_BG))
-        self.sim_view = AutoFitGraphicsView(self.sim_scene)
-        l.addWidget(self.sim_view)
+        self.control_tabs.addTab(self.tab_config, "Editor")
 
-        # Load Quadrant Images for 'Zoom' functionality
+        # --- TAB 3: DATEN ---
+        self.tab_objects = QWidget()
+        l_obj = QVBoxLayout(self.tab_objects)
+
+        self.list_tabs = QTabWidget()
+
+        w_routes = QWidget()
+        l_r = QVBoxLayout(w_routes)
+        self.route_list_widget = QListWidget()
+        self.btn_del_route = QPushButton("Löschen")
+        l_r.addWidget(self.route_list_widget)
+        l_r.addWidget(self.btn_del_route)
+        self.list_tabs.addTab(w_routes, "Routen")
+
+        w_objs = QWidget()
+        l_o = QVBoxLayout(w_objs)
+        self.object_list_widget = QListWidget()
+        self.btn_edit_obj = QPushButton("Verschieben")
+        self.btn_del_obj = QPushButton("Löschen")
+        l_o.addWidget(self.object_list_widget)
+        l_o.addWidget(self.btn_edit_obj)
+        l_o.addWidget(self.btn_del_obj)
+        self.list_tabs.addTab(w_objs, "Items")
+
+        l_obj.addWidget(self.list_tabs)
+        self.control_tabs.addTab(self.tab_objects, "Daten")
+
+        # --- TAB 4: STATISTIK ---
+        self.tab_stats = QWidget()
+        l_stat = QVBoxLayout(self.tab_stats)
+        self.plot_widget = pg.PlotWidget()
+        self.plot_widget.setBackground(COLOR_BG_PANEL)
+        self.plot_widget.getAxis("bottom").setPen(
+            pg.mkPen(color=COLOR_TEXT_MAIN)
+        )
+        self.plot_widget.getAxis("left").setPen(
+            pg.mkPen(color=COLOR_TEXT_MAIN)
+        )
+        l_stat.addWidget(self.plot_widget)
+        self.control_tabs.addTab(self.tab_stats, "Stats")
+
+        return container
+
+    def create_canvas(self):
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.sim_scene.setBackgroundBrush(QBrush(COLOR_FLOOR))
+        self.sim_view = AutoFitGraphicsView(self.sim_scene)
+        self.sim_view.setFrameShape(QFrame.Shape.NoFrame)
+        layout.addWidget(self.sim_view)
+
         try:
             self.item_q1 = ClickablePixmapItem(
                 QPixmap(str(IMAGE_DIR / "quadrant_1.png"))
@@ -268,12 +323,10 @@ class MainWindow(QMainWindow):
                 QPixmap(str(IMAGE_DIR / "quadrant_2.png"))
             )
             self.item_q2.setPos(800, 0)
-
             self.item_q3 = self.sim_scene.addPixmap(
                 QPixmap(str(IMAGE_DIR / "quadrant_3.png"))
             )
             self.item_q3.setPos(0, 450)
-
             self.item_q4 = self.sim_scene.addPixmap(
                 QPixmap(str(IMAGE_DIR / "quadrant_4.png"))
             )
@@ -285,138 +338,30 @@ class MainWindow(QMainWindow):
                 self.scene_rect, Qt.AspectRatioMode.KeepAspectRatio
             )
         except Exception:
-            pass  # Fail silently if images missing
+            pass
 
-        return gb
-
-    def create_bottom_right_quadrant(self):
-        """
-        Creates the 'Object Management' quadrant (Bottom-Right).
-
-        @return: The configured group box.
-        @rtype: QGroupBox
-        """
-        gb = QGroupBox("Verwaltung")
-        self.bottom_right_stack = QStackedWidget(gb)
-        l = QVBoxLayout(gb)
-        l.addWidget(self.bottom_right_stack)
-
-        self.bottom_right_stack.addWidget(QTextEdit("Platzhalter..."))
-
-        tabs = QTabWidget()
-
-        # Routes Tab
-        w_routes = QWidget()
-        l_r = QVBoxLayout(w_routes)
-        self.route_list_widget = QListWidget()
-        self.btn_del_route = QPushButton("Route löschen")
-        l_r.addWidget(self.route_list_widget)
-        l_r.addWidget(self.btn_del_route)
-        tabs.addTab(w_routes, "Routen")
-
-        # Objects Tab
-        w_objs = QWidget()
-        l_o = QVBoxLayout(w_objs)
-        self.object_list_widget = QListWidget()
-        self.btn_edit_obj = QPushButton("Position bearbeiten")
-        self.btn_del_obj = QPushButton("Objekt entfernen")
-        l_o.addWidget(self.object_list_widget)
-        l_o.addWidget(self.btn_edit_obj)
-        l_o.addWidget(self.btn_del_obj)
-        tabs.addTab(w_objs, "Objekte")
-
-        self.bottom_right_stack.addWidget(tabs)
-        return gb
-
-    def toggle_admin_mode_ui(self, checked):
-        """
-        Updates the UI elements based on the admin mode state.
-
-        @param checked: Whether admin mode is active.
-        @type checked: bool
-        """
-        self.is_admin_mode = checked
-        if checked:
-            if self.is_q1_maximized:
-                self.toggle_q1_fullscreen()
-            if self.is_sim_maximized:
-                self.toggle_simulation_fullscreen()
-            self.top_left_stack.setCurrentIndex(1)
-            self.bottom_right_stack.setCurrentIndex(1)
-            self.bottom_left_group_box.setTitle("Routen-Editor")
-            self.bottom_left_group_box.setEnabled(False)
-            if hasattr(self, "item_q1"):
-                self.item_q1.setEnabled(False)
-        else:
-            self.top_left_stack.setCurrentIndex(0)
-            self.bottom_right_stack.setCurrentIndex(0)
-            self.bottom_left_group_box.setTitle("Live-Simulation (Miniatur)")
-            self.bottom_left_group_box.setEnabled(True)
-            if hasattr(self, "item_q1"):
-                self.item_q1.setEnabled(True)
-
-        if self.controller:
-            self.controller.toggle_admin_mode_logic(checked)
-
-    def toggle_simulation_fullscreen(self, force=False):
-        """
-        Toggles the simulation view to fullscreen.
-
-        @param force: Force maximization.
-        @type force: bool
-        """
-        if self.is_q1_maximized:
-            self.toggle_q1_fullscreen()
-            return
-        if self.is_admin_mode and not force:
-            return
-
-        self.is_sim_maximized = not self.is_sim_maximized
-        if self.is_sim_maximized:
-            self.top_row_widget.hide()
-            self.bottom_right_group_box.hide()
-            self.minimize_sim_button.show()
-            self.bottom_left_group_box.setTitle("Live-Simulation (Vollbild)")
-        else:
-            self.top_row_widget.show()
-            self.bottom_right_group_box.show()
-            self.minimize_sim_button.hide()
-            self.bottom_left_group_box.setTitle("Live-Simulation (Miniatur)")
-            self.sim_view.fitInView(
-                self.scene_rect, Qt.AspectRatioMode.KeepAspectRatio
-            )
+        return container
 
     def toggle_q1_fullscreen(self):
-        """
-        Toggles the zoomed view of Quadrant 1 (Checkouts).
-        """
         if not hasattr(self, "item_q1") or self.is_admin_mode:
             return
 
-        self.is_q1_maximized = not self.is_q1_maximized
+        self.is_q1_maximized = not getattr(self, "is_q1_maximized", False)
+        self.reset_sim_zoom()
+
         if self.is_q1_maximized:
             for i in [self.item_q2, self.item_q3, self.item_q4]:
                 i.hide()
-            self.minimize_q1_button.show()
             self.sim_view.fitInView(
                 self.item_q1.boundingRect(), Qt.AspectRatioMode.KeepAspectRatio
             )
-            self.bottom_left_group_box.setTitle("Kassenbereich (Vollbild)")
-            if self.is_sim_maximized:
-                self.minimize_sim_button.hide()
         else:
             for i in [self.item_q2, self.item_q3, self.item_q4]:
                 i.show()
-            self.minimize_q1_button.hide()
             self.sim_view.fitInView(
                 self.scene_rect, Qt.AspectRatioMode.KeepAspectRatio
             )
-            if self.is_sim_maximized:
-                self.minimize_sim_button.show()
-                self.bottom_left_group_box.setTitle(
-                    "Live-Simulation (Vollbild)"
-                )
-            else:
-                self.bottom_left_group_box.setTitle(
-                    "Live-Simulation (Miniatur)"
-                )
+
+    def reset_sim_zoom(self):
+        if self.sim_view:
+            self.sim_view.reset_zoom()

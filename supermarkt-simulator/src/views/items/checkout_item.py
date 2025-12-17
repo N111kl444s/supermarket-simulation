@@ -3,7 +3,7 @@ Checkout item visualization.
 """
 
 from PyQt6.QtWidgets import QGraphicsObject, QStyle
-from PyQt6.QtCore import Qt, QRectF
+from PyQt6.QtCore import Qt, QRectF, pyqtSignal
 from PyQt6.QtGui import QPen, QBrush, QPixmap, QPainter, QColor
 from config import *
 
@@ -12,7 +12,13 @@ class CheckoutItem(QGraphicsObject):
     """
     Visual representation of a checkout counter.
     Supports different types (Normal/SB) and orientations, including images and status lights.
+
+    @ivar clicked: Signal emitted when the item is clicked. Sends the checkout ID.
+    @type clicked: pyqtSignal(int)
     """
+
+    # Signal sendet die ID (int) der angeklickten Kasse
+    clicked = pyqtSignal(int)
 
     _pixmap_normal_left = None
     _pixmap_normal_right = None
@@ -51,6 +57,9 @@ class CheckoutItem(QGraphicsObject):
         self.data_id = data_id
         self.light_offset = light_offset
         self.setZValue(6)
+
+        # Interaktivitaet: Cursor aendern und Selektierbarkeit
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFlag(QGraphicsObject.GraphicsItemFlag.ItemIsSelectable, True)
 
         # Lazy loading of static pixmaps
@@ -127,5 +136,16 @@ class CheckoutItem(QGraphicsObject):
             painter.setBrush(QBrush(status_color))
             painter.setPen(QPen(Qt.GlobalColor.black, 1))
             painter.drawEllipse(
-                self.light_offset[0], self.light_offset[1], 8, 8
+                int(self.light_offset[0]), int(self.light_offset[1]), 8, 8
             )
+
+    def mousePressEvent(self, event):
+        """
+        Handles mouse press events to trigger configuration.
+        """
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.data_id is not None:
+                self.clicked.emit(self.data_id)
+                event.accept()  # Event konsumieren, damit es nicht weitergereicht wird
+        else:
+            super().mousePressEvent(event)

@@ -10,23 +10,13 @@ from config import *
 
 class RouteEditorScene(QGraphicsScene):
     """
-    Enhanced QGraphicsScene that supports admin interaction modes (drawing routes, placing objects).
-
-    @ivar clicked_point: Signal emitted when a point is clicked in admin mode.
-    @type clicked_point: pyqtSignal(QPointF)
-    @ivar waiting_area_created: Signal emitted when a waiting area rectangle is drawn.
-    @type waiting_area_created: pyqtSignal(QRectF)
+    Enhanced QGraphicsScene that supports admin interaction modes.
     """
 
     clicked_point = pyqtSignal(QPointF)
     waiting_area_created = pyqtSignal(QRectF)
 
     def __init__(self, p=None):
-        """
-        Initializes the scene.
-
-        @param p: Parent object.
-        """
         super().__init__(p)
         self.main_window = None
         self.rect_start = None
@@ -35,26 +25,28 @@ class RouteEditorScene(QGraphicsScene):
     def mousePressEvent(self, e):
         """
         Handles mouse press events to capture admin inputs.
-
-        @param e: Mouse event.
-        @type e: QGraphicsSceneMouseEvent
         """
         if self.main_window and self.main_window.is_admin_mode:
             super().mousePressEvent(e)
             if self.selectedItems():
                 return
+
+            # Drawing Waiting Area
             if (
                 self.main_window.is_drawing_waiting_area
                 and e.button() == Qt.MouseButton.LeftButton
             ):
                 self.rect_start = e.scenePos()
                 self.temp_rect = QGraphicsRectItem()
+                # Use COLOR_SUCCESS (Green) for the drag visualization
                 self.temp_rect.setPen(
-                    QPen(COLOR_GREEN, 2, Qt.PenStyle.DashLine)
+                    QPen(COLOR_SUCCESS, 2, Qt.PenStyle.DashLine)
                 )
                 self.addItem(self.temp_rect)
                 e.accept()
                 return
+
+            # Drawing Points / Routes
             if (
                 self.main_window.is_drawing_mode
                 or self.main_window.is_placing_shelves
@@ -64,13 +56,12 @@ class RouteEditorScene(QGraphicsScene):
                     self.clicked_point.emit(e.scenePos())
                     e.accept()
                     return
+
         super().mousePressEvent(e)
 
     def mouseMoveEvent(self, e):
         """
-        Handles mouse move events (e.g., for rubber-banding rectangles).
-
-        @param e: Mouse event.
+        Handles mouse move events (rubber-banding).
         """
         if (
             self.main_window.is_drawing_waiting_area
@@ -86,9 +77,7 @@ class RouteEditorScene(QGraphicsScene):
 
     def mouseReleaseEvent(self, e):
         """
-        Handles mouse release events to finalize drawing actions.
-
-        @param e: Mouse event.
+        Handles mouse release events.
         """
         if self.main_window.is_drawing_waiting_area and self.rect_start:
             self.waiting_area_created.emit(
