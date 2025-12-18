@@ -1,7 +1,6 @@
 """
-Main controller module orchestrating the simulation and map management.
-Refactored: Fixed missing 'load_settings' method.
-Refactored: Implemented Time Simulation, Speed Controls, and Play/Pause logic.
+Main Controller.
+Refactored: Implements Global Exit Direction and Map Saving/Loading of it.
 """
 
 import json
@@ -16,7 +15,6 @@ from PyQt6.QtWidgets import (
     QInputDialog,
     QGraphicsItem,
 )
-
 from config import *
 from views.main_window import MainWindow
 from models.customer import CustomerModel
@@ -26,6 +24,7 @@ from views.items import (
     CashierItem,
     CustomerItem,
     WaitingAreaItem,
+    StartAreaItem,
 )
 from views.dialogs import (
     VisibilityDialog,
@@ -36,39 +35,31 @@ from views.dialogs import (
 
 
 class MainController:
-    """
-    The central controller class connecting Models, Views, and Data logic.
-    """
-
     def __init__(self):
-        # MODELS & DATA
         self.all_routes = {}
         self.all_shelves = []
         self.checkouts_data = []
         self.waiting_area_rect = None
+        self.start_area_rect = None
         self.settings = DEFAULT_SETTINGS.copy()
 
         self.current_mode = "Simulation"
-
-        # Tool State
         self.active_tool = None
         self.active_tool_params = {}
         self.selected_object_spec = None
 
-        # SIMULATION TIME STATE
         self.sim_time = QTime(*DEFAULT_OPEN_TIME)
         self.open_time = QTime(*DEFAULT_OPEN_TIME)
         self.close_time = QTime(*DEFAULT_CLOSE_TIME)
         self.is_running = False
-        self.sim_speed = SPEED_1
+        self.time_factor = FACTOR_1X
+        self.time_accumulator_sec = 0.0
 
-        # Map System
         self.current_map_file = None
         if not MAPS_DIR.exists():
             os.makedirs(MAPS_DIR)
         self.settings_file = BASE_DIR / "settings.json"
 
-        # SIM STATE (Entities)
         self.customers_model = []
         self.customer_items = []
         self.checkout_queues = {}
@@ -78,46 +69,50 @@ class MainController:
         self.route_debug_items = []
         self.cashier_items = []
         self.waiting_area_item = None
+        self.start_area_item = None
 
         self.current_route_points = []
         self.current_route_path_item = None
         self.current_route_point_items = []
 
         self.sim_timer = QTimer()
+        self.sim_timer.setInterval(ANIMATION_TICK_MS)
         self.sim_timer.timeout.connect(self.simulation_tick)
 
-        # VIEW
         self.view = MainWindow()
         self.view.set_controller(self)
         self.scene = self.view.sim_scene
 
-        # --- CONNECTIONS ---
-
-        # Toolbar & Mode
+        # Connections
         self.view.btn_play_pause.clicked.connect(self.toggle_play_pause)
         self.view.btn_reset.clicked.connect(self.reset_simulation)
         self.view.btn_skip.clicked.connect(self.skip_day)
-
-        self.view.btn_speed_1.clicked.connect(lambda: self.set_speed(SPEED_1))
-        self.view.btn_speed_2.clicked.connect(lambda: self.set_speed(SPEED_2))
-        self.view.btn_speed_3.clicked.connect(lambda: self.set_speed(SPEED_3))
-
+        self.view.btn_speed_1.clicked.connect(
+            lambda: self.set_speed(FACTOR_1X)
+        )
+        self.view.btn_speed_2.clicked.connect(
+            lambda: self.set_speed(FACTOR_2X)
+        )
+        self.view.btn_speed_3.clicked.connect(
+            lambda: self.set_speed(FACTOR_6X)
+        )
         self.view.btn_reset_zoom.clicked.connect(self.view.reset_sim_zoom)
         self.view.map_combo.currentTextChanged.connect(
             self.on_map_selection_changed
         )
         self.view.mode_combo.currentTextChanged.connect(self.on_mode_changed)
 
-        # Map Actions
         self.view.btn_new_map.clicked.connect(self.create_new_map)
         self.view.btn_save_map.clicked.connect(self.save_current_map)
         self.view.btn_delete_map.clicked.connect(self.delete_current_map)
 
-        # Tools
         self.view.new_route_button.clicked.connect(self.toggle_route_tool)
         self.view.place_shelves_button.clicked.connect(self.toggle_shelf_tool)
         self.view.waiting_area_button.clicked.connect(
             self.toggle_waiting_area_tool
+        )
+        self.view.start_area_button.clicked.connect(
+            self.toggle_start_area_tool
         )
 
         self.view.btn_kl.clicked.connect(
@@ -141,43 +136,34 @@ class MainController:
         self.view.btn_offsets.clicked.connect(self.open_offsets_dialog)
         self.view.btn_save_admin.clicked.connect(self.finish_route_drawing)
 
-        # Data Lists
         self.view.route_list_widget.itemClicked.connect(lambda i: None)
         self.view.object_list_widget.itemClicked.connect(
             self.on_object_list_clicked
         )
-
         self.view.btn_del_route.clicked.connect(self.delete_selected_route)
         self.view.btn_edit_obj.clicked.connect(self.edit_selected_object)
         self.view.btn_del_obj.clicked.connect(
             self.delete_selected_object_from_list
         )
 
-        # Scene Interactions
         self.scene.clicked_point.connect(self.handle_scene_click)
         self.scene.waiting_area_created.connect(
             self.handle_waiting_area_created
         )
         self.scene.selectionChanged.connect(self.on_scene_selection_changed)
 
-        # Initial Load
         self.load_settings()
         self.refresh_map_list()
         self.on_mode_changed("Simulation")
-
-        # Init Clock Display
         self.update_clock_display()
 
     def show(self):
         self.view.show()
 
-    # --- SETTINGS LOADING (FIXED) ---
     def load_settings(self):
         if self.settings_file.exists():
             with open(self.settings_file, "r") as f:
                 self.settings.update(json.load(f))
-
-    # --- SIMULATION CONTROL ---
 
     def toggle_play_pause(self):
         if self.sim_timer.isActive():
@@ -192,7 +178,6 @@ class MainController:
             )
             self.view.btn_play_pause.setChecked(False)
             return
-
         if self.current_mode == "Editor":
             QMessageBox.warning(
                 self.view,
@@ -201,48 +186,36 @@ class MainController:
             )
             self.view.btn_play_pause.setChecked(False)
             return
-
         if not self.is_running:
             self.initialize_simulation_day()
-
         self.is_running = True
         self.view.btn_play_pause.setChecked(True)
         self.view.btn_play_pause.setText("⏸")
         self.view.time_open.setEnabled(False)
         self.view.time_close.setEnabled(False)
         self.view.actor_count_input.setEnabled(False)
-
-        self.sim_timer.start(self.sim_speed)
+        self.sim_timer.start()
 
     def pause_simulation(self):
-        self.is_running = False
         self.sim_timer.stop()
         self.view.btn_play_pause.setChecked(False)
         self.view.btn_play_pause.setText("▶")
+        self.is_running = False
 
     def reset_simulation(self):
         self.pause_simulation()
-
-        # Clear entities
         for c in self.customer_items:
             self.scene.removeItem(c)
         self.customers_model.clear()
         self.customer_items.clear()
         self.checkout_queues = {}
         self.queue_count = 0
-
-        # Reset Time
         self.sim_time = self.view.time_open.time()
-        self.open_time = self.sim_time
-        self.close_time = self.view.time_close.time()
-
+        self.time_accumulator_sec = 0.0
         self.update_clock_display()
-
-        # Re-enable inputs
         self.view.time_open.setEnabled(True)
         self.view.time_close.setEnabled(True)
         self.view.actor_count_input.setEnabled(True)
-
         self.view.lbl_queue_count.setText("0")
         self.is_running = False
 
@@ -250,17 +223,15 @@ class MainController:
         self.open_time = self.view.time_open.time()
         self.close_time = self.view.time_close.time()
         self.sim_time = self.open_time
+        self.time_accumulator_sec = 0.0
         self.update_clock_display()
-
         for c in self.customer_items:
             self.scene.removeItem(c)
         self.customers_model.clear()
         self.customer_items.clear()
         self.checkout_queues = {}
         self.queue_count = 0
-
         self.draw_debug_elements()
-
         count = self.view.actor_count_input.value()
         self.spawn_customers(count)
 
@@ -268,13 +239,15 @@ class MainController:
         route_names = list(self.all_routes.keys())
         if not route_names:
             return
-
+        offset = self.settings.get("customer_path_offset", 10)
         for _ in range(count):
             r_name = random.choice(route_names)
             model = CustomerModel(
                 self.all_routes[r_name],
                 self.all_shelves,
+                self.start_area_rect,
                 self.waiting_area_rect,
+                max_offset=offset,
             )
             self.customers_model.append(model)
             item = CustomerItem(model)
@@ -290,17 +263,20 @@ class MainController:
         )
         self.reset_simulation()
 
-    def set_speed(self, speed_interval):
-        self.sim_speed = speed_interval
-        if self.sim_timer.isActive():
-            self.sim_timer.setInterval(self.sim_speed)
+    def set_speed(self, factor):
+        self.time_factor = factor
 
     def simulation_tick(self):
-        self.sim_time = self.sim_time.addSecs(60)
-        self.update_clock_display()
-
+        real_dt = ANIMATION_TICK_MS / 1000.0
+        game_dt = real_dt * self.time_factor
+        self.time_accumulator_sec += game_dt
+        while self.time_accumulator_sec >= 60.0:
+            self.sim_time = self.sim_time.addSecs(60)
+            self.time_accumulator_sec -= 60.0
+            self.update_clock_display()
         if self.sim_time >= self.close_time:
             self.pause_simulation()
+            self.update_clock_display()
             QMessageBox.information(
                 self.view, "Feierabend", "Der Supermarkt schließt jetzt."
             )
@@ -311,9 +287,9 @@ class MainController:
         waiting_cnt = 0
         for i, model in enumerate(self.customers_model):
             item = self.customer_items[i]
-            model.tick()
+            model.tick(game_dt)
             item.sync_visuals()
-            if model.state == "FINISHED_SHOPPING":
+            if model.state == "WAITING_AREA":
                 waiting_cnt += 1
                 if model.assigned_checkout_id is None:
                     self.try_assign_checkout(model)
@@ -352,7 +328,6 @@ class MainController:
     def update_clock_display(self):
         self.view.lbl_clock.setText(self.sim_time.toString("HH:mm"))
 
-    # --- CUSTOMER LOGIC ---
     def try_assign_checkout(self, model):
         candidates = []
         for c_data in self.checkouts_data:
@@ -386,6 +361,10 @@ class MainController:
             return
         cx, cy = c_data["x"], c_data["y"]
         ori = c_data.get("orientation", "Right")
+
+        # Determine Exit Direction (GLOBAL setting)
+        exit_dir = self.view.combo_global_exit.currentText()
+
         c_type = c_data["type"]
         offset_key = (
             "offset_queue_"
@@ -396,9 +375,8 @@ class MainController:
         sx = cx + off[0]
         sy = cy + off[1]
         target = QPointF(sx, sy + (q_index * QUEUE_SPACING))
-        model.go_to_queue(target, cid)
+        model.go_to_queue(target, cid, exit_dir)
 
-    # --- SELECTION & DRAWING ---
     def on_object_list_clicked(self, item):
         d = item.data(Qt.ItemDataRole.UserRole)
         self.selected_object_spec = d
@@ -457,6 +435,8 @@ class MainController:
         self.scene.blockSignals(True)
         if self.waiting_area_item and self.waiting_area_item.scene():
             self.scene.removeItem(self.waiting_area_item)
+        if self.start_area_item and self.start_area_item.scene():
+            self.scene.removeItem(self.start_area_item)
         for i in self.shelf_items:
             if i.scene():
                 self.scene.removeItem(i)
@@ -486,6 +466,9 @@ class MainController:
         ):
             self.waiting_area_item = WaitingAreaItem(self.waiting_area_rect)
             self.scene.addItem(self.waiting_area_item)
+        if self.start_area_rect and self.settings.get("show_start_area", True):
+            self.start_area_item = StartAreaItem(self.start_area_rect)
+            self.scene.addItem(self.start_area_item)
 
         for idx, p in enumerate(self.all_shelves):
             show = (
@@ -494,6 +477,7 @@ class MainController:
                 or is_selected("shelf", idx)
             )
             if show:
+                # Reverted: simple QPointF access
                 s = ShelfItem(p.x(), p.y(), index=idx)
                 self.scene.addItem(s)
                 self.shelf_items.append(s)
@@ -605,12 +589,12 @@ class MainController:
         self.scene.blockSignals(False)
         self.update_object_list()
 
-    # --- Tool Management ---
     def reset_tools(self, exclude_btn=None):
         tools = [
             self.view.new_route_button,
             self.view.place_shelves_button,
             self.view.waiting_area_button,
+            self.view.start_area_button,
             self.view.btn_kl,
             self.view.btn_kr,
             self.view.btn_sl,
@@ -624,6 +608,7 @@ class MainController:
         self.view.is_placing_shelves = False
         self.view.is_drawing_waiting_area = False
         self.view.is_placing_checkout = False
+        self.view.is_drawing_start_area = False
         self.view.admin_toolbar.hide()
         if self.current_route_path_item:
             if self.current_route_path_item.scene():
@@ -667,6 +652,19 @@ class MainController:
             self.reset_tools(exclude_btn=btn)
             self.active_tool = "waiting_area"
             self.view.is_drawing_waiting_area = True
+            if self.waiting_area_item:
+                self.waiting_area_item.setVisible(True)
+        else:
+            self.reset_tools()
+
+    def toggle_start_area_tool(self):
+        btn = self.view.start_area_button
+        if btn.isChecked():
+            self.reset_tools(exclude_btn=btn)
+            self.active_tool = "start_area"
+            self.view.is_drawing_start_area = True
+            if self.start_area_item:
+                self.start_area_item.setVisible(True)
         else:
             self.reset_tools()
 
@@ -679,7 +677,6 @@ class MainController:
         else:
             self.reset_tools()
 
-    # --- Scene Actions ---
     def handle_scene_click(self, pos):
         if self.current_mode != "Editor":
             return
@@ -732,8 +729,10 @@ class MainController:
         if self.active_tool == "waiting_area":
             self.waiting_area_rect = rect
             self.draw_debug_elements()
+        elif self.active_tool == "start_area":
+            self.start_area_rect = rect
+            self.draw_debug_elements()
 
-    # --- Data List Actions ---
     def edit_selected_object(self):
         item = self.view.object_list_widget.currentItem()
         if not item:
@@ -873,7 +872,6 @@ class MainController:
                         self.view.object_list_widget.setCurrentRow(row)
                         break
 
-    # --- Helpers ---
     def refresh_map_list(self):
         self.view.map_combo.blockSignals(True)
         self.view.map_combo.clear()
@@ -919,15 +917,31 @@ class MainController:
             if "routes" in data:
                 for k, v in data["routes"].items():
                     self.all_routes[k] = [QPointF(p[0], p[1]) for p in v]
-            self.all_shelves = [
-                QPointF(p[0], p[1]) for p in data.get("shelves", [])
-            ]
+
+            # Simplified Loading (Points only)
+            raw_shelves = data.get("shelves", [])
+            self.all_shelves = []
+            for s in raw_shelves:
+                # Handle Dict or List formats, revert to point
+                if isinstance(s, dict):
+                    self.all_shelves.append(QPointF(s["x"], s["y"]))
+                elif isinstance(s, list):
+                    self.all_shelves.append(QPointF(s[0], s[1]))
+
             self.checkouts_data = data.get("checkouts", [])
             self.waiting_area_rect = (
                 QRectF(*data["waiting_area"])
                 if data.get("waiting_area")
                 else None
             )
+            self.start_area_rect = (
+                QRectF(*data["start_area"]) if data.get("start_area") else None
+            )
+
+            # --- GLOBAL SETTING LOADING ---
+            global_exit = data.get("global_exit_direction", "Rechts")
+            self.view.combo_global_exit.setCurrentText(global_exit)
+
             self.update_object_list()
             self.view.route_list_widget.clear()
             for r in self.all_routes:
@@ -944,7 +958,9 @@ class MainController:
         routes_export = {
             k: [[p.x(), p.y()] for p in v] for k, v in self.all_routes.items()
         }
+        # Save shelves as simple lists [x, y]
         shelves_export = [[p.x(), p.y()] for p in self.all_shelves]
+
         wa_export = (
             [
                 self.waiting_area_rect.x(),
@@ -955,11 +971,27 @@ class MainController:
             if self.waiting_area_rect
             else None
         )
+        sa_export = (
+            [
+                self.start_area_rect.x(),
+                self.start_area_rect.y(),
+                self.start_area_rect.width(),
+                self.start_area_rect.height(),
+            ]
+            if self.start_area_rect
+            else None
+        )
+
+        # --- GLOBAL SETTING SAVING ---
+        global_exit = self.view.combo_global_exit.currentText()
+
         data = {
             "routes": routes_export,
             "shelves": shelves_export,
             "checkouts": self.checkouts_data,
             "waiting_area": wa_export,
+            "start_area": sa_export,
+            "global_exit_direction": global_exit,
         }
         try:
             with open(self.current_map_file, "w") as f:

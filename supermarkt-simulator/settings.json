@@ -4,6 +4,8 @@
     "show_checkouts": true,
     "show_cashiers": true,
     "show_waiting_area": true,
+    "show_start_area": true,
+    "customer_path_offset": 0,
     "offset_cashier_left": [
         13,
         -21

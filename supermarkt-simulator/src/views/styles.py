@@ -1,8 +1,6 @@
 """
 Style definitions for the application (QSS).
 Implements a modern, clean LIGHT design.
-Refined GroupBox titles to cut borders cleanly.
-Fixed: Dialog backgrounds, ScrollArea transparency, and Tool Button Active State.
 """
 
 from config import (
@@ -33,7 +31,6 @@ def get_application_style():
             background-color: {c_bg};
         }}
         
-        /* --- DIALOGS --- */
         QDialog {{
             background-color: {c_panel};
             color: {c_text};
@@ -44,7 +41,6 @@ def get_application_style():
             color: {c_text};
         }}
         
-        /* --- CLOCK LABEL --- */
         QLabel#ClockLabel {{
             font-family: 'Consolas', 'Monospace', sans-serif;
             font-size: 24px;
@@ -56,14 +52,12 @@ def get_application_style():
             padding: 2px 10px;
         }}
 
-        /* --- TOOLBAR BUTTONS --- */
         QPushButton#ToolbarButton {{
             font-size: 16px;
             padding: 4px 10px;
             font-weight: bold;
         }}
 
-        /* --- SCROLL AREA FIX --- */
         QScrollArea {{
             background-color: transparent;
             border: none;
@@ -81,7 +75,6 @@ def get_application_style():
             font-size: 13px;
         }}
         
-        /* --- LABELS --- */
         QLabel {{
             background-color: transparent;
             border: none;
@@ -89,13 +82,11 @@ def get_application_style():
             color: {c_text};
         }}
         
-        /* --- TOOLBAR FRAME --- */
         QFrame#ToolbarFrame {{
             background-color: {c_panel};
             border-bottom: 1px solid {c_border};
         }}
 
-        /* --- GROUP BOXES --- */
         QGroupBox {{
             background-color: {c_panel};
             border: 1px solid {c_border};
@@ -113,7 +104,6 @@ def get_application_style():
             margin-left: 10px;
         }}
 
-        /* --- BUTTONS --- */
         QPushButton {{
             background-color: {c_panel};
             border: 1px solid {c_border};
@@ -143,7 +133,6 @@ def get_application_style():
             min-width: 60px;
         }}
 
-        /* --- TABS --- */
         QTabWidget::pane {{
             border: 1px solid {c_border};
             background-color: {c_panel};
@@ -169,7 +158,6 @@ def get_application_style():
             background: #E5E7EB;
         }}
 
-        /* --- INPUTS & COMBOBOX --- */
         QLineEdit, QSpinBox, QComboBox, QTimeEdit {{
             background-color: {c_input};
             border: 1px solid {c_border};
@@ -189,7 +177,6 @@ def get_application_style():
             outline: none;
         }}
         
-        /* --- SPINBOX ARROWS --- */
         QSpinBox::up-button, QDoubleSpinBox::up-button, 
         QSpinBox::down-button, QDoubleSpinBox::down-button,
         QTimeEdit::up-button, QTimeEdit::down-button {{
@@ -209,7 +196,6 @@ def get_application_style():
             border-bottom-right-radius: 4px;
         }}
 
-        /* --- CHECKBOX --- */
         QCheckBox {{
             spacing: 8px;
             color: {c_text};
@@ -229,7 +215,6 @@ def get_application_style():
             border: 1px solid {c_accent};
         }}
         
-        /* --- TABLES & LISTS --- */
         QListWidget, QTableWidget {{
             background-color: {c_input};
             border: 1px solid {c_border};
@@ -256,7 +241,6 @@ def get_application_style():
             font-weight: bold;
         }}
         
-        /* --- SCROLLBARS --- */
         QScrollBar:vertical {{
             background: {c_bg};
             width: 10px;
@@ -284,7 +268,6 @@ def get_application_style():
         }}
         QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; }}
 
-        /* --- SPLITTER --- */
         QSplitter::handle {{
             background-color: {c_border};
         }}

@@ -1,217 +1,228 @@
 """
-Logic model for a single customer agent.
+Logic for the customer agent.
+Refactored: Uses 'item_count' as dynamic inventory accumulator.
 """
 
 import random
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QVector2D
-from config import *
+from config import WALK_SPEED_PPS, SCAN_TIME_PER_ITEM_MS, SHELF_PROBABILITY
 
 
 class CustomerModel:
-    """
-    Represents the state and behavioral logic of a customer in the simulation.
+    def __init__(
+        self,
+        route_points,
+        all_shelves,
+        start_area_rect,
+        waiting_area_rect,
+        max_offset=0,
+    ):
+        self.route = list(route_points)
+        self.all_shelves = list(all_shelves)  # Expecting QPointF or dict
+        self.start_area = start_area_rect
+        self.waiting_area = waiting_area_rect
+        self.max_offset = max_offset
 
-    Operates as a state machine.
-
-    @ivar pos: Current absolute position of the customer.
-    @type pos: QPointF
-    @ivar state: Current state (e.g., 'WALKING_ROUTE', 'SHOPPING').
-    @type state: str
-    @ivar inventory: Number of items collected.
-    @type inventory: int
-    """
-
-    def __init__(self, rp, sp, wr):
-        """
-        Initializes the customer model.
-
-        @param rp: List of route waypoints.
-        @type rp: list[QPointF]
-        @param sp: List of shelf positions.
-        @type sp: list[QPointF]
-        @param wr: Rectangle defining the waiting area.
-        @type wr: QRectF
-        """
-        self.route = rp
-        self.shelves = sp
-        self.waiting_area = wr
-        self.state = "WALKING_ROUTE"
-        self.current_waypoint_idx = 0
-        self.wait_ticks = 0
-        self.return_pos = None
-        self.target_pos = QPointF(0, 0)
-        self.assigned_checkout_id = None
-        self.inventory = 0
-        self.items_scanned = 0
-        self.scan_progress_ticks = 0
-        self.scan_ticks_total = int(SCAN_TIME_PER_ITEM_MS / SIM_TICK_MS)
+        # -- 1. SPAWN POSITION --
         self.pos = QPointF(0, 0)
-
-        if rp:
-            self.pos = rp[0]
-            self.target_pos = rp[1] if len(rp) > 1 else self.pos
-
-    def set_pos(self, p):
-        """
-        Updates the customer's position.
-
-        @param p: New position.
-        @type p: QPointF
-        """
-        self.pos = p
-
-    def tick(self):
-        """
-        Executes one simulation step.
-
-        Updates the state and position based on current targets and environment.
-        """
-        if self.state == "SCANNING":
-            self.process_scanning()
-            return
-        if self.state == "LEAVING":
-            self.set_pos(QPointF(self.pos.x(), self.pos.y() - WALK_SPEED))
-            if self.pos.y() < -50:
-                self.state = "GONE"
-            return
-        if self.state == "IN_QUEUE":
-            dist = (QVector2D(self.target_pos) - QVector2D(self.pos)).length()
-            if dist > 1.0:
-                self.move_towards_target()
-            return
-        if self.state == "FINISHED_SHOPPING":
-            self.wait_ticks -= 1
-            if self.wait_ticks <= 0:
-                self.new_wait_target()
-            self.move_towards_target()
-            return
-        if self.state == "WAITING_AT_SHELF":
-            self.wait_ticks -= 1
-            if self.wait_ticks <= 0:
-                self.state = "RETURNING_TO_ROUTE"
-                self.target_pos = self.return_pos
-            return
-        self.move_towards_target()
-
-    def process_scanning(self):
-        """
-        Simulates the item scanning process at a checkout.
-        """
-        if self.items_scanned < self.inventory:
-            self.scan_progress_ticks += 1
-            if self.scan_progress_ticks >= self.scan_ticks_total:
-                self.items_scanned += 1
-                self.scan_progress_ticks = 0
-        else:
-            self.state = "LEAVING"
-
-    def new_wait_target(self):
-        """
-        Selects a random target position within the waiting area.
-        """
-        if self.waiting_area:
-            self.target_pos = QPointF(
-                random.uniform(
-                    self.waiting_area.left(), self.waiting_area.right()
-                ),
-                random.uniform(
-                    self.waiting_area.top(), self.waiting_area.bottom()
-                ),
+        if self.start_area:
+            wx = random.uniform(
+                self.start_area.left(), self.start_area.right()
             )
-            self.wait_ticks = random.randint(50, 150)
-
-    def move_towards_target(self):
-        """
-        Moves the customer towards self.target_pos using WALK_SPEED.
-        """
-        curr = QVector2D(self.pos)
-        tgt = QVector2D(self.target_pos)
-        dist = (tgt - curr).length()
-        if dist < WALK_SPEED:
-            self.set_pos(self.target_pos)
-            self.handle_target_reached()
-        else:
-            self.set_pos(
-                (curr + (tgt - curr).normalized() * WALK_SPEED).toPointF()
+            wy = random.uniform(
+                self.start_area.top(), self.start_area.bottom()
             )
+            self.pos = QPointF(wx, wy)
+        elif self.route:
+            self.pos = self.route[0]
 
-    def handle_target_reached(self):
-        """
-        Handles logic when the customer reaches their target position.
-        Transitions states (e.g., from WALKING to WAITING).
-        """
-        if (
-            self.state == "FINISHED_SHOPPING"
-            or self.state == "IN_QUEUE"
-            or self.state == "WALKING_TO_QUEUE"
-        ):
-            if self.state == "WALKING_TO_QUEUE":
-                self.state = "IN_QUEUE"
-            return
-        if self.state == "WALKING_TO_SHELF":
-            self.state = "WAITING_AT_SHELF"
-            self.wait_ticks = 50
-            if random.random() < ITEM_PICK_PROBABILITY:
-                self.inventory += 1
-        elif self.state == "RETURNING_TO_ROUTE":
-            self.state = "WALKING_ROUTE"
-            self.next_wp()
-        elif self.state == "WALKING_ROUTE":
-            if (
-                self.current_waypoint_idx < len(self.route) - 1
-                and self.shelves
-                and random.random() < SHELF_PROBABILITY
-            ):
-                sh = self.find_nearest_shelf()
-                if sh:
-                    self.state = "WALKING_TO_SHELF"
-                    self.return_pos = self.target_pos
-                    self.target_pos = sh
-                    return
-            self.next_wp()
+        # -- 2. SHOPPING MAPPING --
+        self.shopping_map = self._map_shelves_to_route()
 
-    def next_wp(self):
-        """
-        Advances to the next waypoint in the route.
-        """
-        self.current_waypoint_idx += 1
-        if self.current_waypoint_idx >= len(self.route):
-            self.enter_waiting_area()
-        else:
-            self.target_pos = self.route[self.current_waypoint_idx]
+        # DYNAMIC ITEM COUNT
+        # Starts at 0, increases when visiting shelves
+        self.item_count = 0
 
-    def enter_waiting_area(self):
-        """
-        Transitions the customer to the waiting area state.
-        """
-        self.state = "FINISHED_SHOPPING"
-        self.wait_ticks = 0
+        # Movement State
+        self.route_index = 0
+        self.target_pos = None
+        self.state = "SPAWNING"
+        self.spawn_timer = random.uniform(0.5, 2.0)
 
-    def find_nearest_shelf(self):
-        """
-        Finds the closest shelf to the current position.
-
-        @return: Position of the nearest shelf or None.
-        @rtype: QPointF
-        """
-        if not self.shelves:
-            return None
-        return min(
-            self.shelves,
-            key=lambda s: (QVector2D(s) - QVector2D(self.pos)).length(),
-            default=None,
+        # Random path jitter
+        self.offset_vec = QVector2D(
+            random.uniform(-self.max_offset, self.max_offset),
+            random.uniform(-self.max_offset, self.max_offset),
         )
 
-    def go_to_queue(self, target_pos, checkout_id):
-        """
-        Directs the customer to a specific checkout queue.
+        # Checkout State
+        self.assigned_checkout_id = None
+        self.checkout_exit_direction = "Right"
+        self.wait_timer = 0.0
 
-        @param target_pos: The target position in the queue.
-        @type target_pos: QPointF
-        @param checkout_id: ID of the assigned checkout.
-        @type checkout_id: int
-        """
-        self.state = "WALKING_TO_QUEUE"
-        self.target_pos = target_pos
+        self.scan_duration_per_item = SCAN_TIME_PER_ITEM_MS / 1000.0
+        self.total_scan_duration = 0.0
+        self.scan_time_elapsed = 0.0
+        self.items_scanned = 0
+
+    def _map_shelves_to_route(self):
+        mapping = {}
+        if not self.route or not self.all_shelves:
+            return mapping
+
+        potential_stops = []
+        for shelf_obj in self.all_shelves:
+            # Handle both QPointF and dict (legacy support)
+            if isinstance(shelf_obj, dict):
+                shelf_pos = QPointF(shelf_obj["x"], shelf_obj["y"])
+            else:
+                shelf_pos = shelf_obj
+
+            best_idx = -1
+            min_dist = float("inf")
+            for i, route_pt in enumerate(self.route):
+                dist = (QVector2D(shelf_pos) - QVector2D(route_pt)).length()
+                if dist < min_dist:
+                    min_dist = dist
+                    best_idx = i
+
+            if best_idx != -1 and min_dist < 300:
+                potential_stops.append((best_idx, shelf_pos))
+
+        for idx, pos in potential_stops:
+            if idx not in mapping:
+                if random.random() < SHELF_PROBABILITY:
+                    mapping[idx] = pos
+
+        return mapping
+
+    def get_current_route_point_with_offset(self):
+        if self.route_index < len(self.route):
+            return self.route[self.route_index] + self.offset_vec.toPointF()
+        return None
+
+    def go_to_queue(self, target, checkout_id, exit_direction):
+        self.state = "IN_QUEUE"
         self.assigned_checkout_id = checkout_id
+        self.checkout_exit_direction = exit_direction
+        self.target_pos = target
+
+        # Calculate duration based on accumulated items
+        self.total_scan_duration = (
+            self.item_count * self.scan_duration_per_item
+        )
+
+    def tick(self, dt_seconds):
+        if self.state == "GONE":
+            return
+
+        # --- SPAWNING ---
+        if self.state == "SPAWNING":
+            self.spawn_timer -= dt_seconds
+            if self.spawn_timer <= 0:
+                self.route_index = 0
+                self.target_pos = self.get_current_route_point_with_offset()
+                if not self.target_pos:
+                    self.state = "MOVING_TO_WAITING_AREA"
+                else:
+                    self.state = "FOLLOWING_ROUTE"
+            return
+
+        # --- SHOPPING INTERACTION ---
+        if self.state == "PICKING_ITEM":
+            self.wait_timer -= dt_seconds
+            if self.wait_timer <= 0:
+                # Add items to cart dynamically
+                picked = random.randint(1, 3)
+                self.item_count += picked
+
+                self.route_index += 1
+                self.target_pos = self.get_current_route_point_with_offset()
+
+                if self.target_pos:
+                    self.state = "FOLLOWING_ROUTE"
+                else:
+                    self.state = "MOVING_TO_WAITING_AREA"
+                    self._set_waiting_target()
+            return
+
+        # --- CHECKOUT PROCESS ---
+        if self.state == "SCANNING":
+            self.scan_time_elapsed += dt_seconds
+            if self.scan_duration_per_item > 0:
+                # Calculate progress for current item
+                if self.scan_time_elapsed >= self.scan_duration_per_item:
+                    self.scan_time_elapsed = 0.0
+                    self.item_count -= 1
+                    if self.item_count <= 0:
+                        self.state = "LEAVING"
+                        # Determine exit vector
+                        exit_vec = QPointF(0, 0)
+                        d = self.checkout_exit_direction
+                        if d == "Links":
+                            exit_vec = QPointF(-100, 0)
+                        elif d == "Rechts":
+                            exit_vec = QPointF(100, 0)
+                        elif d == "Oben":
+                            exit_vec = QPointF(0, -100)
+                        elif d == "Unten":
+                            exit_vec = QPointF(0, 100)
+                        else:
+                            # Fallback
+                            exit_vec = QPointF(100, 0)
+
+                        self.target_pos = self.pos + exit_vec
+            return
+
+        # --- MOVEMENT ENGINE ---
+        if self.target_pos:
+            current_vec = QVector2D(self.pos)
+            target_vec = QVector2D(self.target_pos)
+            direction = target_vec - current_vec
+            distance = direction.length()
+            step = WALK_SPEED_PPS * dt_seconds
+
+            if distance <= step:
+                self.pos = self.target_pos
+
+                if self.state == "FOLLOWING_ROUTE":
+                    if self.route_index in self.shopping_map:
+                        self.target_pos = self.shopping_map[self.route_index]
+                        self.state = "MOVING_TO_SHELF"
+                    else:
+                        self.route_index += 1
+                        self.target_pos = (
+                            self.get_current_route_point_with_offset()
+                        )
+                        if not self.target_pos:
+                            self.state = "MOVING_TO_WAITING_AREA"
+                            self._set_waiting_target()
+
+                elif self.state == "MOVING_TO_SHELF":
+                    self.state = "PICKING_ITEM"
+                    self.wait_timer = random.uniform(1.0, 3.0)
+
+                elif self.state == "MOVING_TO_WAITING_AREA":
+                    self.state = "WAITING_AREA"
+                    self.target_pos = None
+
+                elif self.state == "LEAVING":
+                    self.state = "GONE"
+
+            else:
+                if distance > 0:
+                    direction.normalize()
+                    self.pos = (current_vec + (direction * step)).toPointF()
+
+    def _set_waiting_target(self):
+        if self.waiting_area:
+            wx = random.uniform(
+                self.waiting_area.left(), self.waiting_area.right()
+            )
+            wy = random.uniform(
+                self.waiting_area.top(), self.waiting_area.bottom()
+            )
+            self.target_pos = QPointF(wx, wy)
+        else:
+            self.target_pos = self.pos
