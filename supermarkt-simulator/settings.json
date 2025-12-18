@@ -5,12 +5,12 @@
     "show_cashiers": true,
     "show_waiting_area": true,
     "offset_cashier_left": [
-        -19,
-        8
+        13,
+        -21
     ],
     "offset_cashier_right": [
-        45,
-        8
+        55,
+        -24
     ],
     "offset_light_normal_left": [
         36,
@@ -29,19 +29,19 @@
         2
     ],
     "offset_queue_left": [
-        3,
-        -60
+        -13,
+        7
     ],
     "offset_queue_right": [
-        -20,
-        -60
+        96,
+        5
     ],
     "offset_queue_sb_left": [
-        5,
-        -60
+        96,
+        9
     ],
     "offset_queue_sb_right": [
-        35,
-        -60
+        -17,
+        10
     ]
 }

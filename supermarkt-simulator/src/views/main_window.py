@@ -1,6 +1,7 @@
 """
 Main window module for the application GUI.
-Refactored: Split Settings button into Visibility and Offsets buttons.
+Refactored: Added Clock, Speed Controls, and Time Settings.
+Refactored: Toolbar Layout for better control access.
 """
 
 from PyQt6.QtWidgets import (
@@ -18,10 +19,11 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QSplitter,
     QFrame,
-    QAbstractItemView,
+    QButtonGroup,
+    QTimeEdit,
 )
-from PyQt6.QtCore import Qt, QRectF
-from PyQt6.QtGui import QPixmap, QBrush, QColor
+from PyQt6.QtCore import Qt, QRectF, QTime
+from PyQt6.QtGui import QPixmap, QBrush
 
 import pyqtgraph as pg
 
@@ -46,6 +48,8 @@ class MainWindow(QMainWindow):
 
         # Flags for Editor State
         self.is_admin_mode = False
+
+        # Internal State Flags
         self.is_drawing_mode = False
         self.is_placing_shelves = False
         self.is_drawing_waiting_area = False
@@ -59,6 +63,14 @@ class MainWindow(QMainWindow):
         self.sim_scene.main_window = self
         self.sim_view = None
         self.controller = None
+
+        # Tool Button Group
+        self.tool_group = QButtonGroup(self)
+        self.tool_group.setExclusive(False)
+
+        # Speed Button Group (Exclusive)
+        self.speed_group = QButtonGroup(self)
+        self.speed_group.setExclusive(True)
 
         self.setup_ui()
         self.setStyleSheet(get_application_style())
@@ -99,51 +111,105 @@ class MainWindow(QMainWindow):
         toolbar_frame.setFixedHeight(70)
 
         layout = QHBoxLayout(toolbar_frame)
-        layout.setContentsMargins(20, 10, 20, 10)
+        layout.setContentsMargins(20, 5, 20, 5)
         layout.setSpacing(15)
         layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
-        # -- Left: Map Selection --
-        lbl_map = QLabel("Map:")
-        lbl_map.setFixedHeight(30)
-
-        self.map_combo = QComboBox()
-        self.map_combo.setFixedWidth(250)
-        self.map_combo.setFixedHeight(30)
-
-        layout.addWidget(lbl_map)
-        layout.addWidget(self.map_combo)
-
-        # -- Center: Simulation Control --
-        layout.addStretch()
-        self.start_sim_button = QPushButton("Simulation Starten")
-        self.start_sim_button.setFixedWidth(220)
-        self.start_sim_button.setFixedHeight(36)
-
-        self.start_sim_button.setStyleSheet(
-            f"""
-            QPushButton {{
-                background-color: {COLOR_SUCCESS.name()}; 
-                color: white; 
-                font-weight: bold; 
-                border: none;
-                border-radius: 4px;
-                margin: 2px;
-            }}
-            QPushButton:hover {{
-                background-color: #059669; 
-                margin-top: 1px; 
-            }}
-        """
+        # -- Left: Mode & Map --
+        lbl_mode = QLabel("Modus:")
+        self.mode_combo = QComboBox()
+        self.mode_combo.setFixedWidth(130)
+        self.mode_combo.setFixedHeight(30)
+        self.mode_combo.addItems(["Simulation", "Editor"])
+        self.mode_combo.setStyleSheet(
+            f"font-weight: bold; color: {COLOR_TEXT_MAIN.name()};"
         )
 
-        layout.addWidget(self.start_sim_button)
+        layout.addWidget(lbl_mode)
+        layout.addWidget(self.mode_combo)
+
+        # Map
+        self.map_combo = QComboBox()
+        self.map_combo.setFixedWidth(180)
+        self.map_combo.setFixedHeight(30)
+        layout.addWidget(QLabel("Map:"))
+        layout.addWidget(self.map_combo)
+
+        # Vertical Separator
+        line1 = QFrame()
+        line1.setFrameShape(QFrame.Shape.VLine)
+        line1.setFrameShadow(QFrame.Shadow.Sunken)
+        layout.addWidget(line1)
+
+        # -- Center: CLOCK & CONTROLS --
+        # We use a stretch before and after to center this block
+        layout.addStretch()
+
+        # Clock
+        self.lbl_clock = QLabel("08:00")
+        self.lbl_clock.setObjectName("ClockLabel")
+        self.lbl_clock.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.lbl_clock)
+
+        layout.addSpacing(20)
+
+        # Playback Controls
+        self.btn_reset = QPushButton("↺")
+        self.btn_reset.setObjectName("ToolbarButton")
+        self.btn_reset.setToolTip("Simulation zurücksetzen")
+        self.btn_reset.setFixedWidth(40)
+
+        self.btn_play_pause = QPushButton("▶")
+        self.btn_play_pause.setObjectName("ToolbarButton")
+        self.btn_play_pause.setToolTip("Start / Pause")
+        self.btn_play_pause.setCheckable(True)
+        self.btn_play_pause.setFixedWidth(50)
+        self.btn_play_pause.setStyleSheet(
+            f"color: {COLOR_SUCCESS.name()}; font-size: 20px;"
+        )
+
+        self.btn_skip = QPushButton("⏭")
+        self.btn_skip.setObjectName("ToolbarButton")
+        self.btn_skip.setToolTip("Tag überspringen")
+        self.btn_skip.setFixedWidth(40)
+
+        layout.addWidget(self.btn_reset)
+        layout.addWidget(self.btn_play_pause)
+        layout.addWidget(self.btn_skip)
+
+        layout.addSpacing(15)
+
+        # Speed Controls (1x, 2x, 3x)
+        self.btn_speed_1 = QPushButton("1x")
+        self.btn_speed_1.setCheckable(True)
+        self.btn_speed_1.setChecked(True)
+        self.btn_speed_1.setFixedWidth(35)
+
+        self.btn_speed_2 = QPushButton("2x")
+        self.btn_speed_2.setCheckable(True)
+        self.btn_speed_2.setFixedWidth(35)
+
+        self.btn_speed_3 = QPushButton("3x")
+        self.btn_speed_3.setCheckable(True)
+        self.btn_speed_3.setFixedWidth(35)
+
+        self.speed_group.addButton(self.btn_speed_1)
+        self.speed_group.addButton(self.btn_speed_2)
+        self.speed_group.addButton(self.btn_speed_3)
+
+        layout.addWidget(self.btn_speed_1)
+        layout.addWidget(self.btn_speed_2)
+        layout.addWidget(self.btn_speed_3)
 
         layout.addStretch()
 
         # -- Right: View Controls --
-        self.btn_reset_zoom = QPushButton("Ansicht zurücksetzen")
-        self.btn_reset_zoom.setFixedHeight(30)
+        line2 = QFrame()
+        line2.setFrameShape(QFrame.Shape.VLine)
+        line2.setFrameShadow(QFrame.Shadow.Sunken)
+        layout.addWidget(line2)
+
+        self.btn_reset_zoom = QPushButton("Ansicht Reset")
         layout.addWidget(self.btn_reset_zoom)
 
         parent_layout.addWidget(toolbar_frame)
@@ -161,6 +227,23 @@ class MainWindow(QMainWindow):
         l_sim = QVBoxLayout(self.tab_sim)
         l_sim.setAlignment(Qt.AlignmentFlag.AlignTop)
 
+        # NEW: Time Settings
+        gb_time = QGroupBox("Öffnungszeiten")
+        f_time = QFormLayout(gb_time)
+
+        self.time_open = QTimeEdit()
+        self.time_open.setDisplayFormat("HH:mm")
+        self.time_open.setTime(QTime(*DEFAULT_OPEN_TIME))
+
+        self.time_close = QTimeEdit()
+        self.time_close.setDisplayFormat("HH:mm")
+        self.time_close.setTime(QTime(*DEFAULT_CLOSE_TIME))
+
+        f_time.addRow("Öffnen:", self.time_open)
+        f_time.addRow("Schließen:", self.time_close)
+        l_sim.addWidget(gb_time)
+
+        # Parameters
         gb_params = QGroupBox("Parameter")
         f_params = QFormLayout(gb_params)
         self.actor_count_input = QSpinBox()
@@ -170,17 +253,14 @@ class MainWindow(QMainWindow):
         l_sim.addWidget(gb_params)
 
         l_sim.addWidget(
-            QLabel(
-                "<i>Tipp: Klicke auf eine Kasse,<br>um sie zu konfigurieren.</i>"
-            )
+            QLabel("<i>Drücke ▶ in der Toolbar<br>um zu starten.</i>")
         )
 
         l_sim.addSpacing(10)
-        gb_mini_metrics = QGroupBox("Status")
+        gb_mini_metrics = QGroupBox("Live Status")
         l_mm = QFormLayout(gb_mini_metrics)
-        self.lbl_runtime = QLabel("0.00 s")
+        self.lbl_runtime = QLabel("0.00 s")  # Legacy? Maybe keep for debug
         self.lbl_queue_count = QLabel("0")
-        l_mm.addRow("Laufzeit:", self.lbl_runtime)
         l_mm.addRow("Warteschlange:", self.lbl_queue_count)
         l_sim.addWidget(gb_mini_metrics)
 
@@ -200,7 +280,6 @@ class MainWindow(QMainWindow):
         self.btn_delete_map.setStyleSheet(
             f"color: {COLOR_ERROR.name()}; border-color: {COLOR_ERROR.name()};"
         )
-
         l_map_actions.addWidget(self.btn_new_map)
         l_map_actions.addWidget(self.btn_save_map)
         l_map_actions.addWidget(self.btn_delete_map)
@@ -208,11 +287,16 @@ class MainWindow(QMainWindow):
 
         # Tools
         l_conf.addWidget(QLabel("Werkzeuge:"))
-        self.new_route_button = QPushButton("Route zeichnen")
-        self.place_shelves_button = QPushButton("Regale platzieren")
-        self.waiting_area_button = QPushButton("Wartebereich")
 
-        # New split buttons for Settings
+        self.new_route_button = QPushButton("Route zeichnen")
+        self.new_route_button.setCheckable(True)
+
+        self.place_shelves_button = QPushButton("Regale platzieren")
+        self.place_shelves_button.setCheckable(True)
+
+        self.waiting_area_button = QPushButton("Wartebereich")
+        self.waiting_area_button.setCheckable(True)
+
         self.btn_visibility = QPushButton("👁️ Sichtbarkeit")
         self.btn_offsets = QPushButton("📏 Globale Offsets")
 
@@ -226,10 +310,15 @@ class MainWindow(QMainWindow):
         l_conf.addSpacing(15)
         l_conf.addWidget(QLabel("Kasse hinzufügen:"))
         grid_k = QHBoxLayout()
+
         self.btn_kl = QPushButton("Normal (L)")
+        self.btn_kl.setCheckable(True)
         self.btn_kr = QPushButton("Normal (R)")
+        self.btn_kr.setCheckable(True)
         self.btn_sl = QPushButton("SB (L)")
+        self.btn_sl.setCheckable(True)
         self.btn_sr = QPushButton("SB (R)")
+        self.btn_sr.setCheckable(True)
 
         grid_k.addWidget(self.btn_kl)
         grid_k.addWidget(self.btn_kr)
@@ -238,19 +327,16 @@ class MainWindow(QMainWindow):
         l_conf.addLayout(grid_k)
 
         # Editor Action Toolbar
-        self.admin_toolbar = QGroupBox("Aktion aktiv")
+        self.admin_toolbar = QGroupBox("Route aktiv")
         self.admin_toolbar.setStyleSheet(
-            f"border: 1px solid {COLOR_ORANGE.name()};"
+            f"border: 1px solid {COLOR_ORANGE.name()}; background-color: {COLOR_BG_PANEL.name()};"
         )
         l_adm = QVBoxLayout(self.admin_toolbar)
-        self.btn_save_admin = QPushButton("Bestätigen")
+        self.btn_save_admin = QPushButton("Route Abschließen (OK)")
         self.btn_save_admin.setStyleSheet(
-            f"color: {COLOR_SUCCESS.name()}; font-weight: bold;"
+            f"background-color: {COLOR_SUCCESS.name()}; color: white; font-weight: bold;"
         )
-        self.btn_cancel_admin = QPushButton("Abbrechen")
-        self.btn_cancel_admin.setStyleSheet(f"color: {COLOR_ERROR.name()};")
         l_adm.addWidget(self.btn_save_admin)
-        l_adm.addWidget(self.btn_cancel_admin)
 
         l_conf.addSpacing(20)
         l_conf.addWidget(self.admin_toolbar)
@@ -267,7 +353,8 @@ class MainWindow(QMainWindow):
         w_routes = QWidget()
         l_r = QVBoxLayout(w_routes)
         self.route_list_widget = QListWidget()
-        self.btn_del_route = QPushButton("Löschen")
+        self.btn_del_route = QPushButton("Route Löschen")
+        self.btn_del_route.setStyleSheet(f"color: {COLOR_ERROR.name()};")
         l_r.addWidget(self.route_list_widget)
         l_r.addWidget(self.btn_del_route)
         self.list_tabs.addTab(w_routes, "Routen")
@@ -275,8 +362,9 @@ class MainWindow(QMainWindow):
         w_objs = QWidget()
         l_o = QVBoxLayout(w_objs)
         self.object_list_widget = QListWidget()
-        self.btn_edit_obj = QPushButton("Verschieben")
-        self.btn_del_obj = QPushButton("Löschen")
+        self.btn_edit_obj = QPushButton("Position bearbeiten")
+        self.btn_del_obj = QPushButton("Objekt Löschen")
+        self.btn_del_obj.setStyleSheet(f"color: {COLOR_ERROR.name()};")
         l_o.addWidget(self.object_list_widget)
         l_o.addWidget(self.btn_edit_obj)
         l_o.addWidget(self.btn_del_obj)
@@ -305,7 +393,6 @@ class MainWindow(QMainWindow):
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
-
         self.sim_scene.setBackgroundBrush(QBrush(COLOR_FLOOR))
         self.sim_view = AutoFitGraphicsView(self.sim_scene)
         self.sim_view.setFrameShape(QFrame.Shape.NoFrame)
@@ -339,8 +426,33 @@ class MainWindow(QMainWindow):
             )
         except Exception:
             pass
-
         return container
+
+    def update_sidebar_mode(self, mode_text):
+        """
+        Updates sidebar tabs based on the selected mode.
+        Disables play controls if in Editor mode.
+        """
+        is_sim = mode_text == "Simulation"
+
+        # Tabs
+        self.control_tabs.setTabVisible(0, is_sim)  # Sim
+        self.control_tabs.setTabVisible(1, not is_sim)  # Editor
+        self.control_tabs.setTabVisible(2, not is_sim)  # Daten
+        self.control_tabs.setTabVisible(3, is_sim)  # Stats
+        self.control_tabs.setCurrentIndex(0 if is_sim else 1)
+
+        # Toolbar Controls
+        self.btn_play_pause.setEnabled(is_sim)
+        self.btn_reset.setEnabled(is_sim)
+        self.btn_skip.setEnabled(is_sim)
+        self.btn_speed_1.setEnabled(is_sim)
+        self.btn_speed_2.setEnabled(is_sim)
+        self.btn_speed_3.setEnabled(is_sim)
+
+        # Settings
+        self.time_open.setEnabled(is_sim)
+        self.time_close.setEnabled(is_sim)
 
     def toggle_q1_fullscreen(self):
         if not hasattr(self, "item_q1") or self.is_admin_mode:

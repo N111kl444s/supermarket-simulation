@@ -1,10 +1,12 @@
 """
 Checkout item visualization.
+Refactored: Displays ID and thicker selection border.
+Fixed: mousePressEvent now propagates selection.
 """
 
 from PyQt6.QtWidgets import QGraphicsObject, QStyle
 from PyQt6.QtCore import Qt, QRectF, pyqtSignal
-from PyQt6.QtGui import QPen, QBrush, QPixmap, QPainter, QColor
+from PyQt6.QtGui import QPen, QBrush, QPixmap, QPainter, QColor, QFont
 from config import *
 
 
@@ -12,12 +14,9 @@ class CheckoutItem(QGraphicsObject):
     """
     Visual representation of a checkout counter.
     Supports different types (Normal/SB) and orientations, including images and status lights.
-
-    @ivar clicked: Signal emitted when the item is clicked. Sends the checkout ID.
-    @type clicked: pyqtSignal(int)
     """
 
-    # Signal sendet die ID (int) der angeklickten Kasse
+    # Signal emittieren, wenn geklickt wird
     clicked = pyqtSignal(int)
 
     _pixmap_normal_left = None
@@ -38,15 +37,6 @@ class CheckoutItem(QGraphicsObject):
     ):
         """
         Initializes the checkout item.
-
-        @param x: X position.
-        @param y: Y position.
-        @param c_type: Type of checkout ("Normal" or "SB").
-        @param orientation: "Left" or "Right".
-        @param is_open: Status of the checkout.
-        @param show_light: Whether to draw the status light.
-        @param data_id: ID of the checkout data object.
-        @param light_offset: (x, y) tuple for light position relative to item.
         """
         super().__init__()
         self.setPos(x, y)
@@ -58,7 +48,7 @@ class CheckoutItem(QGraphicsObject):
         self.light_offset = light_offset
         self.setZValue(6)
 
-        # Interaktivitaet: Cursor aendern und Selektierbarkeit
+        # Interaktivitaet
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFlag(QGraphicsObject.GraphicsItemFlag.ItemIsSelectable, True)
 
@@ -80,13 +70,12 @@ class CheckoutItem(QGraphicsObject):
     def boundingRect(self):
         """
         Returns the bounding box of the checkout.
-        @rtype: QRectF
         """
         return QRectF(0, 0, CHECKOUT_WIDTH, CHECKOUT_HEIGHT)
 
     def paint(self, painter: QPainter, option, widget=None):
         """
-        Paints the checkout image or fallback rectangle.
+        Paints the checkout image, ID, and selection highlight.
         """
         pixmap = None
         if self.c_type == "SB":
@@ -102,8 +91,10 @@ class CheckoutItem(QGraphicsObject):
                 else CheckoutItem._pixmap_normal_right
             )
 
+        rect = self.boundingRect().toRect()
+
         if pixmap and not pixmap.isNull():
-            painter.drawPixmap(self.boundingRect().toRect(), pixmap)
+            painter.drawPixmap(rect, pixmap)
         else:
             # Fallback drawing
             color = (
@@ -113,7 +104,7 @@ class CheckoutItem(QGraphicsObject):
             )
             painter.setBrush(QBrush(color))
             painter.setPen(QPen(Qt.GlobalColor.black))
-            painter.drawRect(0, 0, CHECKOUT_WIDTH, CHECKOUT_HEIGHT)
+            painter.drawRect(rect)
 
             painter.setBrush(QBrush(Qt.GlobalColor.darkGray))
             painter.setPen(Qt.PenStyle.NoPen)
@@ -122,11 +113,11 @@ class CheckoutItem(QGraphicsObject):
             else:
                 painter.drawRect(CHECKOUT_WIDTH - 5, 0, 5, CHECKOUT_HEIGHT)
 
-        # Selection highlight
+        # Selection highlight (Visible Border)
         if option.state & QStyle.StateFlag.State_Selected:
-            painter.setPen(QPen(COLOR_SELECTION, 3))
+            painter.setPen(QPen(COLOR_SELECTION, 4))  # Thicker border
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRect(-2, -2, CHECKOUT_WIDTH + 4, CHECKOUT_HEIGHT + 4)
+            painter.drawRect(rect.adjusted(-2, -2, 2, 2))
 
         # Status Light
         if self.show_light:
@@ -139,13 +130,33 @@ class CheckoutItem(QGraphicsObject):
                 int(self.light_offset[0]), int(self.light_offset[1]), 8, 8
             )
 
+        # Draw ID Text (Top Center or Center)
+        if self.data_id is not None:
+            font = QFont()
+            font.setPixelSize(14)
+            font.setBold(True)
+            painter.setFont(font)
+            # Draw shadow for readability
+            painter.setPen(QPen(Qt.GlobalColor.black))
+            painter.drawText(
+                rect.adjusted(1, 1, 1, 1),
+                Qt.AlignmentFlag.AlignCenter,
+                f"#{self.data_id}",
+            )
+            # Draw text
+            painter.setPen(QPen(Qt.GlobalColor.white))
+            painter.drawText(
+                rect, Qt.AlignmentFlag.AlignCenter, f"#{self.data_id}"
+            )
+
     def mousePressEvent(self, event):
         """
-        Handles mouse press events to trigger configuration.
+        Handles mouse press events.
         """
+        # ZUERST Standard-Selektion erlauben (wichtig fuer Editor-Modus)
+        super().mousePressEvent(event)
+
+        # DANN Signal senden (wichtig fuer Sim-Modus / Config)
         if event.button() == Qt.MouseButton.LeftButton:
             if self.data_id is not None:
                 self.clicked.emit(self.data_id)
-                event.accept()  # Event konsumieren, damit es nicht weitergereicht wird
-        else:
-            super().mousePressEvent(event)
