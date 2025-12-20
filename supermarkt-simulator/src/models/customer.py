@@ -1,6 +1,6 @@
 """
 Logic for the customer agent.
-Refactored: Uses 'item_count' as dynamic inventory accumulator.
+Refactored: Uses 'item_count' as dynamic inventory accumulator. Start Area logic verified.
 """
 
 import random
@@ -26,6 +26,8 @@ class CustomerModel:
 
         # -- 1. SPAWN POSITION --
         self.pos = QPointF(0, 0)
+
+        # Priority: Start Area -> First Route Point -> Origin
         if self.start_area:
             wx = random.uniform(
                 self.start_area.left(), self.start_area.right()
@@ -121,6 +123,7 @@ class CustomerModel:
         if self.state == "SPAWNING":
             self.spawn_timer -= dt_seconds
             if self.spawn_timer <= 0:
+                # Decide next target: First route point
                 self.route_index = 0
                 self.target_pos = self.get_current_route_point_with_offset()
                 if not self.target_pos:
@@ -157,7 +160,7 @@ class CustomerModel:
                     self.item_count -= 1
                     if self.item_count <= 0:
                         self.state = "LEAVING"
-                        # Determine exit vector
+                        # Determine exit vector based on global setting
                         exit_vec = QPointF(0, 0)
                         d = self.checkout_exit_direction
                         if d == "Links":

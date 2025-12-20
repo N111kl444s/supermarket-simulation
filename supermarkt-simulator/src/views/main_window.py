@@ -186,7 +186,7 @@ class MainWindow(QMainWindow):
         f_params = QFormLayout(gb_params)
         self.actor_count_input = QSpinBox()
         self.actor_count_input.setValue(10)
-        self.actor_count_input.setRange(1, 500)
+        self.actor_count_input.setRange(1, 10000)
         f_params.addRow("Kundenanzahl:", self.actor_count_input)
         l_sim.addWidget(gb_params)
         l_sim.addWidget(

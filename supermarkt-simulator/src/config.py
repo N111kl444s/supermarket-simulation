@@ -15,6 +15,11 @@ ASSETS_DIR = BASE_DIR / "assets"
 IMAGE_DIR = ASSETS_DIR / "images"
 MAPS_DIR = BASE_DIR / "maps"
 
+# --- WINDOW ---
+# Added to prevent crashes if main.py references them
+WINDOW_WIDTH = 1200
+WINDOW_HEIGHT = 800
+
 # --- MODERN LIGHT PALETTE ---
 COLOR_BG_MAIN = QColor("#F5F7FA")
 COLOR_BG_PANEL = QColor("#FFFFFF")

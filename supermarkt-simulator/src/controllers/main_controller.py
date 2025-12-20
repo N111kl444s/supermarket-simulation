@@ -1,6 +1,6 @@
 """
 Main Controller.
-Refactored: Implements Global Exit Direction and Map Saving/Loading of it.
+Refactored: Manages View DragMode to allow drawing on the scene without panning interception.
 """
 
 import json
@@ -14,10 +14,13 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QInputDialog,
     QGraphicsItem,
+    QGraphicsView,  # Import needed for DragMode
 )
 from config import *
 from views.main_window import MainWindow
 from models.customer import CustomerModel
+
+# Ensure all items are imported
 from views.items import (
     CheckoutItem,
     ShelfItem,
@@ -156,6 +159,12 @@ class MainController:
         self.refresh_map_list()
         self.on_mode_changed("Simulation")
         self.update_clock_display()
+
+        # Set initial drag mode (Navigation)
+        if self.view.sim_view:
+            self.view.sim_view.setDragMode(
+                QGraphicsView.DragMode.ScrollHandDrag
+            )
 
     def show(self):
         self.view.show()
@@ -361,8 +370,6 @@ class MainController:
             return
         cx, cy = c_data["x"], c_data["y"]
         ori = c_data.get("orientation", "Right")
-
-        # Determine Exit Direction (GLOBAL setting)
         exit_dir = self.view.combo_global_exit.currentText()
 
         c_type = c_data["type"]
@@ -477,7 +484,7 @@ class MainController:
                 or is_selected("shelf", idx)
             )
             if show:
-                # Reverted: simple QPointF access
+                # Assuming simple QPointF from previous revert
                 s = ShelfItem(p.x(), p.y(), index=idx)
                 self.scene.addItem(s)
                 self.shelf_items.append(s)
@@ -589,6 +596,7 @@ class MainController:
         self.scene.blockSignals(False)
         self.update_object_list()
 
+    # FIX: Reset tools now restores standard navigation mode (ScrollHandDrag)
     def reset_tools(self, exclude_btn=None):
         tools = [
             self.view.new_route_button,
@@ -610,6 +618,7 @@ class MainController:
         self.view.is_placing_checkout = False
         self.view.is_drawing_start_area = False
         self.view.admin_toolbar.hide()
+
         if self.current_route_path_item:
             if self.current_route_path_item.scene():
                 self.scene.removeItem(self.current_route_path_item)
@@ -618,6 +627,12 @@ class MainController:
             if i.scene():
                 self.scene.removeItem(i)
         self.current_route_point_items.clear()
+
+        # RESTORE DRAG MODE FOR NAVIGATION
+        if self.view.sim_view:
+            self.view.sim_view.setDragMode(
+                QGraphicsView.DragMode.ScrollHandDrag
+            )
 
     def toggle_route_tool(self):
         btn = self.view.new_route_button
@@ -632,6 +647,9 @@ class MainController:
                 QPen(COLOR_ORANGE, 3, Qt.PenStyle.DashLine)
             )
             self.scene.addItem(self.current_route_path_item)
+            # DISABLE DRAG FOR DRAWING
+            if self.view.sim_view:
+                self.view.sim_view.setDragMode(QGraphicsView.DragMode.NoDrag)
         else:
             self.reset_tools()
 
@@ -642,6 +660,9 @@ class MainController:
             self.active_tool = "shelf"
             self.view.is_placing_shelves = True
             self.draw_debug_elements()
+            # DISABLE DRAG
+            if self.view.sim_view:
+                self.view.sim_view.setDragMode(QGraphicsView.DragMode.NoDrag)
         else:
             self.reset_tools()
             self.draw_debug_elements()
@@ -654,6 +675,9 @@ class MainController:
             self.view.is_drawing_waiting_area = True
             if self.waiting_area_item:
                 self.waiting_area_item.setVisible(True)
+            # DISABLE DRAG
+            if self.view.sim_view:
+                self.view.sim_view.setDragMode(QGraphicsView.DragMode.NoDrag)
         else:
             self.reset_tools()
 
@@ -665,6 +689,9 @@ class MainController:
             self.view.is_drawing_start_area = True
             if self.start_area_item:
                 self.start_area_item.setVisible(True)
+            # DISABLE DRAG
+            if self.view.sim_view:
+                self.view.sim_view.setDragMode(QGraphicsView.DragMode.NoDrag)
         else:
             self.reset_tools()
 
@@ -674,6 +701,9 @@ class MainController:
             self.active_tool = "checkout"
             self.view.is_placing_checkout = True
             self.active_tool_params = {"type": c_type, "ori": ori}
+            # DISABLE DRAG
+            if self.view.sim_view:
+                self.view.sim_view.setDragMode(QGraphicsView.DragMode.NoDrag)
         else:
             self.reset_tools()
 
@@ -918,11 +948,9 @@ class MainController:
                 for k, v in data["routes"].items():
                     self.all_routes[k] = [QPointF(p[0], p[1]) for p in v]
 
-            # Simplified Loading (Points only)
             raw_shelves = data.get("shelves", [])
             self.all_shelves = []
             for s in raw_shelves:
-                # Handle Dict or List formats, revert to point
                 if isinstance(s, dict):
                     self.all_shelves.append(QPointF(s["x"], s["y"]))
                 elif isinstance(s, list):
@@ -934,11 +962,11 @@ class MainController:
                 if data.get("waiting_area")
                 else None
             )
+
             self.start_area_rect = (
                 QRectF(*data["start_area"]) if data.get("start_area") else None
             )
 
-            # --- GLOBAL SETTING LOADING ---
             global_exit = data.get("global_exit_direction", "Rechts")
             self.view.combo_global_exit.setCurrentText(global_exit)
 
@@ -958,7 +986,6 @@ class MainController:
         routes_export = {
             k: [[p.x(), p.y()] for p in v] for k, v in self.all_routes.items()
         }
-        # Save shelves as simple lists [x, y]
         shelves_export = [[p.x(), p.y()] for p in self.all_shelves]
 
         wa_export = (
@@ -982,7 +1009,6 @@ class MainController:
             else None
         )
 
-        # --- GLOBAL SETTING SAVING ---
         global_exit = self.view.combo_global_exit.currentText()
 
         data = {
