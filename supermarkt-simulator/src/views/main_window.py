@@ -1,5 +1,6 @@
 """
 Main window module for the application GUI.
+Updated: Added Live Feed and Disabled Probability Input.
 """
 
 from PyQt6.QtWidgets import (
@@ -19,9 +20,10 @@ from PyQt6.QtWidgets import (
     QFrame,
     QButtonGroup,
     QTimeEdit,
+    QDoubleSpinBox,
 )
 from PyQt6.QtCore import Qt, QRectF, QTime
-from PyQt6.QtGui import QPixmap, QBrush
+from PyQt6.QtGui import QPixmap, QBrush, QColor
 import pyqtgraph as pg
 from config import *
 from .ui_components import ClickablePixmapItem, AutoFitGraphicsView
@@ -182,16 +184,33 @@ class MainWindow(QMainWindow):
         f_time.addRow("Öffnen:", self.time_open)
         f_time.addRow("Schließen:", self.time_close)
         l_sim.addWidget(gb_time)
-        gb_params = QGroupBox("Parameter")
+
+        gb_params = QGroupBox("Kunden Parameter")
         f_params = QFormLayout(gb_params)
         self.actor_count_input = QSpinBox()
-        self.actor_count_input.setValue(10)
+        self.actor_count_input.setValue(50)
         self.actor_count_input.setRange(1, 10000)
-        f_params.addRow("Kundenanzahl:", self.actor_count_input)
+        self.actor_count_input.setSuffix(" / Tag")
+
+        self.disabled_prob_input = QDoubleSpinBox()
+        self.disabled_prob_input.setRange(0, 100)
+        self.disabled_prob_input.setValue(10)  # Default 10%
+        self.disabled_prob_input.setSuffix(" %")
+
+        f_params.addRow("Anzahl:", self.actor_count_input)
+        f_params.addRow("Behinderung:", self.disabled_prob_input)
         l_sim.addWidget(gb_params)
-        l_sim.addWidget(
-            QLabel("<i>Drücke ▶ in der Toolbar<br>um zu starten.</i>")
-        )
+
+        # LIVE FEED
+        gb_log = QGroupBox("Live Feed")
+        l_log = QVBoxLayout(gb_log)
+        self.list_log = QListWidget()
+        self.list_log.setAlternatingRowColors(True)
+        # Style for ListWidget
+        self.list_log.setStyleSheet("font-size: 11px;")
+        l_log.addWidget(self.list_log)
+        l_sim.addWidget(gb_log)
+
         l_sim.addSpacing(10)
         gb_mini_metrics = QGroupBox("Live Status")
         l_mm = QFormLayout(gb_mini_metrics)
@@ -359,6 +378,15 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         return container
+
+    def add_log_entry(self, message, color="black"):
+        """Adds a message to the live feed."""
+        self.list_log.insertItem(0, message)
+        item = self.list_log.item(0)
+        item.setForeground(QBrush(QColor(color)))
+        # Keep log size manageable
+        if self.list_log.count() > 100:
+            self.list_log.takeItem(100)
 
     def update_sidebar_mode(self, mode_text):
         is_sim = mode_text == "Simulation"

@@ -1,6 +1,6 @@
 """
 Main Controller.
-Refactored: Manages View DragMode to allow drawing on the scene without panning interception.
+Refactored: Distributed spawning over the day, Live Feed integration.
 """
 
 import json
@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QInputDialog,
     QGraphicsItem,
-    QGraphicsView,  # Import needed for DragMode
+    QGraphicsView,
 )
 from config import *
 from views.main_window import MainWindow
@@ -73,6 +73,13 @@ class MainController:
         self.cashier_items = []
         self.waiting_area_item = None
         self.start_area_item = None
+
+        # SPAWNING LOGIC
+        self.target_daily_customers = 50
+        self.spawn_timer_acc = 0.0
+        self.next_spawn_interval = 0.0
+        self.average_spawn_interval = 10.0
+        self.prob_disabled = 0.1
 
         self.current_route_points = []
         self.current_route_path_item = None
@@ -200,10 +207,14 @@ class MainController:
         self.is_running = True
         self.view.btn_play_pause.setChecked(True)
         self.view.btn_play_pause.setText("⏸")
-        self.view.time_open.setEnabled(False)
-        self.view.time_close.setEnabled(False)
-        self.view.actor_count_input.setEnabled(False)
+        self.disable_inputs(True)
         self.sim_timer.start()
+
+    def disable_inputs(self, disabled):
+        self.view.time_open.setEnabled(not disabled)
+        self.view.time_close.setEnabled(not disabled)
+        self.view.actor_count_input.setEnabled(not disabled)
+        self.view.disabled_prob_input.setEnabled(not disabled)
 
     def pause_simulation(self):
         self.sim_timer.stop()
@@ -213,20 +224,22 @@ class MainController:
 
     def reset_simulation(self):
         self.pause_simulation()
+        self.clear_customers()
+        self.sim_time = self.view.time_open.time()
+        self.time_accumulator_sec = 0.0
+        self.update_clock_display()
+        self.disable_inputs(False)
+        self.view.lbl_queue_count.setText("0")
+        self.view.list_log.clear()
+        self.is_running = False
+
+    def clear_customers(self):
         for c in self.customer_items:
             self.scene.removeItem(c)
         self.customers_model.clear()
         self.customer_items.clear()
         self.checkout_queues = {}
         self.queue_count = 0
-        self.sim_time = self.view.time_open.time()
-        self.time_accumulator_sec = 0.0
-        self.update_clock_display()
-        self.view.time_open.setEnabled(True)
-        self.view.time_close.setEnabled(True)
-        self.view.actor_count_input.setEnabled(True)
-        self.view.lbl_queue_count.setText("0")
-        self.is_running = False
 
     def initialize_simulation_day(self):
         self.open_time = self.view.time_open.time()
@@ -234,39 +247,80 @@ class MainController:
         self.sim_time = self.open_time
         self.time_accumulator_sec = 0.0
         self.update_clock_display()
-        for c in self.customer_items:
-            self.scene.removeItem(c)
-        self.customers_model.clear()
-        self.customer_items.clear()
-        self.checkout_queues = {}
-        self.queue_count = 0
+        self.clear_customers()
         self.draw_debug_elements()
-        count = self.view.actor_count_input.value()
-        self.spawn_customers(count)
 
-    def spawn_customers(self, count):
+        # Init Spawning Parameters
+        self.target_daily_customers = self.view.actor_count_input.value()
+        self.prob_disabled = self.view.disabled_prob_input.value() / 100.0
+
+        # Calculate Spawn Interval:
+        # Total Minutes Open
+        seconds_open = self.open_time.secsTo(self.close_time)
+        if seconds_open <= 0:
+            seconds_open = 1  # Avoid div by zero
+
+        # e.g., 720 mins / 50 customers = 14.4 mins per customer (Game Time)
+        self.average_spawn_interval = seconds_open / max(
+            1, self.target_daily_customers
+        )
+        self.spawn_timer_acc = 0.0
+        self.calc_next_spawn()
+
+        self.view.add_log_entry(
+            f"Laden geöffnet. Erwarte ca. {self.target_daily_customers} Kunden.",
+            "blue",
+        )
+
+    def calc_next_spawn(self):
+        # Random variance +/- 30% for organic feel
+        variance = random.uniform(0.7, 1.3)
+        self.next_spawn_interval = self.average_spawn_interval * variance
+
+    def attempt_spawn(self, dt_game_seconds):
+        self.spawn_timer_acc += dt_game_seconds
+        if self.spawn_timer_acc >= self.next_spawn_interval:
+            self.spawn_timer_acc = 0
+            self.spawn_single_customer()
+            self.calc_next_spawn()
+
+    def spawn_single_customer(self):
         route_names = list(self.all_routes.keys())
         if not route_names:
             return
+
         offset = self.settings.get("customer_path_offset", 10)
-        for _ in range(count):
-            r_name = random.choice(route_names)
-            model = CustomerModel(
-                self.all_routes[r_name],
-                self.all_shelves,
-                self.start_area_rect,
-                self.waiting_area_rect,
-                max_offset=offset,
-            )
-            self.customers_model.append(model)
-            item = CustomerItem(model)
-            self.scene.addItem(item)
-            self.customer_items.append(item)
+        r_name = random.choice(route_names)
+
+        # Determine Type
+        is_disabled = random.random() < self.prob_disabled
+
+        model = CustomerModel(
+            self.all_routes[r_name],
+            self.all_shelves,
+            self.start_area_rect,
+            self.waiting_area_rect,
+            max_offset=offset,
+            is_disabled=is_disabled,
+        )
+
+        # Set Entry Time for Log
+        total_seconds_today = self.open_time.secsTo(self.sim_time)
+        model.entry_time_sec = total_seconds_today
+
+        self.customers_model.append(model)
+        item = CustomerItem(model)
+        self.scene.addItem(item)
+        self.customer_items.append(item)
+
+        type_str = "Kunde (mit Einschränkung)" if is_disabled else "Kunde"
+        self.view.add_log_entry(f"{type_str} hat den Laden betreten.", "green")
 
     def skip_day(self):
         self.pause_simulation()
         self.sim_time = self.close_time
         self.update_clock_display()
+        self.view.add_log_entry("Tag übersprungen.", "orange")
         QMessageBox.information(
             self.view, "Simulation", "Tag wurde übersprungen / beendet."
         )
@@ -286,10 +340,14 @@ class MainController:
         if self.sim_time >= self.close_time:
             self.pause_simulation()
             self.update_clock_display()
+            self.view.add_log_entry("Feierabend! Laden geschlossen.", "red")
             QMessageBox.information(
                 self.view, "Feierabend", "Der Supermarkt schließt jetzt."
             )
             return
+
+        # Spawning Logic
+        self.attempt_spawn(game_dt)
 
         active_models = []
         active_items = []
@@ -326,6 +384,14 @@ class MainController:
                     self.advance_queue(cid)
                     model.assigned_checkout_id = None
             if model.state == "GONE":
+                # Log Leaving
+                now_sec = self.open_time.secsTo(self.sim_time)
+                duration = int(
+                    (now_sec - model.entry_time_sec) / 60
+                )  # in minutes
+                self.view.add_log_entry(
+                    f"Kunde hat Laden nach {duration} Min verlassen.", "gray"
+                )
                 self.scene.removeItem(item)
             else:
                 active_models.append(model)

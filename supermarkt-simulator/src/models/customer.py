@@ -1,12 +1,17 @@
 """
 Logic for the customer agent.
-Refactored: Uses 'item_count' as dynamic inventory accumulator. Start Area logic verified.
+Updated: Support for disability status and dynamic speed.
 """
 
 import random
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QVector2D
-from config import WALK_SPEED_PPS, SCAN_TIME_PER_ITEM_MS, SHELF_PROBABILITY
+from config import (
+    WALK_SPEED_PPS,
+    SCAN_TIME_PER_ITEM_MS,
+    SHELF_PROBABILITY,
+    WALK_SPEED_DISABLED_FACTOR,
+)
 
 
 class CustomerModel:
@@ -17,12 +22,22 @@ class CustomerModel:
         start_area_rect,
         waiting_area_rect,
         max_offset=0,
+        is_disabled=False,
     ):
         self.route = list(route_points)
         self.all_shelves = list(all_shelves)  # Expecting QPointF or dict
         self.start_area = start_area_rect
         self.waiting_area = waiting_area_rect
         self.max_offset = max_offset
+        self.is_disabled = is_disabled
+
+        # Tracking for Live Feed
+        self.entry_time_sec = 0  # Will be set by controller on spawn
+
+        # Speed adjustment
+        self.speed = WALK_SPEED_PPS
+        if self.is_disabled:
+            self.speed *= WALK_SPEED_DISABLED_FACTOR
 
         # -- 1. SPAWN POSITION --
         self.pos = QPointF(0, 0)
@@ -49,8 +64,11 @@ class CustomerModel:
         # Movement State
         self.route_index = 0
         self.target_pos = None
-        self.state = "SPAWNING"
-        self.spawn_timer = random.uniform(0.5, 2.0)
+        # Start immediately unless we want a spawn delay visual
+        self.state = "FOLLOWING_ROUTE"
+        self.spawn_timer = (
+            0  # Not used for logic delay anymore, we spawn when created
+        )
 
         # Random path jitter
         self.offset_vec = QVector2D(
@@ -67,6 +85,9 @@ class CustomerModel:
         self.total_scan_duration = 0.0
         self.scan_time_elapsed = 0.0
         self.items_scanned = 0
+
+        # Initial Target
+        self.target_pos = self.get_current_route_point_with_offset()
 
     def _map_shelves_to_route(self):
         mapping = {}
@@ -119,17 +140,15 @@ class CustomerModel:
         if self.state == "GONE":
             return
 
-        # --- SPAWNING ---
+        # --- SPAWNING (Legacy check, mostly handled in init now) ---
         if self.state == "SPAWNING":
-            self.spawn_timer -= dt_seconds
-            if self.spawn_timer <= 0:
-                # Decide next target: First route point
-                self.route_index = 0
-                self.target_pos = self.get_current_route_point_with_offset()
-                if not self.target_pos:
-                    self.state = "MOVING_TO_WAITING_AREA"
-                else:
-                    self.state = "FOLLOWING_ROUTE"
+            # Just in case
+            self.route_index = 0
+            self.target_pos = self.get_current_route_point_with_offset()
+            if not self.target_pos:
+                self.state = "MOVING_TO_WAITING_AREA"
+            else:
+                self.state = "FOLLOWING_ROUTE"
             return
 
         # --- SHOPPING INTERACTION ---
@@ -184,7 +203,9 @@ class CustomerModel:
             target_vec = QVector2D(self.target_pos)
             direction = target_vec - current_vec
             distance = direction.length()
-            step = WALK_SPEED_PPS * dt_seconds
+
+            # Use dynamic speed
+            step = self.speed * dt_seconds
 
             if distance <= step:
                 self.pos = self.target_pos
