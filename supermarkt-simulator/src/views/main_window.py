@@ -1,6 +1,6 @@
 """
 Main window module for the application GUI.
-Updated: Added Buttons for Start Route, Exit Route, Exit Area.
+Updated: Added 'Cancel' button to Admin Toolbar.
 """
 
 from PyQt6.QtWidgets import (
@@ -44,7 +44,6 @@ class MainWindow(QMainWindow):
         self.is_drawing_start_area = False
         self.is_placing_checkout = False
         
-        # NEUE FLAGS
         self.is_drawing_start_route = False
         self.is_drawing_exit_route = False
         self.is_drawing_exit_area = False
@@ -281,7 +280,7 @@ class MainWindow(QMainWindow):
 
         self.start_area_button = QPushButton("1. Startfläche")
         self.start_area_button.setCheckable(True)
-        self.btn_start_route = QPushButton("2. Start-Route (Zulauf)") # NEU
+        self.btn_start_route = QPushButton("2. Start-Route (Zulauf)")
         self.btn_start_route.setCheckable(True)
         self.new_route_button = QPushButton("3. Shop-Route (Regale)")
         self.new_route_button.setCheckable(True)
@@ -289,9 +288,9 @@ class MainWindow(QMainWindow):
         self.place_shelves_button.setCheckable(True)
         self.waiting_area_button = QPushButton("5. Wartebereich (Kassen)")
         self.waiting_area_button.setCheckable(True)
-        self.btn_exit_route = QPushButton("6. Ausgangs-Route") # NEU
+        self.btn_exit_route = QPushButton("6. Ausgangs-Route")
         self.btn_exit_route.setCheckable(True)
-        self.btn_exit_area = QPushButton("7. Ausgangsfläche") # NEU
+        self.btn_exit_area = QPushButton("7. Ausgangsfläche")
         self.btn_exit_area.setCheckable(True)
 
         l_conf.addWidget(self.start_area_button)
@@ -333,11 +332,21 @@ class MainWindow(QMainWindow):
             f"border: 1px solid {COLOR_ORANGE.name()}; background-color: {COLOR_BG_PANEL.name()};"
         )
         l_adm = QVBoxLayout(self.admin_toolbar)
-        self.btn_save_admin = QPushButton("Route Abschließen (OK)")
+        
+        # Action Buttons Row
+        row_adm = QHBoxLayout()
+        self.btn_save_admin = QPushButton("Speichern (OK)")
         self.btn_save_admin.setStyleSheet(
             f"background-color: {COLOR_SUCCESS.name()}; color: white; font-weight: bold;"
         )
-        l_adm.addWidget(self.btn_save_admin)
+        self.btn_cancel_route = QPushButton("Abbrechen") # NEU
+        self.btn_cancel_route.setStyleSheet(
+            f"color: {COLOR_ERROR.name()}; font-weight: bold;"
+        )
+        row_adm.addWidget(self.btn_save_admin)
+        row_adm.addWidget(self.btn_cancel_route)
+        
+        l_adm.addLayout(row_adm)
         l_conf.addSpacing(20)
         l_conf.addWidget(self.admin_toolbar)
         self.admin_toolbar.hide()

@@ -1,107 +1,80 @@
 """
-Graphics Scene module handling interactivity.
-Refactored: Drawing item now has high Z-Value to ensure visibility over map images.
+Graphics Scene for the editor.
+Handles mouse events for drawing areas (rectangles) and placing points.
+Refactored: Supports Exit Area drawing and Route clicking.
 """
 
-from PyQt6.QtWidgets import (
-    QGraphicsScene,
-    QGraphicsSceneMouseEvent,
-    QGraphicsRectItem,
-)
-from PyQt6.QtCore import Qt, pyqtSignal, QPointF, QRectF
-from PyQt6.QtGui import QPen, QBrush
-from config import COLOR_WAITING_AREA, COLOR_START_AREA
-
+from PyQt6.QtWidgets import QGraphicsScene, QGraphicsRectItem
+from PyQt6.QtCore import Qt, pyqtSignal, QRectF, QPointF
+from PyQt6.QtGui import QPen, QBrush, QColor
+from config import COLOR_WAITING_AREA, COLOR_START_AREA, COLOR_EXIT_AREA
 
 class RouteEditorScene(QGraphicsScene):
-    """
-    Custom GraphicsScene to handle map interactions.
-    """
-
+    # Signals
     clicked_point = pyqtSignal(QPointF)
-    waiting_area_created = pyqtSignal(
-        QRectF
-    )  # Used for both areas (Waiting & Start), Controller distinguishes via active tool
-
+    waiting_area_created = pyqtSignal(QRectF)
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self.main_window = None
+        
+        # Temporary item for drawing rectangles (rubberband)
+        self.temp_rect_item = None
+        self.start_point = None
 
-        # Drawing State
-        self.rect_start_point = None
-        self.current_drawing_item = None
+    def mousePressEvent(self, event):
+        if not self.main_window:
+            super().mousePressEvent(event)
+            return
 
-    def mousePressEvent(self, event: QGraphicsSceneMouseEvent):
+        pos = event.scenePos()
+
+        # Check which Area tool is active
+        is_wa = self.main_window.is_drawing_waiting_area
+        is_sa = self.main_window.is_drawing_start_area
+        is_ea = self.main_window.is_drawing_exit_area # NEU
+
         if event.button() == Qt.MouseButton.LeftButton:
-            # Check active modes from MainWindow
-            if self.main_window:
-                # --- AREA DRAWING MODE ---
-                if (
-                    self.main_window.is_drawing_waiting_area
-                    or self.main_window.is_drawing_start_area
-                ):
-                    self.rect_start_point = event.scenePos()
-                    self.current_drawing_item = QGraphicsRectItem()
+            if is_wa or is_sa or is_ea:
+                # Start drawing a rectangle
+                self.start_point = pos
+                self.temp_rect_item = QGraphicsRectItem()
+                
+                # Determine color
+                color = QColor(0, 0, 0)
+                if is_wa: color = COLOR_WAITING_AREA
+                elif is_sa: color = COLOR_START_AREA
+                elif is_ea: color = COLOR_EXIT_AREA
+                
+                self.temp_rect_item.setBrush(QBrush(color))
+                self.temp_rect_item.setPen(QPen(Qt.GlobalColor.black, 1, Qt.PenStyle.DashLine))
+                self.addItem(self.temp_rect_item)
+            else:
+                # If strictly not selecting (e.g. placing items or points), emit click
+                # We assume if dragging isn't the goal, it's a click
+                self.clicked_point.emit(pos)
+                super().mousePressEvent(event)
+        else:
+            super().mousePressEvent(event)
 
-                    # FIX: Ensure visual feedback is on top of map images
-                    self.current_drawing_item.setZValue(100)
-
-                    # Distinguish Colors
-                    if self.main_window.is_drawing_start_area:
-                        self.current_drawing_item.setBrush(
-                            QBrush(COLOR_START_AREA)
-                        )
-                        self.current_drawing_item.setPen(
-                            QPen(
-                                Qt.GlobalColor.darkGreen,
-                                1,
-                                Qt.PenStyle.DashLine,
-                            )
-                        )
-                    else:
-                        self.current_drawing_item.setBrush(
-                            QBrush(COLOR_WAITING_AREA)
-                        )
-                        self.current_drawing_item.setPen(
-                            QPen(Qt.GlobalColor.blue, 1, Qt.PenStyle.DashLine)
-                        )
-
-                    self.addItem(self.current_drawing_item)
-                    return  # Consume event (don't pass to map items)
-
-                # --- POINT CLICK MODE ---
-                if (
-                    self.main_window.is_drawing_mode
-                    or self.main_window.is_placing_shelves
-                    or self.main_window.is_placing_checkout
-                ):
-                    self.clicked_point.emit(event.scenePos())
-                    return  # Consume event
-
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent):
-        if self.rect_start_point and self.current_drawing_item:
+    def mouseMoveEvent(self, event):
+        if self.temp_rect_item and self.start_point:
             current_pos = event.scenePos()
-            rect = QRectF(self.rect_start_point, current_pos).normalized()
-            self.current_drawing_item.setRect(rect)
-        else:
-            super().mouseMoveEvent(event)
+            rect = QRectF(self.start_point, current_pos).normalized()
+            self.temp_rect_item.setRect(rect)
+        super().mouseMoveEvent(event)
 
-    def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent):
-        if (
-            event.button() == Qt.MouseButton.LeftButton
-            and self.rect_start_point
-            and self.current_drawing_item
-        ):
-            rect = self.current_drawing_item.rect()
-            # Remove the temporary drawing item
-            self.removeItem(self.current_drawing_item)
-            self.current_drawing_item = None
-            self.rect_start_point = None
-
-            # Emit signal only if rect has meaningful size
-            if rect.width() > 5 and rect.height() > 5:
-                self.waiting_area_created.emit(rect)
-        else:
-            super().mouseReleaseEvent(event)
+    def mouseReleaseEvent(self, event):
+        if self.temp_rect_item and self.start_point:
+            # Finish drawing rectangle
+            final_rect = self.temp_rect_item.rect()
+            
+            # Remove temp item (Controller creates the real persistent item)
+            self.removeItem(self.temp_rect_item)
+            self.temp_rect_item = None
+            self.start_point = None
+            
+            if final_rect.width() > 5 and final_rect.height() > 5:
+                self.waiting_area_created.emit(final_rect)
+        
+        super().mouseReleaseEvent(event)

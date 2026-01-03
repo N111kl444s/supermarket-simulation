@@ -1,252 +1,292 @@
 """
-Logic for the customer agent.
-Updated: Support for disability status and dynamic speed.
+Customer agent logic.
+Refactored:
+- Implements "Shopping List" logic: Customers actally walk to shelves.
+- Path is constructed as: Start -> [Route -> Shelf -> Route] -> Checkout -> Exit.
+- Fixed speed and scanning logic.
 """
 
+import math
 import random
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QVector2D
-from config import (
-    WALK_SPEED_PPS,
-    SCAN_TIME_PER_ITEM_MS,
-    SHELF_PROBABILITY,
-    WALK_SPEED_DISABLED_FACTOR,
-)
-
+from config import WALK_SPEED_PPS, WALK_SPEED_DISABLED_FACTOR, SCAN_TIME_PER_ITEM_MS, SHELF_SIZE
 
 class CustomerModel:
     def __init__(
         self,
-        route_points,
-        all_shelves,
+        shopping_route,
+        shelves,
         start_area_rect,
         waiting_area_rect,
-        max_offset=0,
+        exit_area_rect=None,
+        start_routes=None,
+        exit_routes=None,
+        max_offset=10,
         is_disabled=False,
     ):
-        self.route = list(route_points)
-        self.all_shelves = list(all_shelves)  # Expecting QPointF or dict
+        self.shopping_route = shopping_route
+        self.all_shelves = shelves
         self.start_area = start_area_rect
         self.waiting_area = waiting_area_rect
+        self.exit_area = exit_area_rect
+        
+        self.available_start_routes = start_routes if start_routes else {}
+        self.available_exit_routes = exit_routes if exit_routes else {}
+
         self.max_offset = max_offset
         self.is_disabled = is_disabled
 
-        # Tracking for Live Feed
-        self.entry_time_sec = 0  # Will be set by controller on spawn
-
-        # Speed adjustment
-        self.speed = WALK_SPEED_PPS
-        if self.is_disabled:
-            self.speed *= WALK_SPEED_DISABLED_FACTOR
-
-        # -- 1. SPAWN POSITION --
         self.pos = QPointF(0, 0)
-
-        # Priority: Start Area -> First Route Point -> Origin
-        if self.start_area:
-            wx = random.uniform(
-                self.start_area.left(), self.start_area.right()
-            )
-            wy = random.uniform(
-                self.start_area.top(), self.start_area.bottom()
-            )
-            self.pos = QPointF(wx, wy)
-        elif self.route:
-            self.pos = self.route[0]
-
-        # -- 2. SHOPPING MAPPING --
-        self.shopping_map = self._map_shelves_to_route()
-
-        # DYNAMIC ITEM COUNT
-        # Starts at 0, increases when visiting shelves
-        self.item_count = 0
-
-        # Movement State
-        self.route_index = 0
+        self.state = "SPAWNING"
+        self.path = []
         self.target_pos = None
-        # Start immediately unless we want a spawn delay visual
-        self.state = "FOLLOWING_ROUTE"
-        self.spawn_timer = (
-            0  # Not used for logic delay anymore, we spawn when created
-        )
-
-        # Random path jitter
-        self.offset_vec = QVector2D(
-            random.uniform(-self.max_offset, self.max_offset),
-            random.uniform(-self.max_offset, self.max_offset),
-        )
-
-        # Checkout State
-        self.assigned_checkout_id = None
-        self.checkout_exit_direction = "Right"
-        self.wait_timer = 0.0
-
-        self.scan_duration_per_item = SCAN_TIME_PER_ITEM_MS / 1000.0
-        self.total_scan_duration = 0.0
-        self.scan_time_elapsed = 0.0
-        self.items_scanned = 0
-
-        # Initial Target
-        self.target_pos = self.get_current_route_point_with_offset()
-
-    def _map_shelves_to_route(self):
-        mapping = {}
-        if not self.route or not self.all_shelves:
-            return mapping
-
-        potential_stops = []
-        for shelf_obj in self.all_shelves:
-            # Handle both QPointF and dict (legacy support)
-            if isinstance(shelf_obj, dict):
-                shelf_pos = QPointF(shelf_obj["x"], shelf_obj["y"])
-            else:
-                shelf_pos = shelf_obj
-
-            best_idx = -1
-            min_dist = float("inf")
-            for i, route_pt in enumerate(self.route):
-                dist = (QVector2D(shelf_pos) - QVector2D(route_pt)).length()
-                if dist < min_dist:
-                    min_dist = dist
-                    best_idx = i
-
-            if best_idx != -1 and min_dist < 300:
-                potential_stops.append((best_idx, shelf_pos))
-
-        for idx, pos in potential_stops:
-            if idx not in mapping:
-                if random.random() < SHELF_PROBABILITY:
-                    mapping[idx] = pos
-
-        return mapping
-
-    def get_current_route_point_with_offset(self):
-        if self.route_index < len(self.route):
-            return self.route[self.route_index] + self.offset_vec.toPointF()
-        return None
-
-    def go_to_queue(self, target, checkout_id, exit_direction):
-        self.state = "IN_QUEUE"
-        self.assigned_checkout_id = checkout_id
-        self.checkout_exit_direction = exit_direction
-        self.target_pos = target
-
-        # Calculate duration based on accumulated items
-        self.total_scan_duration = (
-            self.item_count * self.scan_duration_per_item
-        )
-
-    def tick(self, dt_seconds):
-        if self.state == "GONE":
-            return
-
-        # --- SPAWNING (Legacy check, mostly handled in init now) ---
-        if self.state == "SPAWNING":
-            # Just in case
-            self.route_index = 0
-            self.target_pos = self.get_current_route_point_with_offset()
-            if not self.target_pos:
-                self.state = "MOVING_TO_WAITING_AREA"
-            else:
-                self.state = "FOLLOWING_ROUTE"
-            return
-
-        # --- SHOPPING INTERACTION ---
-        if self.state == "PICKING_ITEM":
-            self.wait_timer -= dt_seconds
-            if self.wait_timer <= 0:
-                # Add items to cart dynamically
-                picked = random.randint(1, 3)
-                self.item_count += picked
-
-                self.route_index += 1
-                self.target_pos = self.get_current_route_point_with_offset()
-
-                if self.target_pos:
-                    self.state = "FOLLOWING_ROUTE"
-                else:
-                    self.state = "MOVING_TO_WAITING_AREA"
-                    self._set_waiting_target()
-            return
-
-        # --- CHECKOUT PROCESS ---
-        if self.state == "SCANNING":
-            self.scan_time_elapsed += dt_seconds
-            if self.scan_duration_per_item > 0:
-                # Calculate progress for current item
-                if self.scan_time_elapsed >= self.scan_duration_per_item:
-                    self.scan_time_elapsed = 0.0
-                    self.item_count -= 1
-                    if self.item_count <= 0:
-                        self.state = "LEAVING"
-                        # Determine exit vector based on global setting
-                        exit_vec = QPointF(0, 0)
-                        d = self.checkout_exit_direction
-                        if d == "Links":
-                            exit_vec = QPointF(-100, 0)
-                        elif d == "Rechts":
-                            exit_vec = QPointF(100, 0)
-                        elif d == "Oben":
-                            exit_vec = QPointF(0, -100)
-                        elif d == "Unten":
-                            exit_vec = QPointF(0, 100)
-                        else:
-                            # Fallback
-                            exit_vec = QPointF(100, 0)
-
-                        self.target_pos = self.pos + exit_vec
-            return
-
-        # --- MOVEMENT ENGINE ---
-        if self.target_pos:
-            current_vec = QVector2D(self.pos)
-            target_vec = QVector2D(self.target_pos)
-            direction = target_vec - current_vec
-            distance = direction.length()
-
-            # Use dynamic speed
-            step = self.speed * dt_seconds
-
-            if distance <= step:
-                self.pos = self.target_pos
-
-                if self.state == "FOLLOWING_ROUTE":
-                    if self.route_index in self.shopping_map:
-                        self.target_pos = self.shopping_map[self.route_index]
-                        self.state = "MOVING_TO_SHELF"
-                    else:
-                        self.route_index += 1
-                        self.target_pos = (
-                            self.get_current_route_point_with_offset()
-                        )
-                        if not self.target_pos:
-                            self.state = "MOVING_TO_WAITING_AREA"
-                            self._set_waiting_target()
-
-                elif self.state == "MOVING_TO_SHELF":
-                    self.state = "PICKING_ITEM"
-                    self.wait_timer = random.uniform(1.0, 3.0)
-
-                elif self.state == "MOVING_TO_WAITING_AREA":
-                    self.state = "WAITING_AREA"
-                    self.target_pos = None
-
-                elif self.state == "LEAVING":
-                    self.state = "GONE"
-
-            else:
-                if distance > 0:
-                    direction.normalize()
-                    self.pos = (current_vec + (direction * step)).toPointF()
-
-    def _set_waiting_target(self):
-        if self.waiting_area:
-            wx = random.uniform(
-                self.waiting_area.left(), self.waiting_area.right()
-            )
-            wy = random.uniform(
-                self.waiting_area.top(), self.waiting_area.bottom()
-            )
-            self.target_pos = QPointF(wx, wy)
+        
+        # --- KORREKTE GESCHWINDIGKEIT ---
+        # Wir nutzen den Basiswert aus der Config.
+        base_speed = WALK_SPEED_PPS
+        if self.is_disabled:
+            self.speed = base_speed * WALK_SPEED_DISABLED_FACTOR
         else:
-            self.target_pos = self.pos
+            self.speed = base_speed
+
+        self.item_count = 0
+        self.target_item_count = max(1, int(random.normalvariate(12, 4))) # Durchschnittlich 12 Items
+        self.target_shelves = [] # Liste der Regale, die besucht werden sollen
+        
+        self.assigned_checkout_id = None
+        self.entry_time_sec = 0
+        
+        # --- SCAN LOGIC ---
+        self.scan_duration_per_item = SCAN_TIME_PER_ITEM_MS / 1000.0
+        self.scan_time_elapsed = 0.0
+        
+        # Wenn der Kunde gerade ein Item nimmt (kurze Pause am Regal)
+        self.picking_timer = 0.0
+        self.is_picking = False
+
+        self._init_pathing()
+
+    def _init_pathing(self):
+        # 1. Start Position
+        if self.start_area:
+            rx = random.uniform(self.start_area.x(), self.start_area.x() + self.start_area.width())
+            ry = random.uniform(self.start_area.y(), self.start_area.y() + self.start_area.height())
+            self.pos = QPointF(rx, ry)
+        elif self.shopping_route:
+            self.pos = QPointF(self.shopping_route[0])
+
+        # 2. Einkaufsliste generieren (Zufällige Regale auswählen)
+        if self.all_shelves:
+            # Wähle zufällige Regale aus, maximal so viele wie target_items
+            num_targets = min(len(self.all_shelves), self.target_item_count)
+            # Wir nehmen Indices der Regale
+            indices = random.sample(range(len(self.all_shelves)), num_targets)
+            self.target_shelves = [self.all_shelves[i] for i in indices]
+
+        # 3. Pfad berechnen (Start -> Shop + Regale -> Wartebereich)
+        self.path = self._build_full_shopping_path()
+        
+        if self.path:
+            self.target_pos = self.path.pop(0)
+            self.state = "FOLLOWING_ROUTE"
+        else:
+            self._goto_waiting_area()
+
+    def _build_full_shopping_path(self):
+        """
+        Konstruiert einen Pfad, der die Zulaufroute, die Einkaufsroute
+        UND Abstecher zu den Regalen beinhaltet.
+        """
+        full_path = []
+
+        # A. Zulaufroute (Nächstgelegene)
+        start_route = self._get_nearest_route(self.pos, self.available_start_routes)
+        if start_route:
+            full_path.extend(start_route)
+
+        # B. Einkaufsroute mit Regal-Abstechern (Zig-Zag)
+        if self.shopping_route:
+            # Wir kopieren die Route, damit wir sie nicht verändern
+            route_points = list(self.shopping_route)
+            
+            # Wir ordnen jedem Regal den "besten" Punkt auf der Route zu, um abzubrechen
+            # Simple Logik: Finde den Route-Punkt mit der geringsten Distanz zum Regal
+            shelf_assignments = {} # {route_index: [shelf_pos, shelf_pos]}
+            
+            for shelf_pos in self.target_shelves:
+                best_idx = 0
+                min_dist = float('inf')
+                for i, rp in enumerate(route_points):
+                    dist = QVector2D(shelf_pos - rp).length()
+                    if dist < min_dist:
+                        min_dist = dist
+                        best_idx = i
+                
+                if best_idx not in shelf_assignments:
+                    shelf_assignments[best_idx] = []
+                shelf_assignments[best_idx].append(shelf_pos)
+
+            # Pfad zusammenbauen
+            for i, rp in enumerate(route_points):
+                # 1. Gehe zum Route-Punkt
+                # Add Jitter (natürliche Bewegung)
+                ox = random.uniform(-self.max_offset, self.max_offset)
+                oy = random.uniform(-self.max_offset, self.max_offset)
+                jittered_pos = rp + QPointF(ox, oy)
+                full_path.append(jittered_pos)
+                
+                # 2. Falls hier Regale zugeordnet sind, gehe hin und zurück
+                if i in shelf_assignments:
+                    for s_pos in shelf_assignments[i]:
+                        # Hin zum Regal (Exakt, ohne Jitter, damit er davor steht)
+                        full_path.append(s_pos)
+                        # HIER wird er später das Item nehmen (wir erkennen das an der Position)
+                        
+                        # Zurück zum Route-Punkt (damit er nicht durch Wände glitcht zum nächsten)
+                        full_path.append(jittered_pos)
+
+        return full_path
+
+    def _get_nearest_route(self, current_pos, routes_dict):
+        if not routes_dict:
+            return []
+        best_route = []
+        min_dist = float('inf')
+        for name, points in routes_dict.items():
+            if not points: continue
+            start_node = points[0]
+            vec = QVector2D(start_node - current_pos)
+            dist = vec.length()
+            if dist < min_dist:
+                min_dist = dist
+                best_route = points
+        return best_route
+
+    def tick(self, dt):
+        if self.state == "FOLLOWING_ROUTE":
+            if self.is_picking:
+                # Simuliere kurzes Warten am Regal
+                self.picking_timer += dt
+                if self.picking_timer > 0.5: # 0.5 Sekunden pro Item greifen
+                    self.picking_timer = 0
+                    self.is_picking = False
+                    self.item_count += 1 # Jetzt erst Item hinzufügen!
+            else:
+                self._move_along_path(dt)
+        
+        elif self.state == "WALKING_TO_WAITING":
+            dist = self._move_to_target(dt)
+            if dist < 5.0:
+                self.state = "WAITING_AREA"
+        
+        elif self.state == "IN_QUEUE":
+            self._move_to_target(dt)
+        
+        elif self.state == "SCANNING":
+            # Item-by-Item Countdown
+            self.scan_time_elapsed += dt
+            if self.scan_time_elapsed >= self.scan_duration_per_item:
+                self.scan_time_elapsed = 0.0
+                if self.item_count > 0:
+                    self.item_count -= 1
+                
+                if self.item_count <= 0:
+                    self._finish_checkout()
+        
+        elif self.state == "LEAVING":
+            self._move_leaving(dt)
+
+    def _move_along_path(self, dt):
+        if not self.target_pos:
+            self._goto_waiting_area()
+            return
+
+        dist = self._move_to_target(dt)
+        if dist < 5.0:
+            # Ziel erreicht.
+            # Check: Ist das ein Regal?
+            # Wir prüfen einfach, ob wir an einer Position sind, die in unserer target_shelves Liste war
+            # Da wir QPointF vergleichen, nutzen wir eine kleine Toleranz
+            is_shelf = False
+            for s in self.target_shelves:
+                if QVector2D(self.pos - s).length() < 2.0:
+                    is_shelf = True
+                    break
+            
+            if is_shelf:
+                self.is_picking = True
+                self.picking_timer = 0
+            
+            # Nächster Punkt
+            if self.path:
+                self.target_pos = self.path.pop(0)
+            else:
+                self._goto_waiting_area()
+
+    def _goto_waiting_area(self):
+        if self.waiting_area:
+            rx = random.uniform(self.waiting_area.x(), self.waiting_area.x() + self.waiting_area.width())
+            ry = random.uniform(self.waiting_area.y(), self.waiting_area.y() + self.waiting_area.height())
+            self.target_pos = QPointF(rx, ry)
+            self.state = "WALKING_TO_WAITING"
+        else:
+            self.state = "WAITING_AREA"
+
+    def _move_to_target(self, dt):
+        if not self.target_pos:
+            return 0.0
+        
+        vec = QPointF(self.target_pos.x() - self.pos.x(), self.target_pos.y() - self.pos.y())
+        dist = math.sqrt(vec.x()**2 + vec.y()**2)
+        
+        if dist > 0:
+            dx = vec.x() / dist
+            dy = vec.y() / dist
+            move_dist = self.speed * dt
+            
+            if move_dist >= dist:
+                self.pos = self.target_pos
+                return 0.0
+            else:
+                self.pos = QPointF(self.pos.x() + dx * move_dist, self.pos.y() + dy * move_dist)
+                return dist - move_dist
+        return 0.0
+
+    def go_to_queue(self, target_pos, checkout_id, global_exit_dir):
+        self.target_pos = target_pos
+        self.assigned_checkout_id = checkout_id
+        self.state = "IN_QUEUE"
+
+    def _finish_checkout(self):
+        self.state = "LEAVING"
+        self.scan_time_elapsed = 0.0
+        
+        # Wähle näheste Ausgangsroute vom aktuellen Punkt (Kasse)
+        selected_exit_route = self._get_nearest_route(self.pos, self.available_exit_routes)
+        
+        self.path = []
+        if selected_exit_route:
+            self.path = [QPointF(p) for p in selected_exit_route]
+            if self.path:
+                self.target_pos = self.path.pop(0)
+        else:
+            # Fallback: Laufe einfach nach rechts raus, wenn keine Route da ist
+            self.target_pos = self.pos + QPointF(200, 0)
+
+    def _move_leaving(self, dt):
+        # Bewege zum Ziel (Routenpunkt)
+        if self.target_pos:
+            dist = self._move_to_target(dt)
+            if dist < 5.0:
+                if self.path:
+                    self.target_pos = self.path.pop(0)
+                # Wenn Pfad leer, bleiben wir stehen (oder gehen in Area Logik über)
+        
+        # Check ob in Area
+        if self.exit_area and self.exit_area.contains(self.pos):
+            self.state = "GONE"
+        
+        # Fallback Cleanup, wenn Route zu Ende und keine Area definiert
+        elif not self.path and not self.target_pos:
+             self.state = "GONE"
