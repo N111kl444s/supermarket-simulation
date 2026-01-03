@@ -323,5 +323,7 @@
         423.7978810105949,
         43.0317848410758
     ],
-    "global_exit_direction": "Oben"
+    "global_exit_direction": "Oben",
+    "background_image": null,
+    "background_scale": 1.0
 }

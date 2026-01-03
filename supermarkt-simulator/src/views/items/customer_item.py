@@ -1,11 +1,9 @@
 """
 Customer visualization module.
-Refactored: Robust image loading using config lists.
-Fixed: boundingRect extended to include Item-Count-Badge (prevents visual artifacts/trails).
-Updated: Badge size tweaked for new CUSTOMER_SIZE.
+Refactored: Supports dynamic sizing via init parameter.
 """
 
-from PyQt6.QtWidgets import QGraphicsPixmapItem, QGraphicsItem, QStyle
+from PyQt6.QtWidgets import QGraphicsPixmapItem, QGraphicsItem
 from PyQt6.QtCore import Qt, QRectF
 from PyQt6.QtGui import QPen, QBrush, QColor, QFont, QPixmap
 from config import *
@@ -17,9 +15,10 @@ class CustomerItem(QGraphicsPixmapItem):
     _pixmaps_disabled = []
     _images_loaded = False
 
-    def __init__(self, model):
+    def __init__(self, model, size=CUSTOMER_SIZE):
         super().__init__()
         self.model = model
+        self.size = size  # Dynamic size
         self.setZValue(20)
         self.setAcceptHoverEvents(True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
@@ -33,13 +32,11 @@ class CustomerItem(QGraphicsPixmapItem):
         if cls._images_loaded:
             return
 
-        # Normale Kunden
         for img_name in IMG_CUSTOMERS_NORMAL:
             path = IMAGE_DIR / img_name
             if path.exists():
                 cls._pixmaps_normal.append(QPixmap(str(path)))
 
-        # Kunden mit Behinderung
         for img_name in IMG_CUSTOMERS_DISABLED:
             path = IMAGE_DIR / img_name
             if path.exists():
@@ -58,40 +55,33 @@ class CustomerItem(QGraphicsPixmapItem):
 
         if pool:
             pix = random.choice(pool)
-            # Scaling with SmoothTransformation for better quality
             scaled = pix.scaled(
-                CUSTOMER_SIZE,
-                CUSTOMER_SIZE,
+                int(self.size),
+                int(self.size),
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
             self.setPixmap(scaled)
-            self.setOffset(-CUSTOMER_SIZE / 2, -CUSTOMER_SIZE / 2)
+            self.setOffset(-self.size / 2, -self.size / 2)
 
     def sync_visuals(self):
         self.setPos(self.model.pos)
         self.update()
 
     def boundingRect(self):
-        """
-        Defines the area that needs to be repainted.
-        Must include the image AND the badges drawn outside.
-        """
         base_rect = super().boundingRect()
-        # Adjusted slightly larger to accommodate bigger font/badge if needed
         return base_rect.adjusted(-5, -18, 5, 5)
 
     def paint(self, painter, option, widget=None):
-        # Fallback Kreis
         if not self.pixmap() or self.pixmap().isNull():
             color = COLOR_ACCENT if self.model.is_disabled else COLOR_CUSTOMER
             painter.setBrush(QBrush(color))
             painter.setPen(QPen(Qt.GlobalColor.white))
             painter.drawEllipse(
-                int(-CUSTOMER_SIZE / 2),
-                int(-CUSTOMER_SIZE / 2),
-                int(CUSTOMER_SIZE),
-                int(CUSTOMER_SIZE),
+                int(-self.size / 2),
+                int(-self.size / 2),
+                int(self.size),
+                int(self.size),
             )
 
         super().paint(painter, option, widget)
@@ -102,14 +92,12 @@ class CustomerItem(QGraphicsPixmapItem):
         painter.setPen(Qt.PenStyle.NoPen)
 
         # Position badge slightly higher
-        badge_rect = QRectF(
-            -CUSTOMER_SIZE / 2, -CUSTOMER_SIZE / 2 - 14, 20, 14
-        )
+        badge_rect = QRectF(-self.size / 2, -self.size / 2 - 14, 20, 14)
         painter.drawRoundedRect(badge_rect, 6, 6)
 
         painter.setPen(Qt.GlobalColor.white)
         font = QFont()
-        font.setPixelSize(10)  # Slightly larger font for readability
+        font.setPixelSize(10)
         font.setBold(True)
         painter.setFont(font)
         painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, count_str)

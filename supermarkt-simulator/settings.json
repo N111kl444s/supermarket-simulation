@@ -1,49 +1,54 @@
 {
-    "show_routes": false,
+    "show_routes": true,
     "show_shelves": true,
     "show_checkouts": true,
     "show_cashiers": true,
-    "show_waiting_area": false,
-    "show_start_area": false,
-    "customer_path_offset": 15,
+    "show_waiting_area": true,
+    "show_start_area": true,
+    "customer_path_offset": 50,
     "offset_cashier_left": [
-        13,
-        -21
+        113,
+        67
     ],
     "offset_cashier_right": [
-        55,
-        -24
+        37,
+        67
     ],
     "offset_light_normal_left": [
-        36,
-        2
+        93,
+        75
     ],
     "offset_light_normal_right": [
-        36,
-        2
+        51,
+        75
     ],
     "offset_light_sb_left": [
-        36,
-        2
+        46,
+        49
     ],
     "offset_light_sb_right": [
-        36,
-        2
+        96,
+        50
     ],
     "offset_queue_left": [
-        -13,
-        7
+        46,
+        65
     ],
     "offset_queue_right": [
-        96,
-        5
+        104,
+        65
     ],
     "offset_queue_sb_left": [
-        96,
-        9
+        114,
+        55
     ],
     "offset_queue_sb_right": [
-        -17,
-        10
-    ]
+        37,
+        55
+    ],
+    "size_customer": 50,
+    "size_shelf": 50,
+    "size_cashier": 10,
+    "size_checkout_width": 150,
+    "size_checkout_height": 150
 }

@@ -13,7 +13,6 @@ SRC_DIR = SCRIPT_FILE.parent
 BASE_DIR = SRC_DIR.parent
 ASSETS_DIR = BASE_DIR / "assets"
 IMAGE_DIR = ASSETS_DIR / "images"
-# WICHTIG: Dieser Pfad hat gefehlt
 MAPS_DIR = BASE_DIR / "maps"
 
 
@@ -58,6 +57,7 @@ COLOR_CASHIER = QColor("#F59E0B")
 COLOR_CHECKOUT = QColor("#3B82F6")
 COLOR_WAITING_AREA = QColor(59, 130, 246, 40)
 COLOR_START_AREA = QColor(16, 185, 129, 40)
+COLOR_EXIT_AREA = QColor(239, 68, 68, 40)  # NEU: Rot, transparent
 COLOR_SELECTION = QColor("#EF4444")
 COLOR_QUEUE_HIGHLIGHT = QColor("#8B5CF6")
 COLOR_SCAN_PROGRESS = QColor("#10B981")
@@ -74,7 +74,7 @@ COLOR_DARK_TEXT = COLOR_TEXT_MAIN
 COLOR_LIGHT_BG = COLOR_BG_MAIN
 COLOR_WHITE_BG = COLOR_BG_PANEL
 
-# --- Constants (UPDATED SIZES) ---
+# --- Constants (Fallback Defaults) ---
 SHELF_SIZE = 32
 CUSTOMER_SIZE = 32
 CASHIER_SIZE = 22
@@ -115,6 +115,7 @@ DEFAULT_SETTINGS = {
     "show_waiting_area": True,
     "show_start_area": True,
     "customer_path_offset": 10,
+    # Offsets
     "offset_cashier_left": [-15, 8],
     "offset_cashier_right": [45, 8],
     "offset_light_normal_left": [36, 2],
@@ -125,4 +126,10 @@ DEFAULT_SETTINGS = {
     "offset_queue_right": [35, -60],
     "offset_queue_sb_left": [5, -60],
     "offset_queue_sb_right": [35, -60],
+    # Sizes (Global Config)
+    "size_customer": CUSTOMER_SIZE,
+    "size_shelf": SHELF_SIZE,
+    "size_cashier": CASHIER_SIZE,
+    "size_checkout_width": CHECKOUT_WIDTH,
+    "size_checkout_height": CHECKOUT_HEIGHT,
 }

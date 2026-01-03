@@ -1,7 +1,6 @@
 """
 Shelf item visualization.
-Refactored: Uses images from config or fallback rectangle.
-Fixed: Positioning logic (setPos) added.
+Refactored: Supports dynamic sizing.
 """
 
 from PyQt6.QtWidgets import (
@@ -9,29 +8,22 @@ from PyQt6.QtWidgets import (
     QGraphicsItem,
     QGraphicsTextItem,
     QStyle,
-    QGraphicsRectItem,
 )
 from PyQt6.QtCore import Qt, QRectF
-from PyQt6.QtGui import QPixmap, QFont, QColor, QBrush, QPen
+from PyQt6.QtGui import QPixmap, QFont, QBrush, QPen
 from config import *
 import random
 
 
 class ShelfItem(QGraphicsPixmapItem):
-    """
-    Visual representation of a shelf using images.
-    """
-
     _pixmaps = []
     _images_loaded = False
 
-    def __init__(self, x, y, index=0):
+    def __init__(self, x, y, index=0, size=SHELF_SIZE):
         super().__init__()
-
-        # WICHTIG: Position setzen!
         self.setPos(x, y)
-
         self.index = index
+        self.size = size
         self.setZValue(5)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
 
@@ -43,33 +35,26 @@ class ShelfItem(QGraphicsPixmapItem):
     def _load_images(cls):
         if cls._images_loaded:
             return
-        # Lade Bilder basierend auf der dynamischen Liste in Config
         for img_name in IMG_SHELVES:
             path = IMAGE_DIR / img_name
             if path.exists():
                 cls._pixmaps.append(QPixmap(str(path)))
-            else:
-                print(f"Fehler: Regal-Bild nicht gefunden: {path}")
         cls._images_loaded = True
 
     def set_visuals(self):
-        # Wähle zufälliges Bild oder Fallback
         self.pixmap_data = (
             random.choice(ShelfItem._pixmaps) if ShelfItem._pixmaps else None
         )
 
         if self.pixmap_data:
             scaled = self.pixmap_data.scaled(
-                SHELF_SIZE,
-                SHELF_SIZE,
+                int(self.size),
+                int(self.size),
                 Qt.AspectRatioMode.IgnoreAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
             self.setPixmap(scaled)
-            self.setOffset(-SHELF_SIZE / 2, -SHELF_SIZE / 2)
-        else:
-            # Fallback: Wenn keine Bilder da sind, wird im paint() gezeichnet
-            pass
+            self.setOffset(-self.size / 2, -self.size / 2)
 
     def _create_label(self):
         self.label = QGraphicsTextItem(str(self.index + 1), self)
@@ -83,10 +68,9 @@ class ShelfItem(QGraphicsPixmapItem):
         self.label.setPos(-br.width() / 2, -br.height() / 2)
 
     def paint(self, painter, option, widget=None):
-        # Falls kein Bild geladen wurde, zeichne ein graues Rechteck als Fallback
         if not self.pixmap() or self.pixmap().isNull():
             rect = QRectF(
-                -SHELF_SIZE / 2, -SHELF_SIZE / 2, SHELF_SIZE, SHELF_SIZE
+                -self.size / 2, -self.size / 2, self.size, self.size
             )
             painter.setBrush(QBrush(COLOR_SHELF))
             painter.setPen(QPen(Qt.GlobalColor.black))
@@ -97,6 +81,5 @@ class ShelfItem(QGraphicsPixmapItem):
         if option.state & QStyle.StateFlag.State_Selected:
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.setPen(QPen(COLOR_SELECTION, 2))
-            # Rahmen um das Bild (oder Fallback Rect)
             bbox = self.boundingRect()
             painter.drawRect(bbox)

@@ -1,13 +1,18 @@
 """
 Main Controller.
-Refactored: Distributed spawning over the day, Live Feed integration.
+Refactored:
+- Adds Start Route, Exit Route, Exit Area tools and logic.
+- Consistent geometry logic.
+- Fixed: Includes all map management methods (create, delete, dialogs).
 """
 
 import json
 import random
 import os
+import shutil
+import math
 from PyQt6.QtCore import QTimer, QPointF, Qt, QRectF, QTime
-from PyQt6.QtGui import QPen, QBrush, QVector2D, QPainterPath, QColor
+from PyQt6.QtGui import QPen, QBrush, QVector2D, QPainterPath, QColor, QPixmap
 from PyQt6.QtWidgets import (
     QListWidgetItem,
     QGraphicsPathItem,
@@ -15,9 +20,12 @@ from PyQt6.QtWidgets import (
     QInputDialog,
     QGraphicsItem,
     QGraphicsView,
+    QFileDialog,
+    QGraphicsPixmapItem
 )
 from config import *
 from views.main_window import MainWindow
+from views.size_config_dialog import SizeConfigDialog
 from models.customer import CustomerModel
 
 # Ensure all items are imported
@@ -28,6 +36,7 @@ from views.items import (
     CustomerItem,
     WaitingAreaItem,
     StartAreaItem,
+    ExitAreaItem
 )
 from views.dialogs import (
     VisibilityDialog,
@@ -42,8 +51,20 @@ class MainController:
         self.all_routes = {}
         self.all_shelves = []
         self.checkouts_data = []
+        
         self.waiting_area_rect = None
         self.start_area_rect = None
+        
+        # NEU: Neue Pfade und Area
+        self.start_route_points = []
+        self.exit_route_points = []
+        self.exit_area_rect = None
+        
+        # Background Logic
+        self.background_image_path = None
+        self.background_item = None
+        self.background_scale = 1.0
+        
         self.settings = DEFAULT_SETTINGS.copy()
 
         self.current_mode = "Simulation"
@@ -73,6 +94,7 @@ class MainController:
         self.cashier_items = []
         self.waiting_area_item = None
         self.start_area_item = None
+        self.exit_area_item = None
 
         # SPAWNING LOGIC
         self.target_daily_customers = 50
@@ -115,7 +137,11 @@ class MainController:
         self.view.btn_new_map.clicked.connect(self.create_new_map)
         self.view.btn_save_map.clicked.connect(self.save_current_map)
         self.view.btn_delete_map.clicked.connect(self.delete_current_map)
+        self.view.btn_set_background.clicked.connect(self.select_map_background)
+        self.view.btn_remove_background.clicked.connect(self.remove_map_background)
+        self.view.spin_bg_scale.valueChanged.connect(self.on_bg_scale_changed)
 
+        # Werkzeuge
         self.view.new_route_button.clicked.connect(self.toggle_route_tool)
         self.view.place_shelves_button.clicked.connect(self.toggle_shelf_tool)
         self.view.waiting_area_button.clicked.connect(
@@ -124,6 +150,10 @@ class MainController:
         self.view.start_area_button.clicked.connect(
             self.toggle_start_area_tool
         )
+        # NEUE WERKZEUGE
+        self.view.btn_start_route.clicked.connect(self.toggle_start_route_tool)
+        self.view.btn_exit_route.clicked.connect(self.toggle_exit_route_tool)
+        self.view.btn_exit_area.clicked.connect(self.toggle_exit_area_tool)
 
         self.view.btn_kl.clicked.connect(
             lambda: self.toggle_checkout_tool(
@@ -144,6 +174,7 @@ class MainController:
 
         self.view.btn_visibility.clicked.connect(self.open_visibility_dialog)
         self.view.btn_offsets.clicked.connect(self.open_offsets_dialog)
+        self.view.btn_config_sizes.clicked.connect(self.open_size_config_dialog)
         self.view.btn_save_admin.clicked.connect(self.finish_route_drawing)
 
         self.view.route_list_widget.itemClicked.connect(lambda i: None)
@@ -180,6 +211,11 @@ class MainController:
         if self.settings_file.exists():
             with open(self.settings_file, "r") as f:
                 self.settings.update(json.load(f))
+        
+        # Ensure default keys for sizes exist
+        for k, v in DEFAULT_SETTINGS.items():
+            if k not in self.settings:
+                self.settings[k] = v
 
     def toggle_play_pause(self):
         if self.sim_timer.isActive():
@@ -255,12 +291,10 @@ class MainController:
         self.prob_disabled = self.view.disabled_prob_input.value() / 100.0
 
         # Calculate Spawn Interval:
-        # Total Minutes Open
         seconds_open = self.open_time.secsTo(self.close_time)
         if seconds_open <= 0:
-            seconds_open = 1  # Avoid div by zero
+            seconds_open = 1
 
-        # e.g., 720 mins / 50 customers = 14.4 mins per customer (Game Time)
         self.average_spawn_interval = seconds_open / max(
             1, self.target_daily_customers
         )
@@ -273,7 +307,6 @@ class MainController:
         )
 
     def calc_next_spawn(self):
-        # Random variance +/- 30% for organic feel
         variance = random.uniform(0.7, 1.3)
         self.next_spawn_interval = self.average_spawn_interval * variance
 
@@ -291,8 +324,6 @@ class MainController:
 
         offset = self.settings.get("customer_path_offset", 10)
         r_name = random.choice(route_names)
-
-        # Determine Type
         is_disabled = random.random() < self.prob_disabled
 
         model = CustomerModel(
@@ -300,16 +331,18 @@ class MainController:
             self.all_shelves,
             self.start_area_rect,
             self.waiting_area_rect,
+            exit_area_rect=self.exit_area_rect,
+            start_route=self.start_route_points,
+            exit_route=self.exit_route_points,
             max_offset=offset,
             is_disabled=is_disabled,
         )
 
-        # Set Entry Time for Log
         total_seconds_today = self.open_time.secsTo(self.sim_time)
         model.entry_time_sec = total_seconds_today
 
         self.customers_model.append(model)
-        item = CustomerItem(model)
+        item = CustomerItem(model, size=self.settings.get("size_customer", 32))
         self.scene.addItem(item)
         self.customer_items.append(item)
 
@@ -388,7 +421,7 @@ class MainController:
                 now_sec = self.open_time.secsTo(self.sim_time)
                 duration = int(
                     (now_sec - model.entry_time_sec) / 60
-                )  # in minutes
+                )
                 self.view.add_log_entry(
                     f"Kunde hat Laden nach {duration} Min verlassen.", "gray"
                 )
@@ -434,21 +467,61 @@ class MainController:
         c_data = next((x for x in self.checkouts_data if x["id"] == cid), None)
         if not c_data:
             return
-        cx, cy = c_data["x"], c_data["y"]
-        ori = c_data.get("orientation", "Right")
+        
+        start_point, direction_vec = self._get_checkout_queue_geometry(c_data)
+        
+        # Target = Start + Index * Direction * Spacing
+        offset_vec = direction_vec * (q_index * QUEUE_SPACING)
+        target = start_point + offset_vec.toPointF()
+        
         exit_dir = self.view.combo_global_exit.currentText()
+        model.go_to_queue(target, cid, exit_dir)
 
+    def _get_checkout_queue_geometry(self, c_data):
+        cx, cy = c_data["x"], c_data["y"]
+        cw = self.settings.get("size_checkout_width", 100)
+        ch = self.settings.get("size_checkout_height", 100)
+        
+        ori = c_data.get("orientation", "Right")
         c_type = c_data["type"]
+        angle = c_data.get("angle", 0)
+        
         offset_key = (
             "offset_queue_"
             + ("sb_" if c_type == "SB" else "")
             + ("left" if ori == "Left" else "right")
         )
-        off = self.settings[offset_key]
-        sx = cx + off[0]
-        sy = cy + off[1]
-        target = QPointF(sx, sy + (q_index * QUEUE_SPACING))
-        model.go_to_queue(target, cid, exit_dir)
+        off = self.settings.get(offset_key, [0, 0])
+        
+        qx_local = off[0]
+        qy_local = off[1]
+        
+        center_x = cx + cw / 2
+        center_y = cy + ch / 2
+        
+        p_global_unrot_x = cx + qx_local
+        p_global_unrot_y = cy + qy_local
+        
+        start_point = self._get_rotated_point(
+            p_global_unrot_x, p_global_unrot_y,
+            center_x, center_y,
+            angle
+        )
+        
+        rad = math.radians(angle)
+        dir_x = -math.sin(rad)
+        dir_y = math.cos(rad)
+        
+        direction_vec = QVector2D(dir_x, dir_y)
+        return start_point, direction_vec
+
+    def _get_rotated_point(self, x, y, cx, cy, angle_deg):
+        rad = math.radians(angle_deg)
+        tx = x - cx
+        ty = y - cy
+        rx = tx * math.cos(rad) - ty * math.sin(rad)
+        ry = tx * math.sin(rad) + ty * math.cos(rad)
+        return QPointF(rx + cx, ry + cy)
 
     def on_object_list_clicked(self, item):
         d = item.data(Qt.ItemDataRole.UserRole)
@@ -506,10 +579,23 @@ class MainController:
 
     def draw_debug_elements(self):
         self.scene.blockSignals(True)
+        
+        # CLEAR ITEMS (except background and quadrants)
+        for i in self.scene.items():
+            if (i != self.background_item and 
+                i != self.view.item_q1 and 
+                i != self.view.item_q2 and 
+                i != self.view.item_q3 and 
+                i != self.view.item_q4):
+                pass
+        
         if self.waiting_area_item and self.waiting_area_item.scene():
             self.scene.removeItem(self.waiting_area_item)
         if self.start_area_item and self.start_area_item.scene():
             self.scene.removeItem(self.start_area_item)
+        if self.exit_area_item and self.exit_area_item.scene():
+            self.scene.removeItem(self.exit_area_item)
+            
         for i in self.shelf_items:
             if i.scene():
                 self.scene.removeItem(i)
@@ -522,6 +608,13 @@ class MainController:
         self.checkout_items.clear()
         self.cashier_items.clear()
         self.route_debug_items.clear()
+        
+        # Ensure Background is at bottom and scaled
+        if self.background_item:
+            self.background_item.setZValue(-100)
+            self.background_item.setScale(self.background_scale)
+            if not self.background_item.scene():
+                self.scene.addItem(self.background_item)
 
         def is_selected(obj_type, idx_or_id):
             if not self.selected_object_spec:
@@ -542,6 +635,9 @@ class MainController:
         if self.start_area_rect and self.settings.get("show_start_area", True):
             self.start_area_item = StartAreaItem(self.start_area_rect)
             self.scene.addItem(self.start_area_item)
+        if self.exit_area_rect:
+            self.exit_area_item = ExitAreaItem(self.exit_area_rect)
+            self.scene.addItem(self.exit_area_item)
 
         for idx, p in enumerate(self.all_shelves):
             show = (
@@ -550,8 +646,12 @@ class MainController:
                 or is_selected("shelf", idx)
             )
             if show:
-                # Assuming simple QPointF from previous revert
-                s = ShelfItem(p.x(), p.y(), index=idx)
+                s = ShelfItem(
+                    p.x(), 
+                    p.y(), 
+                    index=idx, 
+                    size=self.settings.get("size_shelf", 32)
+                )
                 self.scene.addItem(s)
                 self.shelf_items.append(s)
 
@@ -561,6 +661,7 @@ class MainController:
             )
             if show:
                 ori = cd.get("orientation", "Right")
+                angle = cd.get("angle", 0)
                 c_type = cd["type"]
                 lo = (
                     self.settings[
@@ -582,21 +683,22 @@ class MainController:
                     self.settings["show_cashiers"],
                     cd.get("id"),
                     lo,
+                    width=self.settings.get("size_checkout_width", 100),
+                    height=self.settings.get("size_checkout_height", 100),
+                    angle=angle
                 )
                 ci.clicked.connect(self.on_checkout_clicked)
                 self.scene.addItem(ci)
                 self.checkout_items.append(ci)
+                
                 if self.settings["show_routes"] or self.view.highlight_queues:
-                    off = self.settings[
-                        "offset_queue_"
-                        + ("sb_" if c_type == "SB" else "")
-                        + ("left" if ori == "Left" else "right")
-                    ]
-                    sx = cd["x"] + off[0]
-                    sy = cd["y"] + off[1]
+                    start_pt, dir_vec = self._get_checkout_queue_geometry(cd)
+                    end_pt = start_pt + (dir_vec * 60).toPointF()
+
                     pp = QPainterPath()
-                    pp.moveTo(sx, sy)
-                    pp.lineTo(sx, sy + 60)
+                    pp.moveTo(start_pt)
+                    pp.lineTo(end_pt)
+                    
                     li = QGraphicsPathItem(pp)
                     li.setPen(
                         QPen(COLOR_QUEUE_HIGHLIGHT, 3)
@@ -607,6 +709,7 @@ class MainController:
                     )
                     self.scene.addItem(li)
                     self.route_debug_items.append(li)
+                    
                 if (
                     c_type == "Normal"
                     and self.settings["show_cashiers"]
@@ -617,10 +720,26 @@ class MainController:
                         if ori == "Left"
                         else self.settings["offset_cashier_right"]
                     )
+                    
+                    cw = self.settings.get("size_checkout_width", 100)
+                    ch = self.settings.get("size_checkout_height", 100)
+                    cx_center = cd["x"] + cw / 2
+                    cy_center = cd["y"] + ch / 2
+                    
+                    c_glob_x = cd["x"] + off_c[0]
+                    c_glob_y = cd["y"] + off_c[1]
+                    
+                    final_pos = self._get_rotated_point(
+                        c_glob_x, c_glob_y,
+                        cx_center, cy_center,
+                        angle
+                    )
+                    
                     cai = CashierItem(
-                        cd["x"] + off_c[0],
-                        cd["y"] + off_c[1],
+                        final_pos.x(),
+                        final_pos.y(),
                         cd.get("skill", "Azubi"),
+                        size=self.settings.get("size_cashier", 22)
                     )
                     self.scene.addItem(cai)
                     self.cashier_items.append(cai)
@@ -637,6 +756,28 @@ class MainController:
                     pi.setZValue(4)
                     self.scene.addItem(pi)
                     self.route_debug_items.append(pi)
+        
+        if self.start_route_points and len(self.start_route_points) > 1:
+            pp = QPainterPath()
+            pp.moveTo(self.start_route_points[0])
+            for p in self.start_route_points[1:]:
+                pp.lineTo(p)
+            pi = QGraphicsPathItem(pp)
+            pi.setPen(QPen(COLOR_BLUE, 2, Qt.PenStyle.DotLine))
+            pi.setZValue(4)
+            self.scene.addItem(pi)
+            self.route_debug_items.append(pi)
+
+        if self.exit_route_points and len(self.exit_route_points) > 1:
+            pp = QPainterPath()
+            pp.moveTo(self.exit_route_points[0])
+            for p in self.exit_route_points[1:]:
+                pp.lineTo(p)
+            pi = QGraphicsPathItem(pp)
+            pi.setPen(QPen(COLOR_RED, 2, Qt.PenStyle.DotLine))
+            pi.setZValue(4)
+            self.scene.addItem(pi)
+            self.route_debug_items.append(pi)
 
         for i in self.shelf_items:
             i.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
@@ -662,13 +803,15 @@ class MainController:
         self.scene.blockSignals(False)
         self.update_object_list()
 
-    # FIX: Reset tools now restores standard navigation mode (ScrollHandDrag)
     def reset_tools(self, exclude_btn=None):
         tools = [
             self.view.new_route_button,
             self.view.place_shelves_button,
             self.view.waiting_area_button,
             self.view.start_area_button,
+            self.view.btn_start_route,
+            self.view.btn_exit_route,
+            self.view.btn_exit_area,
             self.view.btn_kl,
             self.view.btn_kr,
             self.view.btn_sl,
@@ -683,6 +826,10 @@ class MainController:
         self.view.is_drawing_waiting_area = False
         self.view.is_placing_checkout = False
         self.view.is_drawing_start_area = False
+        self.view.is_drawing_start_route = False
+        self.view.is_drawing_exit_route = False
+        self.view.is_drawing_exit_area = False
+        
         self.view.admin_toolbar.hide()
 
         if self.current_route_path_item:
@@ -694,7 +841,6 @@ class MainController:
                 self.scene.removeItem(i)
         self.current_route_point_items.clear()
 
-        # RESTORE DRAG MODE FOR NAVIGATION
         if self.view.sim_view:
             self.view.sim_view.setDragMode(
                 QGraphicsView.DragMode.ScrollHandDrag
@@ -707,17 +853,41 @@ class MainController:
             self.active_tool = "route"
             self.view.is_drawing_mode = True
             self.view.admin_toolbar.show()
-            self.current_route_points = []
-            self.current_route_path_item = QGraphicsPathItem()
-            self.current_route_path_item.setPen(
-                QPen(COLOR_ORANGE, 3, Qt.PenStyle.DashLine)
-            )
-            self.scene.addItem(self.current_route_path_item)
-            # DISABLE DRAG FOR DRAWING
-            if self.view.sim_view:
-                self.view.sim_view.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self._init_temp_path(COLOR_ORANGE)
         else:
             self.reset_tools()
+
+    def toggle_start_route_tool(self):
+        btn = self.view.btn_start_route
+        if btn.isChecked():
+            self.reset_tools(exclude_btn=btn)
+            self.active_tool = "start_route"
+            self.view.is_drawing_start_route = True
+            self.view.admin_toolbar.show()
+            self._init_temp_path(COLOR_BLUE)
+        else:
+            self.reset_tools()
+
+    def toggle_exit_route_tool(self):
+        btn = self.view.btn_exit_route
+        if btn.isChecked():
+            self.reset_tools(exclude_btn=btn)
+            self.active_tool = "exit_route"
+            self.view.is_drawing_exit_route = True
+            self.view.admin_toolbar.show()
+            self._init_temp_path(COLOR_RED)
+        else:
+            self.reset_tools()
+            
+    def _init_temp_path(self, color):
+        self.current_route_points = []
+        self.current_route_path_item = QGraphicsPathItem()
+        self.current_route_path_item.setPen(
+            QPen(color, 3, Qt.PenStyle.DashLine)
+        )
+        self.scene.addItem(self.current_route_path_item)
+        if self.view.sim_view:
+            self.view.sim_view.setDragMode(QGraphicsView.DragMode.NoDrag)
 
     def toggle_shelf_tool(self):
         btn = self.view.place_shelves_button
@@ -726,7 +896,6 @@ class MainController:
             self.active_tool = "shelf"
             self.view.is_placing_shelves = True
             self.draw_debug_elements()
-            # DISABLE DRAG
             if self.view.sim_view:
                 self.view.sim_view.setDragMode(QGraphicsView.DragMode.NoDrag)
         else:
@@ -741,7 +910,6 @@ class MainController:
             self.view.is_drawing_waiting_area = True
             if self.waiting_area_item:
                 self.waiting_area_item.setVisible(True)
-            # DISABLE DRAG
             if self.view.sim_view:
                 self.view.sim_view.setDragMode(QGraphicsView.DragMode.NoDrag)
         else:
@@ -755,7 +923,19 @@ class MainController:
             self.view.is_drawing_start_area = True
             if self.start_area_item:
                 self.start_area_item.setVisible(True)
-            # DISABLE DRAG
+            if self.view.sim_view:
+                self.view.sim_view.setDragMode(QGraphicsView.DragMode.NoDrag)
+        else:
+            self.reset_tools()
+            
+    def toggle_exit_area_tool(self):
+        btn = self.view.btn_exit_area
+        if btn.isChecked():
+            self.reset_tools(exclude_btn=btn)
+            self.active_tool = "exit_area"
+            self.view.is_drawing_exit_area = True
+            if self.exit_area_item:
+                self.exit_area_item.setVisible(True)
             if self.view.sim_view:
                 self.view.sim_view.setDragMode(QGraphicsView.DragMode.NoDrag)
         else:
@@ -767,7 +947,6 @@ class MainController:
             self.active_tool = "checkout"
             self.view.is_placing_checkout = True
             self.active_tool_params = {"type": c_type, "ori": ori}
-            # DISABLE DRAG
             if self.view.sim_view:
                 self.view.sim_view.setDragMode(QGraphicsView.DragMode.NoDrag)
         else:
@@ -776,7 +955,8 @@ class MainController:
     def handle_scene_click(self, pos):
         if self.current_mode != "Editor":
             return
-        if self.active_tool == "route":
+        
+        if self.active_tool in ["route", "start_route", "exit_route"]:
             self.current_route_points.append(pos)
             dot = self.scene.addEllipse(
                 pos.x() - 4,
@@ -793,6 +973,7 @@ class MainController:
                 pp.moveTo(self.current_route_points[0])
                 [pp.lineTo(x) for x in self.current_route_points[1:]]
                 self.current_route_path_item.setPath(pp)
+        
         elif self.active_tool == "shelf":
             self.all_shelves.append(pos)
             self.draw_debug_elements()
@@ -810,16 +991,26 @@ class MainController:
                     "open": True,
                     "skill": "Azubi",
                     "max_queue": 5,
+                    "angle": 0
                 }
             )
             self.draw_debug_elements()
 
     def finish_route_drawing(self):
-        if self.active_tool == "route" and self.current_route_points:
-            name = f"Route_{len(self.all_routes)+1}"
-            self.all_routes[name] = list(self.current_route_points)
-            self.view.route_list_widget.addItem(name)
+        if self.current_route_points:
+            if self.active_tool == "route":
+                name = f"Route_{len(self.all_routes)+1}"
+                self.all_routes[name] = list(self.current_route_points)
+                self.view.route_list_widget.addItem(name)
+            elif self.active_tool == "start_route":
+                self.start_route_points = list(self.current_route_points)
+                QMessageBox.information(self.view, "Info", "Start-Route festgelegt.")
+            elif self.active_tool == "exit_route":
+                self.exit_route_points = list(self.current_route_points)
+                QMessageBox.information(self.view, "Info", "Ausgangs-Route festgelegt.")
+                
         self.reset_tools()
+        self.draw_debug_elements()
 
     def handle_waiting_area_created(self, rect):
         if self.active_tool == "waiting_area":
@@ -827,6 +1018,9 @@ class MainController:
             self.draw_debug_elements()
         elif self.active_tool == "start_area":
             self.start_area_rect = rect
+            self.draw_debug_elements()
+        elif self.active_tool == "exit_area":
+            self.exit_area_rect = rect
             self.draw_debug_elements()
 
     def edit_selected_object(self):
@@ -839,6 +1033,9 @@ class MainController:
         data = item.data(Qt.ItemDataRole.UserRole)
         obj_type = data["type"]
         cx, cy, name = 0, 0, "Objekt"
+        current_ori = None
+        current_angle = 0
+        
         if obj_type == "shelf":
             idx = data["index"]
             if idx < len(self.all_shelves):
@@ -855,9 +1052,12 @@ class MainController:
             if c_data:
                 cx, cy = c_data["x"], c_data["y"]
                 name = f"Kasse #{cid}"
+                current_ori = c_data.get("orientation", "Right")
+                current_angle = c_data.get("angle", 0)
             else:
                 return
-        dlg = ObjectPositionDialog(name, cx, cy, self.view)
+        
+        dlg = ObjectPositionDialog(name, cx, cy, orientation=current_ori, angle=current_angle, parent=self.view)
 
         def on_chg(nx, ny):
             if obj_type == "shelf":
@@ -874,7 +1074,31 @@ class MainController:
                     c_data["y"] = ny
             self.draw_debug_elements()
 
+        def on_ori_chg(new_ori):
+            if obj_type == "checkout":
+                cid = data["id"]
+                c_data = next(
+                    (c for c in self.checkouts_data if c["id"] == cid), None
+                )
+                if c_data:
+                    c_data["orientation"] = new_ori
+                    self.draw_debug_elements()
+                    
+        def on_angle_chg(new_angle):
+            if obj_type == "checkout":
+                cid = data["id"]
+                c_data = next(
+                    (c for c in self.checkouts_data if c["id"] == cid), None
+                )
+                if c_data:
+                    c_data["angle"] = new_angle
+                    self.draw_debug_elements()
+
         dlg.position_changed.connect(on_chg)
+        if current_ori:
+            dlg.orientation_changed.connect(on_ori_chg)
+            dlg.angle_changed.connect(on_angle_chg)
+
         dlg.exec()
         self.draw_debug_elements()
 
@@ -990,9 +1214,15 @@ class MainController:
     def create_default_map(self):
         default_data = {
             "routes": {},
+            "start_route": [],
+            "exit_route": [],
             "shelves": [],
             "checkouts": [],
             "waiting_area": None,
+            "start_area": None,
+            "exit_area": None,
+            "background_image": None,
+            "background_scale": 1.0
         }
         with open(MAPS_DIR / "default.json", "w") as f:
             json.dump(default_data, f, indent=4)
@@ -1013,6 +1243,14 @@ class MainController:
             if "routes" in data:
                 for k, v in data["routes"].items():
                     self.all_routes[k] = [QPointF(p[0], p[1]) for p in v]
+                    
+            self.start_route_points = []
+            if "start_route" in data:
+                self.start_route_points = [QPointF(p[0], p[1]) for p in data["start_route"]]
+            
+            self.exit_route_points = []
+            if "exit_route" in data:
+                self.exit_route_points = [QPointF(p[0], p[1]) for p in data["exit_route"]]
 
             raw_shelves = data.get("shelves", [])
             self.all_shelves = []
@@ -1032,9 +1270,33 @@ class MainController:
             self.start_area_rect = (
                 QRectF(*data["start_area"]) if data.get("start_area") else None
             )
+            
+            self.exit_area_rect = (
+                QRectF(*data["exit_area"]) if data.get("exit_area") else None
+            )
 
             global_exit = data.get("global_exit_direction", "Rechts")
             self.view.combo_global_exit.setCurrentText(global_exit)
+            
+            self.background_image_path = data.get("background_image", None)
+            self.background_scale = data.get("background_scale", 1.0)
+            
+            self.view.spin_bg_scale.blockSignals(True)
+            self.view.spin_bg_scale.setValue(self.background_scale)
+            self.view.spin_bg_scale.blockSignals(False)
+            
+            if self.background_item and self.background_item.scene():
+                self.scene.removeItem(self.background_item)
+            self.background_item = None
+            
+            if self.background_image_path:
+                bg_path = MAPS_DIR / self.background_image_path
+                if bg_path.exists():
+                    pix = QPixmap(str(bg_path))
+                    self.background_item = QGraphicsPixmapItem(pix)
+                    self.background_item.setZValue(-100)
+                    self.background_item.setScale(self.background_scale)
+                    self.scene.addItem(self.background_item)
 
             self.update_object_list()
             self.view.route_list_widget.clear()
@@ -1052,6 +1314,10 @@ class MainController:
         routes_export = {
             k: [[p.x(), p.y()] for p in v] for k, v in self.all_routes.items()
         }
+        
+        start_route_export = [[p.x(), p.y()] for p in self.start_route_points]
+        exit_route_export = [[p.x(), p.y()] for p in self.exit_route_points]
+        
         shelves_export = [[p.x(), p.y()] for p in self.all_shelves]
 
         wa_export = (
@@ -1074,16 +1340,31 @@ class MainController:
             if self.start_area_rect
             else None
         )
+        ea_export = (
+            [
+                self.exit_area_rect.x(),
+                self.exit_area_rect.y(),
+                self.exit_area_rect.width(),
+                self.exit_area_rect.height(),
+            ]
+            if self.exit_area_rect
+            else None
+        )
 
         global_exit = self.view.combo_global_exit.currentText()
 
         data = {
             "routes": routes_export,
+            "start_route": start_route_export,
+            "exit_route": exit_route_export,
             "shelves": shelves_export,
             "checkouts": self.checkouts_data,
             "waiting_area": wa_export,
             "start_area": sa_export,
+            "exit_area": ea_export,
             "global_exit_direction": global_exit,
+            "background_image": self.background_image_path,
+            "background_scale": self.background_scale
         }
         try:
             with open(self.current_map_file, "w") as f:
@@ -1104,8 +1385,20 @@ class MainController:
             if not name.endswith(".json"):
                 name += ".json"
             path = MAPS_DIR / name
+            default_data = {
+                "routes": {},
+                "start_route": [],
+                "exit_route": [],
+                "shelves": [],
+                "checkouts": [],
+                "waiting_area": None,
+                "start_area": None,
+                "exit_area": None,
+                "background_image": None,
+                "background_scale": 1.0
+            }
             with open(path, "w") as f:
-                json.dump({"routes": {}, "shelves": [], "checkouts": []}, f)
+                json.dump(default_data, f, indent=4)
             self.refresh_map_list()
             self.view.map_combo.setCurrentText(name)
 
@@ -1158,3 +1451,62 @@ class MainController:
             json.dump(self.settings, f, indent=4)
         self.view.highlight_queues = False
         self.draw_debug_elements()
+        
+    def open_size_config_dialog(self):
+        dlg = SizeConfigDialog(self.settings, self.view)
+        dlg.settings_changed.connect(
+            lambda ns: (self.settings.update(ns), self.draw_debug_elements())
+        )
+        dlg.exec()
+        with open(self.settings_file, "w") as f:
+            json.dump(self.settings, f, indent=4)
+        self.draw_debug_elements()
+
+    def select_map_background(self):
+        """Allows user to select a background image for the current map."""
+        if not self.current_map_file:
+            return
+        
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.view, 
+            "Hintergrundbild wählen", 
+            str(IMAGE_DIR), 
+            "Bilder (*.png *.jpg *.jpeg)"
+        )
+        
+        if file_path:
+            src = Path(file_path)
+            dest_name = f"bg_{self.current_map_file.stem}{src.suffix}"
+            dest_path = MAPS_DIR / dest_name
+            
+            try:
+                shutil.copy(src, dest_path)
+                self.background_image_path = dest_name
+                self.background_scale = 1.0 # Reset scale on new image
+                self.save_current_map()
+                self.load_map(self.current_map_file.name)
+            except Exception as e:
+                QMessageBox.critical(self.view, "Fehler", f"Bild konnte nicht kopiert werden: {e}")
+
+    def remove_map_background(self):
+        """Removes the current background image."""
+        if self.background_image_path:
+            reply = QMessageBox.question(
+                self.view,
+                "Hintergrund entfernen",
+                "Möchten Sie das Hintergrundbild wirklich entfernen?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self.background_image_path = None
+                self.background_scale = 1.0
+                if self.background_item and self.background_item.scene():
+                    self.scene.removeItem(self.background_item)
+                self.background_item = None
+                self.save_current_map()
+
+    def on_bg_scale_changed(self, value):
+        """Updates the scale of the background image in real-time."""
+        self.background_scale = value
+        if self.background_item:
+            self.background_item.setScale(value)

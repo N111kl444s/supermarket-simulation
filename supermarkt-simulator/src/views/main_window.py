@@ -1,6 +1,6 @@
 """
 Main window module for the application GUI.
-Updated: Added Live Feed and Disabled Probability Input.
+Updated: Added Buttons for Start Route, Exit Route, Exit Area.
 """
 
 from PyQt6.QtWidgets import (
@@ -43,6 +43,12 @@ class MainWindow(QMainWindow):
         self.is_drawing_waiting_area = False
         self.is_drawing_start_area = False
         self.is_placing_checkout = False
+        
+        # NEUE FLAGS
+        self.is_drawing_start_route = False
+        self.is_drawing_exit_route = False
+        self.is_drawing_exit_area = False
+        
         self.current_checkout_type = "Normal"
         self.current_checkout_orientation = "Right"
         self.highlight_queues = False
@@ -206,7 +212,6 @@ class MainWindow(QMainWindow):
         l_log = QVBoxLayout(gb_log)
         self.list_log = QListWidget()
         self.list_log.setAlternatingRowColors(True)
-        # Style for ListWidget
         self.list_log.setStyleSheet("font-size: 11px;")
         l_log.addWidget(self.list_log)
         l_sim.addWidget(gb_log)
@@ -224,16 +229,42 @@ class MainWindow(QMainWindow):
         l_conf = QVBoxLayout(self.tab_config)
         l_conf.setAlignment(Qt.AlignmentFlag.AlignTop)
         gb_map = QGroupBox("Map-Verwaltung")
-        l_map_actions = QHBoxLayout(gb_map)
+        l_map_actions = QVBoxLayout(gb_map)
+
+        row_map = QHBoxLayout()
         self.btn_new_map = QPushButton("Neu")
         self.btn_save_map = QPushButton("Speichern")
         self.btn_delete_map = QPushButton("Löschen")
         self.btn_delete_map.setStyleSheet(
             f"color: {COLOR_ERROR.name()}; border-color: {COLOR_ERROR.name()};"
         )
-        l_map_actions.addWidget(self.btn_new_map)
-        l_map_actions.addWidget(self.btn_save_map)
-        l_map_actions.addWidget(self.btn_delete_map)
+        row_map.addWidget(self.btn_new_map)
+        row_map.addWidget(self.btn_save_map)
+        row_map.addWidget(self.btn_delete_map)
+        l_map_actions.addLayout(row_map)
+
+        # HINTERGRUND STEUERUNG
+        l_map_actions.addSpacing(5)
+        row_bg = QHBoxLayout()
+        self.btn_set_background = QPushButton("🖼️ Bild wählen")
+        self.btn_remove_background = QPushButton("❌")
+        self.btn_remove_background.setFixedWidth(30)
+        self.btn_remove_background.setToolTip("Hintergrund entfernen")
+        
+        row_bg.addWidget(self.btn_set_background)
+        row_bg.addWidget(self.btn_remove_background)
+        l_map_actions.addLayout(row_bg)
+
+        # HINTERGRUND SKALIERUNG
+        row_scale = QHBoxLayout()
+        row_scale.addWidget(QLabel("Skalierung:"))
+        self.spin_bg_scale = QDoubleSpinBox()
+        self.spin_bg_scale.setRange(0.1, 10.0)
+        self.spin_bg_scale.setSingleStep(0.1)
+        self.spin_bg_scale.setValue(1.0)
+        row_scale.addWidget(self.spin_bg_scale)
+        l_map_actions.addLayout(row_scale)
+
         l_conf.addWidget(gb_map)
 
         # --- GLOBAL SETTINGS FOR MAP ---
@@ -248,25 +279,37 @@ class MainWindow(QMainWindow):
 
         l_conf.addWidget(QLabel("Werkzeuge:"))
 
-        self.new_route_button = QPushButton("Route zeichnen")
-        self.new_route_button.setCheckable(True)
-        self.place_shelves_button = QPushButton("Regale platzieren")
-        self.place_shelves_button.setCheckable(True)
-        self.start_area_button = QPushButton("Startbereich")
+        self.start_area_button = QPushButton("1. Startfläche")
         self.start_area_button.setCheckable(True)
-        self.waiting_area_button = QPushButton("Wartebereich")
+        self.btn_start_route = QPushButton("2. Start-Route (Zulauf)") # NEU
+        self.btn_start_route.setCheckable(True)
+        self.new_route_button = QPushButton("3. Shop-Route (Regale)")
+        self.new_route_button.setCheckable(True)
+        self.place_shelves_button = QPushButton("4. Regale platzieren")
+        self.place_shelves_button.setCheckable(True)
+        self.waiting_area_button = QPushButton("5. Wartebereich (Kassen)")
         self.waiting_area_button.setCheckable(True)
+        self.btn_exit_route = QPushButton("6. Ausgangs-Route") # NEU
+        self.btn_exit_route.setCheckable(True)
+        self.btn_exit_area = QPushButton("7. Ausgangsfläche") # NEU
+        self.btn_exit_area.setCheckable(True)
 
-        self.btn_visibility = QPushButton("👁️ Sichtbarkeit")
-        self.btn_offsets = QPushButton("📏 Globale Offsets")
-
+        l_conf.addWidget(self.start_area_button)
+        l_conf.addWidget(self.btn_start_route)
         l_conf.addWidget(self.new_route_button)
         l_conf.addWidget(self.place_shelves_button)
-        l_conf.addWidget(self.start_area_button)
         l_conf.addWidget(self.waiting_area_button)
+        l_conf.addWidget(self.btn_exit_route)
+        l_conf.addWidget(self.btn_exit_area)
+        
         l_conf.addSpacing(5)
+        
+        self.btn_visibility = QPushButton("👁️ Sichtbarkeit")
+        self.btn_offsets = QPushButton("📏 Globale Offsets")
+        self.btn_config_sizes = QPushButton("⚙️ Größen & Skalierung")
         l_conf.addWidget(self.btn_visibility)
         l_conf.addWidget(self.btn_offsets)
+        l_conf.addWidget(self.btn_config_sizes)
 
         l_conf.addSpacing(15)
         l_conf.addWidget(QLabel("Kasse hinzufügen:"))
@@ -380,11 +423,9 @@ class MainWindow(QMainWindow):
         return container
 
     def add_log_entry(self, message, color="black"):
-        """Adds a message to the live feed."""
         self.list_log.insertItem(0, message)
         item = self.list_log.item(0)
         item.setForeground(QBrush(QColor(color)))
-        # Keep log size manageable
         if self.list_log.count() > 100:
             self.list_log.takeItem(100)
 
