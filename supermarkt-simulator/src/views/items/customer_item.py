@@ -1,6 +1,8 @@
 """
 Customer visualization module.
-Refactored: Supports dynamic sizing via init parameter.
+Refactored:
+- Fixed Clipping of Scan Animation (BoundingRect).
+- Ensure correct attribute usage for Scan Progress.
 """
 
 from PyQt6.QtWidgets import QGraphicsPixmapItem, QGraphicsItem
@@ -18,7 +20,7 @@ class CustomerItem(QGraphicsPixmapItem):
     def __init__(self, model, size=CUSTOMER_SIZE):
         super().__init__()
         self.model = model
-        self.size = size  # Dynamic size
+        self.size = size
         self.setZValue(20)
         self.setAcceptHoverEvents(True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
@@ -66,13 +68,16 @@ class CustomerItem(QGraphicsPixmapItem):
 
     def sync_visuals(self):
         self.setPos(self.model.pos)
-        self.update()
+        self.update() # Force redraw for animation
 
     def boundingRect(self):
+        # FIX: Enlarged bounding rect to accommodate the scan circle/ring
         base_rect = super().boundingRect()
-        return base_rect.adjusted(-5, -18, 5, 5)
+        # Add extra padding (top, left, bottom, right) to prevent clipping
+        return base_rect.adjusted(-10, -25, 10, 10)
 
     def paint(self, painter, option, widget=None):
+        # Fallback Paint if no image
         if not self.pixmap() or self.pixmap().isNull():
             color = COLOR_ACCENT if self.model.is_disabled else COLOR_CUSTOMER
             painter.setBrush(QBrush(color))
@@ -91,7 +96,7 @@ class CustomerItem(QGraphicsPixmapItem):
         painter.setBrush(QBrush(QColor(0, 0, 0, 160)))
         painter.setPen(Qt.PenStyle.NoPen)
 
-        # Position badge slightly higher
+        # Position badge
         badge_rect = QRectF(-self.size / 2, -self.size / 2 - 14, 20, 14)
         painter.drawRoundedRect(badge_rect, 6, 6)
 
@@ -102,10 +107,11 @@ class CustomerItem(QGraphicsPixmapItem):
         painter.setFont(font)
         painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, count_str)
 
-        # Scan Progress Ring
+        # --- SCAN ANIMATION ---
         if self.model.state == "SCANNING":
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.setPen(QPen(COLOR_SCAN_PROGRESS, 3))
+            
+            # Progress calculation
             percent = 0.0
             if self.model.scan_duration_per_item > 0:
                 percent = (
@@ -113,10 +119,21 @@ class CustomerItem(QGraphicsPixmapItem):
                     / self.model.scan_duration_per_item
                 )
             percent = min(max(percent, 0.0), 1.0)
-            angle = percent * 360 * 16
-
-            rect = super().boundingRect().adjusted(-2, -2, 2, 2)
-            painter.drawArc(rect.toRect(), 90 * 16, -int(angle))
+            
+            # Draw Arc (Green Ring)
+            # Pen Width 3 makes it visible
+            painter.setPen(QPen(COLOR_SCAN_PROGRESS, 3))
+            
+            # Draw slightly larger than the customer image
+            rect = QRectF(
+                -self.size / 2, -self.size / 2,
+                self.size, self.size
+            ).adjusted(-4, -4, 4, 4)
+            
+            # DrawArc arguments: x, y, w, h, startAngle (16ths of degree), spanAngle
+            # 90*16 starts at 12 o'clock. -angle means clockwise.
+            angle_span = int(percent * 360 * 16)
+            painter.drawArc(rect.toRect(), 90 * 16, -angle_span)
 
     def hoverEnterEvent(self, event):
         status = "Behinderung" if self.model.is_disabled else "Normal"

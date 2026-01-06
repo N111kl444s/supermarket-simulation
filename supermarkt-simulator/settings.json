@@ -1,10 +1,10 @@
 {
-    "show_routes": true,
+    "show_routes": false,
     "show_shelves": true,
     "show_checkouts": true,
     "show_cashiers": true,
-    "show_waiting_area": true,
-    "show_start_area": true,
+    "show_waiting_area": false,
+    "show_start_area": false,
     "customer_path_offset": 50,
     "offset_cashier_left": [
         113,

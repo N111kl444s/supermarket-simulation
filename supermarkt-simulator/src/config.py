@@ -1,20 +1,54 @@
 """
 Central configuration module for the supermarket simulation.
 Includes a modern 'Flat Light' Color Palette and compatibility aliases.
+Refactored for PyInstaller (EXE) Support.
 """
 
 import sys
+import os
 from pathlib import Path
 from PyQt6.QtGui import QColor
 
-# --- Paths ---
-SCRIPT_FILE = Path(__file__).resolve()
-SRC_DIR = SCRIPT_FILE.parent
-BASE_DIR = SRC_DIR.parent
-ASSETS_DIR = BASE_DIR / "assets"
-IMAGE_DIR = ASSETS_DIR / "images"
-MAPS_DIR = BASE_DIR / "maps"
+# --- PATH HANDLING FOR EXE VS SCRIPT ---
+def get_paths():
+    """
+    Determines the correct paths for resources (read-only) and user data (read-write).
+    """
+    if getattr(sys, 'frozen', False):
+        # Running as compiled EXE
+        # sys._MEIPASS is the temp folder where PyInstaller extracts code & assets
+        INTERNAL_DIR = Path(sys._MEIPASS)
+        # sys.executable is the location of the .exe file (where we want to save data)
+        EXTERNAL_DIR = Path(sys.executable).parent
+    else:
+        # Running as normal Python script
+        SCRIPT_FILE = Path(__file__).resolve()
+        SRC_DIR = SCRIPT_FILE.parent
+        BASE_DIR = SRC_DIR.parent
+        
+        INTERNAL_DIR = BASE_DIR
+        EXTERNAL_DIR = BASE_DIR
 
+    return INTERNAL_DIR, EXTERNAL_DIR
+
+INTERNAL_BASE, EXTERNAL_BASE = get_paths()
+
+# --- DIRECTORIES ---
+# Assets (Read-Only) come from the internal bundle
+ASSETS_DIR = INTERNAL_BASE / "assets"
+IMAGE_DIR = ASSETS_DIR / "images"
+
+# Maps & Settings (Read/Write) go to the external folder (next to .exe)
+MAPS_DIR = EXTERNAL_BASE / "maps"
+SETTINGS_FILE = EXTERNAL_BASE / "settings.json"
+
+# Ensure Maps dir exists externally if we are in EXE mode
+if getattr(sys, 'frozen', False):
+    if not MAPS_DIR.exists():
+        try:
+            MAPS_DIR.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            print(f"Warning: Could not create maps directory: {e}")
 
 # --- HELPER: Auto-Load Images ---
 def get_image_files(prefix):
@@ -57,7 +91,7 @@ COLOR_CASHIER = QColor("#F59E0B")
 COLOR_CHECKOUT = QColor("#3B82F6")
 COLOR_WAITING_AREA = QColor(59, 130, 246, 40)
 COLOR_START_AREA = QColor(16, 185, 129, 40)
-COLOR_EXIT_AREA = QColor(239, 68, 68, 40)  # NEU: Rot, transparent
+COLOR_EXIT_AREA = QColor(239, 68, 68, 40)
 COLOR_SELECTION = QColor("#EF4444")
 COLOR_QUEUE_HIGHLIGHT = QColor("#8B5CF6")
 COLOR_SCAN_PROGRESS = QColor("#10B981")

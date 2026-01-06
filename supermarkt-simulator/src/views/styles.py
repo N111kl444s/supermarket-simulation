@@ -1,274 +1,213 @@
 """
-Style definitions for the application (QSS).
-Implements a modern, clean LIGHT design.
+Application styles and themes.
+Refactored: 
+- Added Modern Scrollbar Styling (Light Theme).
+- Refined SpinBox Arrows (Cleaner look).
+- Maintained previous fixes (White Inputs, Clock).
 """
 
-from config import (
-    COLOR_BG_MAIN,
-    COLOR_BG_PANEL,
-    COLOR_BG_INPUT,
-    COLOR_BORDER,
-    COLOR_ACCENT,
-    COLOR_TEXT_MAIN,
-)
-
+from config import COLOR_BG_MAIN, COLOR_ACCENT, COLOR_TEXT_MAIN
 
 def get_application_style():
-    """
-    Returns the QSS stylesheet string for the entire application.
-    """
-
-    # Convert QColors to Hex strings
-    c_bg = COLOR_BG_MAIN.name()
-    c_panel = COLOR_BG_PANEL.name()
-    c_input = COLOR_BG_INPUT.name()
-    c_border = COLOR_BORDER.name()
-    c_accent = COLOR_ACCENT.name()
-    c_text = COLOR_TEXT_MAIN.name()
-
     return f"""
-        QMainWindow {{
-            background-color: {c_bg};
-        }}
-        
-        QDialog {{
-            background-color: {c_panel};
-            color: {c_text};
-        }}
-        
-        QDialog[windowTitle="Globale Offsets"] {{
-            background-color: #ffffff;
-            color: {c_text};
-        }}
-        
-        QLabel#ClockLabel {{
-            font-family: 'Consolas', 'Monospace', sans-serif;
-            font-size: 24px;
-            font-weight: bold;
-            color: {c_accent};
-            background-color: {c_input};
-            border: 1px solid {c_border};
-            border-radius: 4px;
-            padding: 2px 10px;
-        }}
+    QMainWindow {{
+        background-color: {COLOR_BG_MAIN.name()};
+    }}
+    
+    QLabel {{
+        color: {COLOR_TEXT_MAIN.name()};
+        font-size: 12px;
+    }}
+    
+    /* --- CLOCK DESIGN --- */
+    #ClockLabel {{
+        font-size: 24px;
+        font-weight: bold;
+        color: #1F2937;
+        padding: 5px 15px;
+        background-color: #FFFFFF;
+        border: 2px solid {COLOR_ACCENT.name()};
+        border-radius: 8px;
+    }}
+    
+    #ToolbarFrame {{
+        background-color: #FFFFFF;
+        border-bottom: 1px solid #D1D5DB;
+    }}
+    
+    /* --- INPUT TAB CONTAINER --- */
+    QWidget#ConfigContent {{
+        background-color: #FFFFFF;
+    }}
+    
+    /* --- SCROLLBAR STYLING --- */
+    QScrollArea {{
+        border: none;
+        background-color: #FFFFFF;
+    }}
+    
+    QScrollBar:vertical {{
+        border: none;
+        background: #F3F4F6;
+        width: 10px;
+        margin: 0px;
+    }}
+    QScrollBar::handle:vertical {{
+        background: #D1D5DB;
+        min-height: 20px;
+        border-radius: 5px;
+    }}
+    QScrollBar::handle:vertical:hover {{
+        background: #9CA3AF;
+    }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+        height: 0px;
+    }}
+    
+    /* --- GROUP BOX --- */
+    QGroupBox {{
+        font-weight: bold;
+        border: 1px solid #E5E7EB;
+        border-radius: 6px;
+        margin-top: 12px;
+        padding-top: 20px; 
+        padding-bottom: 10px;
+        padding-left: 10px;
+        padding-right: 10px;
+        color: #1F2937;
+        background-color: #FFFFFF;
+    }}
+    QGroupBox::title {{
+        subcontrol-origin: margin;
+        subcontrol-position: top left;
+        padding: 0 5px;
+        left: 10px;
+    }}
+    
+    /* --- SPINBOX STYLING --- */
+    QSpinBox, QDoubleSpinBox, QTimeEdit {{
+        background-color: #FFFFFF;
+        color: #111827;
+        border: 1px solid #D1D5DB;
+        border-radius: 4px;
+        padding: 4px 8px; /* Mehr Platz für Text */
+        min-height: 22px;
+        selection-background-color: {COLOR_ACCENT.name()};
+    }}
+    
+    QSpinBox:hover, QDoubleSpinBox:hover, QTimeEdit:hover {{
+        border: 1px solid {COLOR_ACCENT.name()};
+    }}
 
-        QPushButton#ToolbarButton {{
-            font-size: 16px;
-            padding: 4px 10px;
-            font-weight: bold;
-        }}
+    /* Buttons (Up/Down) Container */
+    QSpinBox::up-button, QDoubleSpinBox::up-button, QTimeEdit::up-button {{
+        subcontrol-origin: border;
+        subcontrol-position: top right;
+        width: 20px;
+        border-left: 1px solid #E5E7EB;
+        border-bottom: 1px solid #E5E7EB;
+        background-color: #F9FAFB;
+        border-top-right-radius: 4px;
+    }}
+    
+    QSpinBox::down-button, QDoubleSpinBox::down-button, QTimeEdit::down-button {{
+        subcontrol-origin: border;
+        subcontrol-position: bottom right;
+        width: 20px;
+        border-left: 1px solid #E5E7EB;
+        border-top: 0px solid #E5E7EB; 
+        background-color: #F9FAFB;
+        border-bottom-right-radius: 4px;
+    }}
+    
+    QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover {{
+        background-color: #E5E7EB;
+    }}
+    QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{
+        background-color: #E5E7EB;
+    }}
 
-        QScrollArea {{
-            background-color: transparent;
-            border: none;
-        }}
-        QScrollArea > QWidget {{
-            background-color: transparent;
-        }}
-        QScrollArea > QWidget > QWidget {{
-            background-color: transparent;
-        }}
+    /* CSS Arrows (Clean & Small) */
+    QSpinBox::up-arrow, QDoubleSpinBox::up-arrow, QTimeEdit::up-arrow {{
+        width: 0; 
+        height: 0; 
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-bottom: 5px solid #4B5563; /* Dark Grey Arrow */
+    }}
 
-        QWidget {{
-            color: {c_text};
-            font-family: 'Segoe UI', 'Roboto', sans-serif;
-            font-size: 13px;
-        }}
-        
-        QLabel {{
-            background-color: transparent;
-            border: none;
-            padding: 0px; 
-            color: {c_text};
-        }}
-        
-        QFrame#ToolbarFrame {{
-            background-color: {c_panel};
-            border-bottom: 1px solid {c_border};
-        }}
+    QSpinBox::down-arrow, QDoubleSpinBox::down-arrow, QTimeEdit::down-arrow {{
+        width: 0; 
+        height: 0; 
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-top: 5px solid #4B5563; /* Dark Grey Arrow */
+    }}
 
-        QGroupBox {{
-            background-color: {c_panel};
-            border: 1px solid {c_border};
-            border-radius: 6px;
-            margin-top: 12px; 
-            padding-top: 15px;
-        }}
-        QGroupBox::title {{
-            subcontrol-origin: margin;
-            subcontrol-position: top left;
-            padding: 0px 5px; 
-            background-color: {c_panel}; 
-            color: {c_text};
-            font-weight: bold;
-            margin-left: 10px;
-        }}
-
-        QPushButton {{
-            background-color: {c_panel};
-            border: 1px solid {c_border};
-            border-radius: 4px;
-            padding: 6px 12px;
-            color: {c_text};
-            margin: 1px;
-        }}
-        QPushButton:hover {{
-            background-color: #E5E7EB;
-            border: 1px solid {c_accent};
-        }}
-        QPushButton:pressed {{
-            background-color: {c_accent};
-            color: white;
-            border: 1px solid {c_accent};
-        }}
-        
-        QPushButton:checked {{
-            background-color: {c_accent};
-            color: white;
-            border: 1px solid {c_accent};
-        }}
-        
-        QDialogButtonBox QPushButton {{
-            icon-size: 0px;
-            min-width: 60px;
-        }}
-
-        QTabWidget::pane {{
-            border: 1px solid {c_border};
-            background-color: {c_panel};
-            border-radius: 4px;
-        }}
-        QTabBar::tab {{
-            background: {c_bg};
-            color: {c_text};
-            padding: 8px 16px;
-            margin-right: 4px;
-            border: 1px solid {c_border};
-            border-bottom: none;
-            border-top-left-radius: 4px;
-            border-top-right-radius: 4px;
-        }}
-        QTabBar::tab:selected {{
-            background: {c_panel};
-            font-weight: bold;
-            border-bottom: 1px solid {c_panel};
-            margin-bottom: -1px;
-        }}
-        QTabBar::tab:hover {{
-            background: #E5E7EB;
-        }}
-
-        QLineEdit, QSpinBox, QComboBox, QTimeEdit {{
-            background-color: {c_input};
-            border: 1px solid {c_border};
-            border-radius: 4px;
-            padding: 4px;
-            color: {c_text};
-        }}
-        QLineEdit:focus, QSpinBox:focus, QComboBox:focus, QTimeEdit:focus {{
-            border: 1px solid {c_accent};
-        }}
-        
-        QComboBox QAbstractItemView {{
-            background-color: {c_input};
-            border: 1px solid {c_border};
-            selection-background-color: {c_accent};
-            selection-color: white;
-            outline: none;
-        }}
-        
-        QSpinBox::up-button, QDoubleSpinBox::up-button, 
-        QSpinBox::down-button, QDoubleSpinBox::down-button,
-        QTimeEdit::up-button, QTimeEdit::down-button {{
-            width: 20px;
-            background-color: #F3F4F6;
-            border-left: 1px solid {c_border};
-        }}
-        QSpinBox::up-button, QDoubleSpinBox::up-button, QTimeEdit::up-button {{
-            subcontrol-origin: border;
-            subcontrol-position: top right;
-            border-bottom: 1px solid {c_border};
-            border-top-right-radius: 4px;
-        }}
-        QSpinBox::down-button, QDoubleSpinBox::down-button, QTimeEdit::down-button {{
-            subcontrol-origin: border;
-            subcontrol-position: bottom right;
-            border-bottom-right-radius: 4px;
-        }}
-
-        QCheckBox {{
-            spacing: 8px;
-            color: {c_text};
-        }}
-        QCheckBox::indicator {{
-            width: 16px;
-            height: 16px;
-            background-color: {c_input};
-            border: 1px solid {c_border};
-            border-radius: 3px;
-        }}
-        QCheckBox::indicator:hover {{
-            border: 1px solid {c_accent};
-        }}
-        QCheckBox::indicator:checked {{
-            background-color: {c_accent};
-            border: 1px solid {c_accent};
-        }}
-        
-        QListWidget, QTableWidget {{
-            background-color: {c_input};
-            border: 1px solid {c_border};
-            border-radius: 4px;
-            gridline-color: #F3F4F6;
-            outline: none;
-        }}
-        QListWidget::item, QTableWidget::item {{
-            padding: 4px;
-            border-bottom: 1px solid #F3F4F6;
-            color: {c_text};
-        }}
-        QListWidget::item:selected, QTableWidget::item:selected {{
-            background-color: {c_accent};
-            color: white;
-            border-radius: 2px;
-        }}
-        QHeaderView::section {{
-            background-color: #F9FAFB;
-            color: {c_text};
-            padding: 4px;
-            border: none;
-            border-bottom: 2px solid {c_border};
-            font-weight: bold;
-        }}
-        
-        QScrollBar:vertical {{
-            background: {c_bg};
-            width: 10px;
-            margin: 0px;
-        }}
-        QScrollBar::handle:vertical {{
-            background: #9CA3AF;
-            min-height: 20px;
-            border-radius: 5px;
-        }}
-        QScrollBar::handle:vertical:hover {{
-            background: {c_accent};
-        }}
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
-        
-        QScrollBar:horizontal {{
-            background: {c_bg};
-            height: 10px;
-            margin: 0px;
-        }}
-        QScrollBar::handle:horizontal {{
-            background: #9CA3AF;
-            min-width: 20px;
-            border-radius: 5px;
-        }}
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; }}
-
-        QSplitter::handle {{
-            background-color: {c_border};
-        }}
+    /* --- BUTTONS --- */
+    QPushButton {{
+        background-color: #FFFFFF;
+        border: 1px solid #D1D5DB;
+        border-radius: 6px;
+        padding: 6px 12px;
+        color: {COLOR_TEXT_MAIN.name()};
+        font-weight: 500;
+    }}
+    QPushButton:hover {{
+        background-color: #F3F4F6;
+        border-color: #9CA3AF;
+    }}
+    QPushButton:checked {{
+        background-color: {COLOR_ACCENT.name()};
+        color: white;
+        border: 1px solid {COLOR_ACCENT.name()};
+    }}
+    
+    QComboBox {{
+        background-color: #FFFFFF;
+        border: 1px solid #D1D5DB;
+        border-radius: 4px;
+        padding: 4px;
+        color: #111827;
+    }}
+    QComboBox::drop-down {{
+        border: none;
+        background: transparent;
+        width: 20px;
+    }}
+    QComboBox::down-arrow {{
+        image: none;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-top: 6px solid #4B5563;
+        margin-right: 8px;
+    }}
+    
+    /* --- TABS --- */
+    QTabWidget::pane {{
+        border: 1px solid #E5E7EB;
+        background: #FFFFFF;
+    }}
+    QTabBar::tab {{
+        background: #F3F4F6;
+        border: 1px solid #E5E7EB;
+        padding: 8px 16px;
+        margin-right: 2px;
+        border-top-left-radius: 6px;
+        border-top-right-radius: 6px;
+        color: #4B5563; /* Dark Grey for inactive */
+    }}
+    QTabBar::tab:selected {{
+        background: #FFFFFF;
+        border-bottom-color: #FFFFFF;
+        font-weight: bold;
+        color: {COLOR_ACCENT.name()}; /* Blue for active */
+    }}
+    
+    QListWidget {{
+        background-color: #FFFFFF;
+        border: 1px solid #E5E7EB;
+        color: #000000;
+        border-radius: 4px;
+    }}
     """

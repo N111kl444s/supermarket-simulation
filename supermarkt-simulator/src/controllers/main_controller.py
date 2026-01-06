@@ -1,9 +1,12 @@
 """
 Main Controller.
-Refactored:
-- Supports ALL map features (Start/Exit Route, Areas).
-- Includes Cancel functionality.
-- Fixed Checkout Randomness logic.
+COMPLETE VERSION.
+Includes:
+- Simulation Loop & Spawning
+- All Editor Tools (Start/Exit Routes, Areas, Shelves, Checkouts)
+- Map Management (Load/Save/New/Delete/Background)
+- Dialog Handlers (Visibility, Offsets, Sizes)
+- Event Handling
 """
 
 import json
@@ -87,7 +90,9 @@ class MainController:
         self.current_map_file = None
         if not MAPS_DIR.exists():
             os.makedirs(MAPS_DIR)
-        self.settings_file = BASE_DIR / "settings.json"
+            
+        # FIX: Use SETTINGS_FILE from config.py directly
+        self.settings_file = SETTINGS_FILE
 
         # Simulation Objects
         self.customers_model = []
@@ -122,6 +127,7 @@ class MainController:
         self.scene = self.view.sim_scene
 
         # --- CONNECTIONS ---
+        
         # Simulation Control
         self.view.btn_play_pause.clicked.connect(self.toggle_play_pause)
         self.view.btn_reset.clicked.connect(self.reset_simulation)
@@ -244,6 +250,7 @@ class MainController:
         self.update_clock_display()
         self.disable_inputs(False)
         self.view.lbl_queue_count.setText("0")
+        self.view.lbl_customers_in_store.setText("0")
         self.view.list_log.clear()
         self.is_running = False
 
@@ -293,6 +300,24 @@ class MainController:
         r_name = random.choice(route_names)
         is_disabled = random.random() < self.prob_disabled
 
+        # READ PARAMS FROM VIEW (Normal Distribution)
+        walk_mean = self.view.speed_walk_mean.value()
+        walk_std = self.view.speed_walk_std.value()
+        
+        roll_mean = self.view.speed_roll_mean.value()
+        roll_std = self.view.speed_roll_std.value()
+        
+        items_mean = self.view.items_mean.value()
+        items_std = self.view.items_std.value()
+        
+        # Scan Speed Ranges (Uniform)
+        if is_disabled:
+            scan_min = self.view.scan_speed_disabled_min.value()
+            scan_max = self.view.scan_speed_disabled_max.value()
+        else:
+            scan_min = self.view.scan_speed_normal_min.value()
+            scan_max = self.view.scan_speed_normal_max.value()
+
         model = CustomerModel(
             self.shop_routes[r_name],
             self.all_shelves,
@@ -303,6 +328,12 @@ class MainController:
             exit_routes=self.exit_routes,
             max_offset=offset,
             is_disabled=is_disabled,
+            
+            # Pass Parameters
+            speed_walk_params=(walk_mean, walk_std),
+            speed_roll_params=(roll_mean, roll_std),
+            items_params=(items_mean, items_std),
+            scan_speed_range=(scan_min, scan_max)
         )
         total_seconds_today = self.open_time.secsTo(self.sim_time)
         model.entry_time_sec = total_seconds_today
@@ -346,6 +377,8 @@ class MainController:
         active_models = []
         active_items = []
         waiting_cnt = 0
+        customers_in_store = len(self.customers_model)
+        
         for i, model in enumerate(self.customers_model):
             item = self.customer_items[i]
             model.tick(game_dt)
@@ -376,6 +409,7 @@ class MainController:
         self.customers_model = active_models
         self.customer_items = active_items
         self.view.lbl_queue_count.setText(str(waiting_cnt))
+        self.view.lbl_customers_in_store.setText(str(customers_in_store))
 
     def update_clock_display(self):
         self.view.lbl_clock.setText(self.sim_time.toString("HH:mm"))
@@ -384,25 +418,12 @@ class MainController:
 
     def try_assign_checkout(self, model):
         candidates = []
-        # Ensure we have data
-        if not self.checkouts_data:
-            return
-
         for c_data in self.checkouts_data:
-            # Check 'open' flag, default to True if missing
-            is_open = c_data.get("open", True)
-            if not is_open: 
-                continue
-            
+            if not c_data.get("open", True): continue
             cid = c_data["id"]
-            current_q_len = len(self.checkout_queues.get(cid, []))
-            max_q = c_data.get("max_queue", 5)
-            
-            if current_q_len < max_q:
+            if len(self.checkout_queues.get(cid, [])) < c_data.get("max_queue", 5):
                 candidates.append(cid)
-        
         if candidates:
-            # True Random Choice
             chosen_id = random.choice(candidates)
             if chosen_id not in self.checkout_queues:
                 self.checkout_queues[chosen_id] = []
@@ -1044,7 +1065,10 @@ class MainController:
         self.background_scale = value
         if self.background_item: self.background_item.setScale(value)
 
+    # --- DIALOGS (Wurden vorher vergessen) ---
+
     def open_visibility_dialog(self):
+        """Öffnet den Dialog für Sichtbarkeitseinstellungen."""
         dlg = VisibilityDialog(self.settings, self.view)
         dlg.settings_changed.connect(
             lambda ns: (self.settings.update(ns), self.draw_debug_elements())
@@ -1055,6 +1079,7 @@ class MainController:
         self.draw_debug_elements()
 
     def open_offsets_dialog(self):
+        """Öffnet den Dialog für Offsets (Warteschlangen, Kassierer)."""
         self.view.highlight_queues = True
         self.draw_debug_elements()
         dlg = OffsetDialog(self.settings, self.view)
@@ -1068,6 +1093,7 @@ class MainController:
         self.draw_debug_elements()
         
     def open_size_config_dialog(self):
+        """Öffnet den Dialog für Größenkonfigurationen."""
         dlg = SizeConfigDialog(self.settings, self.view)
         dlg.settings_changed.connect(
             lambda ns: (self.settings.update(ns), self.draw_debug_elements())
