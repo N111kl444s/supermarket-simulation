@@ -1,80 +1,57 @@
 """
-Application styles and themes.
-Refactored: 
-- Added Modern Scrollbar Styling (Light Theme).
-- Refined SpinBox Arrows (Cleaner look).
-- Maintained previous fixes (White Inputs, Clock).
+Application styles.
+Refactored:
+- SPINBOXES: Removed ALL custom arrow/button styling.
+  -> This restores the native OS (Windows) arrows which are bug-free.
+  -> Kept custom Size (Height/Padding) and Colors (White/Black) as requested.
 """
 
 from config import COLOR_BG_MAIN, COLOR_ACCENT, COLOR_TEXT_MAIN
 
 def get_application_style():
     return f"""
+    /* --- GLOBAL --- */
     QMainWindow {{
         background-color: {COLOR_BG_MAIN.name()};
     }}
     
     QLabel {{
-        color: {COLOR_TEXT_MAIN.name()};
-        font-size: 12px;
+        color: #000000;
+        font-size: 13px;
+        font-weight: 500;
     }}
     
-    /* --- CLOCK DESIGN --- */
+    /* --- UHR --- */
     #ClockLabel {{
-        font-size: 24px;
-        font-weight: bold;
+        font-size: 26px;
+        font-weight: 800;
         color: #1F2937;
-        padding: 5px 15px;
+        padding: 6px 20px;
         background-color: #FFFFFF;
-        border: 2px solid {COLOR_ACCENT.name()};
+        border: 3px solid {COLOR_ACCENT.name()};
         border-radius: 8px;
     }}
     
     #ToolbarFrame {{
         background-color: #FFFFFF;
-        border-bottom: 1px solid #D1D5DB;
+        border-bottom: 2px solid #D1D5DB;
     }}
     
-    /* --- INPUT TAB CONTAINER --- */
+    /* --- INPUT TAB --- */
     QWidget#ConfigContent {{
         background-color: #FFFFFF;
     }}
     
-    /* --- SCROLLBAR STYLING --- */
-    QScrollArea {{
-        border: none;
-        background-color: #FFFFFF;
-    }}
-    
-    QScrollBar:vertical {{
-        border: none;
-        background: #F3F4F6;
-        width: 10px;
-        margin: 0px;
-    }}
-    QScrollBar::handle:vertical {{
-        background: #D1D5DB;
-        min-height: 20px;
-        border-radius: 5px;
-    }}
-    QScrollBar::handle:vertical:hover {{
-        background: #9CA3AF;
-    }}
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-        height: 0px;
-    }}
-    
-    /* --- GROUP BOX --- */
     QGroupBox {{
-        font-weight: bold;
-        border: 1px solid #E5E7EB;
-        border-radius: 6px;
-        margin-top: 12px;
-        padding-top: 20px; 
-        padding-bottom: 10px;
-        padding-left: 10px;
-        padding-right: 10px;
-        color: #1F2937;
+        font-weight: 800;
+        border: 2px solid #9CA3AF;
+        border-radius: 8px;
+        margin-top: 16px;
+        padding-top: 24px; 
+        padding-bottom: 16px;
+        padding-left: 12px;
+        padding-right: 12px;
+        color: {COLOR_ACCENT.name()};
         background-color: #FFFFFF;
     }}
     QGroupBox::title {{
@@ -82,132 +59,137 @@ def get_application_style():
         subcontrol-position: top left;
         padding: 0 5px;
         left: 10px;
+        background-color: #FFFFFF; 
     }}
-    
-    /* --- SPINBOX STYLING --- */
+
+    /* --- COMBOBOX --- */
+    QComboBox {{
+        background-color: #FFFFFF;
+        border: 2px solid #6B7280;
+        border-radius: 6px;
+        padding: 4px 10px;
+        color: #000000;
+        font-size: 13px;
+        min-width: 100px;
+        min-height: 28px;
+    }}
+    QComboBox:hover {{
+        border: 2px solid {COLOR_ACCENT.name()};
+        background-color: #F9FAFB;
+    }}
+    QComboBox::drop-down {{
+        border: none;
+        background: #E5E7EB;
+        width: 30px;
+        border-left: 2px solid #6B7280;
+    }}
+    /* Einfacher CSS Pfeil für ComboBox bleibt, da ComboBoxen seltener glitchen */
+    QComboBox::down-arrow {{
+        width: 0; 
+        height: 0; 
+        border-left: 5px solid transparent;
+        border-right: 5px solid transparent;
+        border-top: 6px solid #000000;
+        margin-left: 2px;
+    }}
+    QComboBox QAbstractItemView {{
+        background-color: #FFFFFF;
+        color: #000000;
+        border: 2px solid #6B7280;
+        selection-background-color: {COLOR_ACCENT.name()};
+        selection-color: #FFFFFF;
+        outline: none;
+    }}
+
+    /* --- SPINBOXEN (Werte) --- */
+    /* Wir definieren NUR den Container. 
+       Keine ::up-button oder ::down-arrow Styles mehr! */
     QSpinBox, QDoubleSpinBox, QTimeEdit {{
         background-color: #FFFFFF;
-        color: #111827;
-        border: 1px solid #D1D5DB;
-        border-radius: 4px;
-        padding: 4px 8px; /* Mehr Platz für Text */
-        min-height: 22px;
+        color: #000000;
+        font-weight: bold;
+        font-size: 13px;
+        padding: 4px 10px;
+        min-height: 28px; /* Größe bleibt */
         selection-background-color: {COLOR_ACCENT.name()};
-    }}
-    
-    QSpinBox:hover, QDoubleSpinBox:hover, QTimeEdit:hover {{
-        border: 1px solid {COLOR_ACCENT.name()};
+        selection-color: white;
     }}
 
-    /* Buttons (Up/Down) Container */
-    QSpinBox::up-button, QDoubleSpinBox::up-button, QTimeEdit::up-button {{
-        subcontrol-origin: border;
-        subcontrol-position: top right;
-        width: 20px;
-        border-left: 1px solid #E5E7EB;
-        border-bottom: 1px solid #E5E7EB;
-        background-color: #F9FAFB;
-        border-top-right-radius: 4px;
+    /* --- SCROLLBAR --- */
+    QScrollArea {{
+        border: none;
+        background-color: #FFFFFF;
     }}
-    
-    QSpinBox::down-button, QDoubleSpinBox::down-button, QTimeEdit::down-button {{
-        subcontrol-origin: border;
-        subcontrol-position: bottom right;
-        width: 20px;
-        border-left: 1px solid #E5E7EB;
-        border-top: 0px solid #E5E7EB; 
-        background-color: #F9FAFB;
-        border-bottom-right-radius: 4px;
+    QScrollBar:vertical {{
+        border: none;
+        background: #F3F4F6;
+        width: 16px;
+        margin: 0px;
     }}
-    
-    QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover {{
-        background-color: #E5E7EB;
+    QScrollBar::handle:vertical {{
+        background: #9CA3AF;
+        min-height: 40px;
+        border-radius: 8px;
+        margin: 3px;
     }}
-    QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{
-        background-color: #E5E7EB;
+    QScrollBar::handle:vertical:hover {{
+        background: #6B7280;
     }}
-
-    /* CSS Arrows (Clean & Small) */
-    QSpinBox::up-arrow, QDoubleSpinBox::up-arrow, QTimeEdit::up-arrow {{
-        width: 0; 
-        height: 0; 
-        border-left: 4px solid transparent;
-        border-right: 4px solid transparent;
-        border-bottom: 5px solid #4B5563; /* Dark Grey Arrow */
-    }}
-
-    QSpinBox::down-arrow, QDoubleSpinBox::down-arrow, QTimeEdit::down-arrow {{
-        width: 0; 
-        height: 0; 
-        border-left: 4px solid transparent;
-        border-right: 4px solid transparent;
-        border-top: 5px solid #4B5563; /* Dark Grey Arrow */
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+        height: 0px;
     }}
 
     /* --- BUTTONS --- */
     QPushButton {{
-        background-color: #FFFFFF;
-        border: 1px solid #D1D5DB;
+        background-color: #F3F4F6;
+        border: 2px solid #9CA3AF;
         border-radius: 6px;
-        padding: 6px 12px;
-        color: {COLOR_TEXT_MAIN.name()};
-        font-weight: 500;
+        padding: 8px 16px;
+        color: #000000;
+        font-size: 13px;
+        font-weight: 700;
+        min-height: 28px;
     }}
     QPushButton:hover {{
-        background-color: #F3F4F6;
-        border-color: #9CA3AF;
+        background-color: #E5E7EB;
+        border-color: #4B5563;
+        color: #000000;
     }}
     QPushButton:checked {{
         background-color: {COLOR_ACCENT.name()};
         color: white;
-        border: 1px solid {COLOR_ACCENT.name()};
-    }}
-    
-    QComboBox {{
-        background-color: #FFFFFF;
-        border: 1px solid #D1D5DB;
-        border-radius: 4px;
-        padding: 4px;
-        color: #111827;
-    }}
-    QComboBox::drop-down {{
-        border: none;
-        background: transparent;
-        width: 20px;
-    }}
-    QComboBox::down-arrow {{
-        image: none;
-        border-left: 4px solid transparent;
-        border-right: 4px solid transparent;
-        border-top: 6px solid #4B5563;
-        margin-right: 8px;
+        border: 2px solid {COLOR_ACCENT.name()};
     }}
     
     /* --- TABS --- */
     QTabWidget::pane {{
-        border: 1px solid #E5E7EB;
+        border: 2px solid #D1D5DB;
         background: #FFFFFF;
     }}
     QTabBar::tab {{
         background: #F3F4F6;
-        border: 1px solid #E5E7EB;
-        padding: 8px 16px;
+        border: 1px solid #D1D5DB;
+        padding: 10px 20px;
         margin-right: 2px;
         border-top-left-radius: 6px;
         border-top-right-radius: 6px;
-        color: #4B5563; /* Dark Grey for inactive */
+        color: #4B5563;
+        font-size: 13px;
+        font-weight: 600;
     }}
     QTabBar::tab:selected {{
         background: #FFFFFF;
         border-bottom-color: #FFFFFF;
         font-weight: bold;
-        color: {COLOR_ACCENT.name()}; /* Blue for active */
+        color: {COLOR_ACCENT.name()};
+        border-top: 4px solid {COLOR_ACCENT.name()};
     }}
     
     QListWidget {{
         background-color: #FFFFFF;
-        border: 1px solid #E5E7EB;
+        border: 2px solid #E5E7EB;
         color: #000000;
         border-radius: 4px;
+        font-family: "Consolas", "Courier New", monospace;
     }}
     """

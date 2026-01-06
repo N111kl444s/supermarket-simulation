@@ -1,7 +1,8 @@
 """
 Main window module for the application GUI.
 Updated: 
-- Added ObjectName 'ConfigContent' for styling.
+- Improved Layout Symmetry (Expanding SpinBoxes).
+- Cleaned up margins and spacing.
 """
 
 from PyQt6.QtWidgets import (
@@ -182,6 +183,10 @@ class MainWindow(QMainWindow):
         l.setStyleSheet("font-weight: bold; color: #374151; margin-top: 5px;")
         return l
 
+    def _configure_spinbox(self, box):
+        """Helper to set consistent expanding policy on spinboxes."""
+        box.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
     def create_sidebar(self):
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -197,21 +202,27 @@ class MainWindow(QMainWindow):
         scroll_input.setWidgetResizable(True)
         
         content_input = QWidget()
-        content_input.setObjectName("ConfigContent") # WICHTIG FÜR CSS
+        content_input.setObjectName("ConfigContent")
         
         l_input = QVBoxLayout(content_input)
         l_input.setAlignment(Qt.AlignmentFlag.AlignTop)
-        l_input.setSpacing(10)
+        l_input.setSpacing(12) # Etwas mehr Luft
 
         # --- Öffnungszeiten ---
         gb_time = QGroupBox("Öffnungszeiten")
         f_time = QFormLayout(gb_time)
+        f_time.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+        
         self.time_open = QTimeEdit()
         self.time_open.setDisplayFormat("HH:mm")
         self.time_open.setTime(QTime(*DEFAULT_OPEN_TIME))
+        self._configure_spinbox(self.time_open)
+        
         self.time_close = QTimeEdit()
         self.time_close.setDisplayFormat("HH:mm")
         self.time_close.setTime(QTime(*DEFAULT_CLOSE_TIME))
+        self._configure_spinbox(self.time_close)
+        
         f_time.addRow("Öffnen:", self.time_open)
         f_time.addRow("Schließen:", self.time_close)
         l_input.addWidget(gb_time)
@@ -225,10 +236,12 @@ class MainWindow(QMainWindow):
         l_cust.addWidget(self._create_distribution_label("(Exponentialverteilung)"))
         
         f_gen = QFormLayout()
+        f_gen.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
         self.actor_count_input = QSpinBox()
         self.actor_count_input.setValue(50)
         self.actor_count_input.setRange(1, 10000)
         self.actor_count_input.setSuffix(" / Tag")
+        self._configure_spinbox(self.actor_count_input)
         f_gen.addRow("Anzahl:", self.actor_count_input)
         l_cust.addLayout(f_gen)
         
@@ -237,6 +250,7 @@ class MainWindow(QMainWindow):
         l_cust.addWidget(self._create_distribution_label("(Normalverteilung)"))
         
         f_move = QFormLayout()
+        f_move.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
         
         # Walk
         hbox_walk = QHBoxLayout()
@@ -244,10 +258,13 @@ class MainWindow(QMainWindow):
         self.speed_walk_mean.setRange(0.1, 20.0)
         self.speed_walk_mean.setValue(2.5)
         self.speed_walk_mean.setSingleStep(0.1)
+        self._configure_spinbox(self.speed_walk_mean)
+        
         self.speed_walk_std = QDoubleSpinBox()
         self.speed_walk_std.setRange(0.0, 5.0)
         self.speed_walk_std.setValue(0.5)
         self.speed_walk_std.setSingleStep(0.1)
+        self._configure_spinbox(self.speed_walk_std)
         
         hbox_walk.addWidget(QLabel("Ø:"))
         hbox_walk.addWidget(self.speed_walk_mean)
@@ -261,10 +278,13 @@ class MainWindow(QMainWindow):
         self.speed_roll_mean.setRange(0.1, 20.0)
         self.speed_roll_mean.setValue(1.5)
         self.speed_roll_mean.setSingleStep(0.1)
+        self._configure_spinbox(self.speed_roll_mean)
+
         self.speed_roll_std = QDoubleSpinBox()
         self.speed_roll_std.setRange(0.0, 5.0)
         self.speed_roll_std.setValue(0.3)
         self.speed_roll_std.setSingleStep(0.1)
+        self._configure_spinbox(self.speed_roll_std)
         
         hbox_roll.addWidget(QLabel("Ø:"))
         hbox_roll.addWidget(self.speed_roll_mean)
@@ -277,22 +297,28 @@ class MainWindow(QMainWindow):
         self.disabled_prob_input.setRange(0, 100)
         self.disabled_prob_input.setValue(10)
         self.disabled_prob_input.setSuffix(" %")
-        f_move.addRow("Behinderungsgrad:", self.disabled_prob_input)
+        self._configure_spinbox(self.disabled_prob_input)
+        f_move.addRow("Behinderung:", self.disabled_prob_input)
         l_cust.addLayout(f_move)
         
         # Items & Scanning
         l_cust.addWidget(self._create_header_label("Einkauf & Scannen"))
         
         f_shop = QFormLayout()
+        f_shop.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
         
         # Items
         hbox_items = QHBoxLayout()
         self.items_mean = QSpinBox()
         self.items_mean.setRange(1, 100)
         self.items_mean.setValue(12)
+        self._configure_spinbox(self.items_mean)
+        
         self.items_std = QDoubleSpinBox()
         self.items_std.setRange(0, 20)
         self.items_std.setValue(4.0)
+        self._configure_spinbox(self.items_std)
+
         hbox_items.addWidget(QLabel("Ø:"))
         hbox_items.addWidget(self.items_mean)
         hbox_items.addWidget(QLabel("σ:"))
@@ -306,15 +332,20 @@ class MainWindow(QMainWindow):
         l_cust.addWidget(self._create_distribution_label("(Gleichverteilung)"))
         
         f_scan = QFormLayout()
+        f_scan.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
         
         # Normal Range
         hbox_scan_norm = QHBoxLayout()
         self.scan_speed_normal_min = QDoubleSpinBox()
         self.scan_speed_normal_min.setValue(0.5)
         self.scan_speed_normal_min.setSingleStep(0.1)
+        self._configure_spinbox(self.scan_speed_normal_min)
+
         self.scan_speed_normal_max = QDoubleSpinBox()
         self.scan_speed_normal_max.setValue(1.5)
         self.scan_speed_normal_max.setSingleStep(0.1)
+        self._configure_spinbox(self.scan_speed_normal_max)
+
         hbox_scan_norm.addWidget(QLabel("Min:"))
         hbox_scan_norm.addWidget(self.scan_speed_normal_min)
         hbox_scan_norm.addWidget(QLabel("Max:"))
@@ -326,9 +357,13 @@ class MainWindow(QMainWindow):
         self.scan_speed_disabled_min = QDoubleSpinBox()
         self.scan_speed_disabled_min.setValue(1.0)
         self.scan_speed_disabled_min.setSingleStep(0.1)
+        self._configure_spinbox(self.scan_speed_disabled_min)
+
         self.scan_speed_disabled_max = QDoubleSpinBox()
         self.scan_speed_disabled_max.setValue(3.0)
         self.scan_speed_disabled_max.setSingleStep(0.1)
+        self._configure_spinbox(self.scan_speed_disabled_max)
+
         hbox_scan_dis.addWidget(QLabel("Min:"))
         hbox_scan_dis.addWidget(self.scan_speed_disabled_min)
         hbox_scan_dis.addWidget(QLabel("Max:"))
@@ -339,22 +374,68 @@ class MainWindow(QMainWindow):
         l_input.addWidget(gb_customer)
 
         # --- Kassierer ---
-        gb_cashier = QGroupBox("Personal (Platzhalter)")
-        f_cash = QFormLayout(gb_cashier)
-        l_input.addWidget(gb_cashier) 
+        gb_cashier = QGroupBox("Personal Konfiguration")
+        l_cash = QVBoxLayout(gb_cashier)
+        l_cash.addWidget(self._create_header_label("Scangeschwindigkeit Kassierer (Sek/Artikel)"))
+        l_cash.addWidget(self._create_distribution_label("(Gleichverteilung)"))
+        
+        f_staff = QFormLayout()
+        f_staff.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+        
+        # Azubi
+        hbox_azubi = QHBoxLayout()
+        self.scan_speed_newbie_min = QDoubleSpinBox()
+        self.scan_speed_newbie_min.setValue(1.5)
+        self.scan_speed_newbie_min.setSingleStep(0.1)
+        self._configure_spinbox(self.scan_speed_newbie_min)
+
+        self.scan_speed_newbie_max = QDoubleSpinBox()
+        self.scan_speed_newbie_max.setValue(2.5)
+        self.scan_speed_newbie_max.setSingleStep(0.1)
+        self._configure_spinbox(self.scan_speed_newbie_max)
+
+        hbox_azubi.addWidget(QLabel("Min:"))
+        hbox_azubi.addWidget(self.scan_speed_newbie_min)
+        hbox_azubi.addWidget(QLabel("Max:"))
+        hbox_azubi.addWidget(self.scan_speed_newbie_max)
+        f_staff.addRow("Azubi:", hbox_azubi)
+        
+        # Festangestellter
+        hbox_pro = QHBoxLayout()
+        self.scan_speed_pro_min = QDoubleSpinBox()
+        self.scan_speed_pro_min.setValue(0.8)
+        self.scan_speed_pro_min.setSingleStep(0.1)
+        self._configure_spinbox(self.scan_speed_pro_min)
+
+        self.scan_speed_pro_max = QDoubleSpinBox()
+        self.scan_speed_pro_max.setValue(1.2)
+        self.scan_speed_pro_max.setSingleStep(0.1)
+        self._configure_spinbox(self.scan_speed_pro_max)
+
+        hbox_pro.addWidget(QLabel("Min:"))
+        hbox_pro.addWidget(self.scan_speed_pro_min)
+        hbox_pro.addWidget(QLabel("Max:"))
+        hbox_pro.addWidget(self.scan_speed_pro_max)
+        f_staff.addRow("Festangestellter:", hbox_pro)
+        
+        l_cash.addLayout(f_staff)
+        l_input.addWidget(gb_cashier)
 
         # --- Kassen ---
         gb_checkout = QGroupBox("Kassen Eigenschaften")
         f_checkout = QFormLayout(gb_checkout)
+        f_checkout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
         
         self.checkout_fail_rate_normal = QSpinBox()
         self.checkout_fail_rate_normal.setRange(0, 100)
         self.checkout_fail_rate_normal.setSuffix(" %")
+        self._configure_spinbox(self.checkout_fail_rate_normal)
         f_checkout.addRow("Ausfall (Normal):", self.checkout_fail_rate_normal)
         
         self.checkout_fail_rate_sb = QSpinBox()
         self.checkout_fail_rate_sb.setRange(0, 100)
         self.checkout_fail_rate_sb.setSuffix(" %")
+        self._configure_spinbox(self.checkout_fail_rate_sb)
         f_checkout.addRow("Ausfall (SB):", self.checkout_fail_rate_sb)
         l_input.addWidget(gb_checkout)
 
@@ -503,9 +584,13 @@ class MainWindow(QMainWindow):
         l_adm = QVBoxLayout(self.admin_toolbar)
         row_adm = QHBoxLayout()
         self.btn_save_admin = QPushButton("Speichern (OK)")
-        self.btn_save_admin.setStyleSheet(f"background-color: {COLOR_SUCCESS.name()}; color: white; font-weight: bold;")
+        self.btn_save_admin.setStyleSheet(
+            f"background-color: {COLOR_SUCCESS.name()}; color: white; font-weight: bold;"
+        )
         self.btn_cancel_route = QPushButton("Abbrechen")
-        self.btn_cancel_route.setStyleSheet(f"color: {COLOR_ERROR.name()}; font-weight: bold;")
+        self.btn_cancel_route.setStyleSheet(
+            f"color: {COLOR_ERROR.name()}; font-weight: bold;"
+        )
         row_adm.addWidget(self.btn_save_admin)
         row_adm.addWidget(self.btn_cancel_route)
         l_adm.addLayout(row_adm)
