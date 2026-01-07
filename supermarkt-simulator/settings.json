@@ -48,7 +48,7 @@
     ],
     "size_customer": 50,
     "size_shelf": 50,
-    "size_cashier": 10,
+    "size_cashier": 55,
     "size_checkout_width": 150,
     "size_checkout_height": 150
 }

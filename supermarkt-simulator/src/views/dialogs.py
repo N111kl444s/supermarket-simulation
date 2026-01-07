@@ -1,8 +1,7 @@
 """
 Dialogs for configuration settings.
 Refactored:
-- OffsetDialog emits live updates and has higher limits.
-- ObjectPositionDialog supports 90-degree rotation.
+- CheckoutConfigDialog: White styled, added Cashier Type selection (Azubi/Pro).
 """
 
 from PyQt6.QtWidgets import (
@@ -19,7 +18,8 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QComboBox,
 )
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import pyqtSignal, Qt
+from config import COLOR_ACCENT, COLOR_BORDER, COLOR_TEXT_MAIN
 
 
 class VisibilityDialog(QDialog):
@@ -44,7 +44,6 @@ class VisibilityDialog(QDialog):
         for key, label in opts:
             cb = QCheckBox(label)
             cb.setChecked(self.settings.get(key, True))
-            # Live Update auch für Checkboxen
             cb.stateChanged.connect(self.emit_live_update)
             self.checks[key] = cb
             layout.addWidget(cb)
@@ -69,13 +68,12 @@ class OffsetDialog(QDialog):
         self.inputs = {}
         layout = QVBoxLayout(self)
         
-        # Info Label
         layout.addWidget(QLabel("Änderungen werden sofort sichtbar."))
 
         gb_move = QGroupBox("Kundenbewegung")
         l_move = QFormLayout(gb_move)
         sb_path = QSpinBox()
-        sb_path.setRange(0, 200) # Increased range
+        sb_path.setRange(0, 200)
         sb_path.setValue(int(self.settings.get("customer_path_offset", 10)))
         sb_path.setSuffix(" px")
         sb_path.valueChanged.connect(self.emit_live_update)
@@ -105,7 +103,6 @@ class OffsetDialog(QDialog):
             full_key = prefix + suffix
             val = self.settings.get(full_key, [0, 0])
             
-            # WICHTIG: Range drastisch erhöht (-10000 bis 10000)
             sb_x = QSpinBox()
             sb_x.setRange(-10000, 10000)
             sb_x.setValue(int(val[0]))
@@ -131,7 +128,6 @@ class OffsetDialog(QDialog):
         return w
 
     def emit_live_update(self):
-        """Sammelt alle Werte und sendet sie sofort an den Controller."""
         current_data = self.settings.copy()
         current_data["customer_path_offset"] = self.inputs["customer_path_offset"].value()
         for key, widgets in self.inputs.items():
@@ -146,20 +142,70 @@ class CheckoutConfigDialog(QDialog):
     def __init__(self, data, parent=None):
         super().__init__(parent)
         self.data = data
-        self.setWindowTitle(f"Konfiguration Kasse #{data['id']}")
+        self.setWindowTitle(f"Kasse #{data['id']} konfigurieren")
+        
+        # Style: Weißer Hintergrund, moderne Schrift
+        self.setStyleSheet(f"""
+            QDialog {{
+                background-color: #FFFFFF;
+                font-family: "Segoe UI", sans-serif;
+                color: {COLOR_TEXT_MAIN.name()};
+            }}
+            QLabel {{
+                font-weight: 500;
+                font-size: 14px;
+            }}
+            QCheckBox {{
+                font-size: 14px;
+                padding: 5px;
+            }}
+            QComboBox, QSpinBox {{
+                border: 1px solid {COLOR_BORDER.name()};
+                border-radius: 4px;
+                padding: 4px;
+                background-color: #F9FAFB;
+                min-height: 25px;
+            }}
+            QComboBox:hover, QSpinBox:hover {{
+                border: 1px solid {COLOR_ACCENT.name()};
+            }}
+        """)
+        
         layout = QVBoxLayout(self)
-        form = QFormLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Header
+        lbl_header = QLabel(f"Einstellungen für Kasse {data['id']}")
+        lbl_header.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 10px;")
+        layout.addWidget(lbl_header)
 
+        form = QFormLayout()
+        form.setSpacing(10)
+
+        # 1. Warteschlange
         self.sb_queue = QSpinBox()
         self.sb_queue.setRange(1, 50)
         self.sb_queue.setValue(data.get("max_queue", 5))
         form.addRow("Max. Warteschlange:", self.sb_queue)
 
-        self.cb_open = QCheckBox("Geöffnet")
+        # 2. Personal (Skill) - Nur relevant, wenn KEINE SB-Kasse (falls SB Kassen keine Kassierer haben)
+        # Wir zeigen es immer an, außer du willst es für SB deaktivieren.
+        self.combo_staff = QComboBox()
+        self.combo_staff.addItems(["Azubi", "Festangestellter"])
+        # Standard ist Festangestellter, falls nichts gesetzt
+        current_staff = data.get("cashier_skill", "Festangestellter")
+        self.combo_staff.setCurrentText(current_staff)
+        form.addRow("Mitarbeiter:", self.combo_staff)
+
+        # 3. Status
+        self.cb_open = QCheckBox("Kasse geöffnet")
         self.cb_open.setChecked(data.get("open", True))
-        form.addRow(self.cb_open)
+        form.addRow("", self.cb_open)
 
         layout.addLayout(form)
+        
+        # Buttons
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save
             | QDialogButtonBox.StandardButton.Cancel
@@ -172,17 +218,26 @@ class CheckoutConfigDialog(QDialog):
         return {
             "max_queue": self.sb_queue.value(),
             "open": self.cb_open.isChecked(),
+            "cashier_skill": self.combo_staff.currentText()
         }
 
 
 class ObjectPositionDialog(QDialog):
     position_changed = pyqtSignal(float, float)
     orientation_changed = pyqtSignal(str)
-    angle_changed = pyqtSignal(int)  # NEU: Signal für Winkel
+    angle_changed = pyqtSignal(int)
 
     def __init__(self, title, x, y, orientation=None, angle=0, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
+        
+        # Auch hier ein leichter Clean-Look
+        self.setStyleSheet("""
+            QDialog { background-color: #FFFFFF; font-family: "Segoe UI"; }
+            QLabel { font-size: 13px; }
+            QDoubleSpinBox, QComboBox { min-height: 25px; }
+        """)
+        
         layout = QVBoxLayout(self)
         form = QFormLayout()
         
@@ -195,28 +250,22 @@ class ObjectPositionDialog(QDialog):
         form.addRow("X:", self.sb_x)
         form.addRow("Y:", self.sb_y)
 
-        # 1. Orientation (Layout-Typ: Links/Rechts)
         if orientation is not None:
             self.combo_ori = QComboBox()
             self.combo_ori.addItems(["Left", "Right"])
             self.combo_ori.setCurrentText(orientation)
             self.combo_ori.currentTextChanged.connect(self.orientation_changed.emit)
-            form.addRow("Typ (Spiegelung):", self.combo_ori)
+            form.addRow("Typ:", self.combo_ori)
         
-        # 2. Angle (Rotation) - Nur wenn orientation gesetzt (also bei Kassen)
         if orientation is not None:
             self.combo_angle = QComboBox()
-            # 0, 90, 180, 270 Grad
             self.combo_angle.addItem("0°", 0)
             self.combo_angle.addItem("90°", 90)
             self.combo_angle.addItem("180°", 180)
             self.combo_angle.addItem("270°", 270)
-            
-            # Set current index based on value
             idx = self.combo_angle.findData(angle)
             if idx != -1:
                 self.combo_angle.setCurrentIndex(idx)
-            
             self.combo_angle.currentIndexChanged.connect(self.emit_angle)
             form.addRow("Rotation:", self.combo_angle)
 

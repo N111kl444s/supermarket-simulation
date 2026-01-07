@@ -1,0 +1,20 @@
+        # --- PLAYBACK BUTTONS (Korrektur: Reset/Skip kompakter) ---
+        self.btn_reset = QPushButton("↺")
+        self.btn_reset.setObjectName("ToolbarButton")
+        self.btn_reset.setFixedWidth(60) # Reduziert von 60 auf 45
+        self.btn_reset.setStyleSheet(
+            f"color: {COLOR_ERROR.name()}; font-size: 24px;"
+        )
+
+        self.btn_play_pause = QPushButton("▶")
+        self.btn_play_pause.setObjectName("ToolbarButton")
+        self.btn_play_pause.setCheckable(True)
+        self.btn_play_pause.setFixedWidth(80) 
+        self.btn_play_pause.setStyleSheet(
+            f"color: {COLOR_SUCCESS.name()}; font-size: 24px;" 
+        )
+
+        self.btn_skip = QPushButton("⏭")
+        self.btn_skip.setObjectName("ToolbarButton")
+        self.btn_skip.setFixedWidth(60) # Reduziert von 60 auf 45
+        self.btn_skip.setStyleSheet("font-size: 16px;")

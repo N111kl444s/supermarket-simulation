@@ -1,12 +1,8 @@
 """
 Main Controller.
-COMPLETE VERSION.
-Includes:
-- Simulation Loop & Spawning
-- All Editor Tools (Start/Exit Routes, Areas, Shelves, Checkouts)
-- Map Management (Load/Save/New/Delete/Background)
-- Dialog Handlers (Visibility, Offsets, Sizes)
-- Event Handling
+Updated:
+- FORCES update of 'size_cashier' in settings.json to match new config defaults.
+- Ensures 'CASHIER_SIZE' from config is used as fallback.
 """
 
 import json
@@ -91,7 +87,6 @@ class MainController:
         if not MAPS_DIR.exists():
             os.makedirs(MAPS_DIR)
             
-        # FIX: Use SETTINGS_FILE from config.py directly
         self.settings_file = SETTINGS_FILE
 
         # Simulation Objects
@@ -127,8 +122,6 @@ class MainController:
         self.scene = self.view.sim_scene
 
         # --- CONNECTIONS ---
-        
-        # Simulation Control
         self.view.btn_play_pause.clicked.connect(self.toggle_play_pause)
         self.view.btn_reset.clicked.connect(self.reset_simulation)
         self.view.btn_skip.clicked.connect(self.skip_day)
@@ -136,12 +129,10 @@ class MainController:
         self.view.btn_speed_2.clicked.connect(lambda: self.set_speed(FACTOR_2X))
         self.view.btn_speed_3.clicked.connect(lambda: self.set_speed(FACTOR_6X))
         
-        # Camera / View
         self.view.btn_reset_zoom.clicked.connect(self.view.reset_sim_zoom)
         self.view.map_combo.currentTextChanged.connect(self.on_map_selection_changed)
         self.view.mode_combo.currentTextChanged.connect(self.on_mode_changed)
 
-        # Map Management
         self.view.btn_new_map.clicked.connect(self.create_new_map)
         self.view.btn_save_map.clicked.connect(self.save_current_map)
         self.view.btn_delete_map.clicked.connect(self.delete_current_map)
@@ -149,7 +140,6 @@ class MainController:
         self.view.btn_remove_background.clicked.connect(self.remove_map_background)
         self.view.spin_bg_scale.valueChanged.connect(self.on_bg_scale_changed)
 
-        # Tools
         self.view.new_route_button.clicked.connect(self.toggle_route_tool)
         self.view.place_shelves_button.clicked.connect(self.toggle_shelf_tool)
         self.view.waiting_area_button.clicked.connect(self.toggle_waiting_area_tool)
@@ -158,29 +148,24 @@ class MainController:
         self.view.btn_exit_route.clicked.connect(self.toggle_exit_route_tool)
         self.view.btn_exit_area.clicked.connect(self.toggle_exit_area_tool)
 
-        # Checkouts
         self.view.btn_kl.clicked.connect(lambda: self.toggle_checkout_tool("Normal", "Left", self.view.btn_kl))
         self.view.btn_kr.clicked.connect(lambda: self.toggle_checkout_tool("Normal", "Right", self.view.btn_kr))
         self.view.btn_sl.clicked.connect(lambda: self.toggle_checkout_tool("SB", "Left", self.view.btn_sl))
         self.view.btn_sr.clicked.connect(lambda: self.toggle_checkout_tool("SB", "Right", self.view.btn_sr))
 
-        # Config Dialogs
         self.view.btn_visibility.clicked.connect(self.open_visibility_dialog)
         self.view.btn_offsets.clicked.connect(self.open_offsets_dialog)
         self.view.btn_config_sizes.clicked.connect(self.open_size_config_dialog)
         
-        # Drawing Actions
         self.view.btn_save_admin.clicked.connect(self.finish_route_drawing)
         self.view.btn_cancel_route.clicked.connect(self.cancel_route_drawing)
 
-        # Lists & Selection
         self.view.route_list_widget.itemClicked.connect(lambda i: None)
         self.view.object_list_widget.itemClicked.connect(self.on_object_list_clicked)
         self.view.btn_del_route.clicked.connect(self.delete_selected_route)
         self.view.btn_edit_obj.clicked.connect(self.edit_selected_object)
         self.view.btn_del_obj.clicked.connect(self.delete_selected_object_from_list)
 
-        # Scene Events
         self.scene.clicked_point.connect(self.handle_scene_click)
         self.scene.waiting_area_created.connect(self.handle_waiting_area_created)
         self.scene.selectionChanged.connect(self.on_scene_selection_changed)
@@ -201,6 +186,17 @@ class MainController:
         if self.settings_file.exists():
             with open(self.settings_file, "r") as f:
                 self.settings.update(json.load(f))
+        
+        # --- FIX: Alte Settings überschreiben, falls Größe zu klein ---
+        current_c_size = self.settings.get("size_cashier", 22)
+        if current_c_size < 40:
+            print(f"DEBUG: Alte Kassierer-Größe ({current_c_size}) erkannt. Setze auf {CASHIER_SIZE}.")
+            self.settings["size_cashier"] = CASHIER_SIZE
+            # Speichern, damit es beim nächsten Mal passt
+            with open(self.settings_file, "w") as f:
+                json.dump(self.settings, f, indent=4)
+        # -------------------------------------------------------------
+
         for k, v in DEFAULT_SETTINGS.items():
             if k not in self.settings:
                 self.settings[k] = v
@@ -300,17 +296,13 @@ class MainController:
         r_name = random.choice(route_names)
         is_disabled = random.random() < self.prob_disabled
 
-        # READ PARAMS FROM VIEW (Normal Distribution)
         walk_mean = self.view.speed_walk_mean.value()
         walk_std = self.view.speed_walk_std.value()
-        
         roll_mean = self.view.speed_roll_mean.value()
         roll_std = self.view.speed_roll_std.value()
-        
         items_mean = self.view.items_mean.value()
         items_std = self.view.items_std.value()
         
-        # Scan Speed Ranges (Uniform)
         if is_disabled:
             scan_min = self.view.scan_speed_disabled_min.value()
             scan_max = self.view.scan_speed_disabled_max.value()
@@ -328,8 +320,6 @@ class MainController:
             exit_routes=self.exit_routes,
             max_offset=offset,
             is_disabled=is_disabled,
-            
-            # Pass Parameters
             speed_walk_params=(walk_mean, walk_std),
             speed_roll_params=(roll_mean, roll_std),
             items_params=(items_mean, items_std),
@@ -414,8 +404,6 @@ class MainController:
     def update_clock_display(self):
         self.view.lbl_clock.setText(self.sim_time.toString("HH:mm"))
 
-    # --- QUEUE & LOGIC ---
-
     def try_assign_checkout(self, model):
         candidates = []
         for c_data in self.checkouts_data:
@@ -475,8 +463,6 @@ class MainController:
         rx = tx * math.cos(rad) - ty * math.sin(rad)
         ry = tx * math.sin(rad) + ty * math.cos(rad)
         return QPointF(rx + cx, ry + cy)
-
-    # --- EVENT HANDLERS ---
 
     def on_mode_changed(self, mode_text):
         self.current_mode = mode_text
@@ -557,7 +543,6 @@ class MainController:
     def draw_debug_elements(self):
         self.scene.blockSignals(True)
         
-        # Keep background + quad
         for i in self.scene.items():
             if (i != self.background_item and i != self.view.item_q1 and i != self.view.item_q2 and i != self.view.item_q3 and i != self.view.item_q4):
                 pass
@@ -634,7 +619,15 @@ class MainController:
                     cx_center = cd["x"] + cw / 2
                     cy_center = cd["y"] + ch / 2
                     final_pos = self._get_rotated_point(cd["x"] + off_c[0], cd["y"] + off_c[1], cx_center, cy_center, angle)
-                    cai = CashierItem(final_pos.x(), final_pos.y(), cd.get("skill", "Azubi"), size=self.settings.get("size_cashier", 22))
+                    
+                    # Hier wird der Kassierer erstellt. Wir nutzen die Settings, 
+                    # die wir oben (load_settings) repariert haben.
+                    cai = CashierItem(
+                        final_pos.x(), 
+                        final_pos.y(), 
+                        cd.get("skill", "Azubi"), 
+                        size=self.settings.get("size_cashier", CASHIER_SIZE)
+                    )
                     self.scene.addItem(cai)
                     self.cashier_items.append(cai)
 
@@ -692,8 +685,6 @@ class MainController:
 
         self.scene.blockSignals(False)
         self.update_object_list()
-
-    # --- TOOLS & EDITOR ---
 
     def reset_tools(self, exclude_btn=None):
         tools = [
@@ -888,8 +879,6 @@ class MainController:
                         self.view.object_list_widget.setCurrentRow(row)
                         break
 
-    # --- MAP FILES ---
-
     def create_new_map(self):
         name, ok = QInputDialog.getText(self.view, "Neue Map", "Name (ohne .json):")
         if ok and name:
@@ -1034,7 +1023,6 @@ class MainController:
         except Exception as e:
             QMessageBox.critical(self.view, "Fehler", f"Fehler: {e}")
 
-    # --- BG ---
     def select_map_background(self):
         if not self.current_map_file: return
         file_path, _ = QFileDialog.getOpenFileName(self.view, "Hintergrundbild wählen", str(IMAGE_DIR), "Bilder (*.png *.jpg *.jpeg)")
@@ -1065,10 +1053,7 @@ class MainController:
         self.background_scale = value
         if self.background_item: self.background_item.setScale(value)
 
-    # --- DIALOGS (Wurden vorher vergessen) ---
-
     def open_visibility_dialog(self):
-        """Öffnet den Dialog für Sichtbarkeitseinstellungen."""
         dlg = VisibilityDialog(self.settings, self.view)
         dlg.settings_changed.connect(
             lambda ns: (self.settings.update(ns), self.draw_debug_elements())
@@ -1079,7 +1064,6 @@ class MainController:
         self.draw_debug_elements()
 
     def open_offsets_dialog(self):
-        """Öffnet den Dialog für Offsets (Warteschlangen, Kassierer)."""
         self.view.highlight_queues = True
         self.draw_debug_elements()
         dlg = OffsetDialog(self.settings, self.view)
@@ -1093,7 +1077,6 @@ class MainController:
         self.draw_debug_elements()
         
     def open_size_config_dialog(self):
-        """Öffnet den Dialog für Größenkonfigurationen."""
         dlg = SizeConfigDialog(self.settings, self.view)
         dlg.settings_changed.connect(
             lambda ns: (self.settings.update(ns), self.draw_debug_elements())
@@ -1103,7 +1086,6 @@ class MainController:
             json.dump(self.settings, f, indent=4)
         self.draw_debug_elements()
 
-    # --- EDIT OBJECT ---
     def edit_selected_object(self):
         item = self.view.object_list_widget.currentItem()
         if not item: return

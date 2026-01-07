@@ -1,8 +1,8 @@
 """
 Main window module for the application GUI.
 Updated: 
-- Improved Layout Symmetry (Expanding SpinBoxes).
-- Cleaned up margins and spacing.
+- Fixed: "Scannen (Dauer in Sek)" is now a proper bold header using _create_header_label.
+- Removed colon from that header for consistency.
 """
 
 from PyQt6.QtWidgets import (
@@ -92,26 +92,21 @@ class MainWindow(QMainWindow):
     def create_top_toolbar(self, parent_layout):
         toolbar_frame = QFrame()
         toolbar_frame.setObjectName("ToolbarFrame")
-        toolbar_frame.setFixedHeight(70)
+        toolbar_frame.setFixedHeight(80) 
         layout = QHBoxLayout(toolbar_frame)
-        layout.setContentsMargins(20, 5, 20, 5)
+        layout.setContentsMargins(20, 10, 20, 10)
         layout.setSpacing(15)
         layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         lbl_mode = QLabel("Modus:")
         self.mode_combo = QComboBox()
-        self.mode_combo.setFixedWidth(130)
-        self.mode_combo.setFixedHeight(30)
+        self.mode_combo.setFixedWidth(140) 
         self.mode_combo.addItems(["Simulation", "Editor"])
-        self.mode_combo.setStyleSheet(
-            f"font-weight: bold; color: {COLOR_TEXT_MAIN.name()};"
-        )
         layout.addWidget(lbl_mode)
         layout.addWidget(self.mode_combo)
 
         self.map_combo = QComboBox()
-        self.map_combo.setFixedWidth(180)
-        self.map_combo.setFixedHeight(30)
+        self.map_combo.setFixedWidth(200) 
         layout.addWidget(QLabel("Map:"))
         layout.addWidget(self.map_combo)
 
@@ -127,35 +122,47 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.lbl_clock)
         layout.addSpacing(20)
 
+        # --- PLAYBACK BUTTONS ---
         self.btn_reset = QPushButton("↺")
         self.btn_reset.setObjectName("ToolbarButton")
-        self.btn_reset.setFixedWidth(40)
+        self.btn_reset.setFixedWidth(60) 
+        self.btn_reset.setStyleSheet(
+            f"color: {COLOR_ERROR.name()}; font-size: 24px;"
+        )
+
         self.btn_play_pause = QPushButton("▶")
         self.btn_play_pause.setObjectName("ToolbarButton")
         self.btn_play_pause.setCheckable(True)
-        self.btn_play_pause.setFixedWidth(50)
+        self.btn_play_pause.setFixedWidth(80) 
         self.btn_play_pause.setStyleSheet(
-            f"color: {COLOR_SUCCESS.name()}; font-size: 20px;"
+            f"color: {COLOR_SUCCESS.name()}; font-size: 24px;" 
         )
+
         self.btn_skip = QPushButton("⏭")
         self.btn_skip.setObjectName("ToolbarButton")
-        self.btn_skip.setFixedWidth(40)
+        self.btn_skip.setFixedWidth(60) 
+        self.btn_skip.setStyleSheet("font-size: 16px;")
+        
         layout.addWidget(self.btn_reset)
         layout.addWidget(self.btn_play_pause)
         layout.addWidget(self.btn_skip)
 
         layout.addSpacing(15)
 
+        # --- SPEED BUTTONS ---
         self.btn_speed_1 = QPushButton("1x")
         self.btn_speed_1.setCheckable(True)
         self.btn_speed_1.setChecked(True)
-        self.btn_speed_1.setFixedWidth(35)
+        self.btn_speed_1.setFixedWidth(60) 
+        
         self.btn_speed_2 = QPushButton("2x")
         self.btn_speed_2.setCheckable(True)
-        self.btn_speed_2.setFixedWidth(35)
+        self.btn_speed_2.setFixedWidth(60) 
+        
         self.btn_speed_3 = QPushButton("6x")
         self.btn_speed_3.setCheckable(True)
-        self.btn_speed_3.setFixedWidth(35)
+        self.btn_speed_3.setFixedWidth(60) 
+        
         self.speed_group.addButton(self.btn_speed_1)
         self.speed_group.addButton(self.btn_speed_2)
         self.speed_group.addButton(self.btn_speed_3)
@@ -169,18 +176,19 @@ class MainWindow(QMainWindow):
         line2.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(line2)
         self.btn_reset_zoom = QPushButton("Ansicht Reset")
+        self.btn_reset_zoom.setFixedWidth(120) 
         layout.addWidget(self.btn_reset_zoom)
         parent_layout.addWidget(toolbar_frame)
 
     # --- HELPER UI FUNCTIONS ---
     def _create_distribution_label(self, text):
         l = QLabel(text)
-        l.setStyleSheet("color: #6B7280; font-style: italic; font-size: 10px; margin-bottom: 2px;")
+        l.setStyleSheet("color: #6B7280; font-style: italic; font-size: 12px; margin-bottom: 2px;")
         return l
 
     def _create_header_label(self, text):
         l = QLabel(text)
-        l.setStyleSheet("font-weight: bold; color: #374151; margin-top: 5px;")
+        l.setStyleSheet("font-weight: bold; color: #374151; margin-top: 10px;")
         return l
 
     def _configure_spinbox(self, box):
@@ -206,7 +214,7 @@ class MainWindow(QMainWindow):
         
         l_input = QVBoxLayout(content_input)
         l_input.setAlignment(Qt.AlignmentFlag.AlignTop)
-        l_input.setSpacing(12) # Etwas mehr Luft
+        l_input.setSpacing(12) 
 
         # --- Öffnungszeiten ---
         gb_time = QGroupBox("Öffnungszeiten")
@@ -243,6 +251,13 @@ class MainWindow(QMainWindow):
         self.actor_count_input.setSuffix(" / Tag")
         self._configure_spinbox(self.actor_count_input)
         f_gen.addRow("Anzahl:", self.actor_count_input)
+        
+        self.disabled_prob_input = QDoubleSpinBox()
+        self.disabled_prob_input.setRange(0, 100)
+        self.disabled_prob_input.setValue(10)
+        self.disabled_prob_input.setSuffix(" %")
+        self._configure_spinbox(self.disabled_prob_input)
+        f_gen.addRow("Behinderung:", self.disabled_prob_input)
         l_cust.addLayout(f_gen)
         
         # Bewegung
@@ -292,17 +307,10 @@ class MainWindow(QMainWindow):
         hbox_roll.addWidget(self.speed_roll_std)
         f_move.addRow("Rollen:", hbox_roll)
         
-        # Disabled Prob
-        self.disabled_prob_input = QDoubleSpinBox()
-        self.disabled_prob_input.setRange(0, 100)
-        self.disabled_prob_input.setValue(10)
-        self.disabled_prob_input.setSuffix(" %")
-        self._configure_spinbox(self.disabled_prob_input)
-        f_move.addRow("Behinderung:", self.disabled_prob_input)
         l_cust.addLayout(f_move)
         
         # Items & Scanning
-        l_cust.addWidget(self._create_header_label("Einkauf & Scannen"))
+        l_cust.addWidget(self._create_header_label("Einkauf"))
         
         f_shop = QFormLayout()
         f_shop.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -324,11 +332,20 @@ class MainWindow(QMainWindow):
         hbox_items.addWidget(QLabel("σ:"))
         hbox_items.addWidget(self.items_std)
         f_shop.addRow("Artikelanzahl:", hbox_items)
+        
+        # Handscanner
+        self.hand_scanner_prob = QDoubleSpinBox()
+        self.hand_scanner_prob.setRange(0, 100)
+        self.hand_scanner_prob.setValue(5.0) 
+        self.hand_scanner_prob.setSuffix(" %")
+        self._configure_spinbox(self.hand_scanner_prob)
+        f_shop.addRow("Handscanner:", self.hand_scanner_prob)
+        
         l_cust.addWidget(self._create_distribution_label("(Artikelanzahl: Normalverteilung)"))
         l_cust.addLayout(f_shop)
         
-        # Scan Speed
-        l_cust.addWidget(QLabel("Scandauer pro Artikel (Sek):"))
+        # Scan Speed - HIER GEÄNDERT zu _create_header_label
+        l_cust.addWidget(self._create_header_label("Scannen (Dauer in Sek)"))
         l_cust.addWidget(self._create_distribution_label("(Gleichverteilung)"))
         
         f_scan = QFormLayout()
