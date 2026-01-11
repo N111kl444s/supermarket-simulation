@@ -1,6 +1,6 @@
 """
 Shelf item visualization.
-Refactored: Supports dynamic sizing and label toggle.
+Updated: Inherits QObject to support 'clicked' signal.
 """
 
 from PyQt6.QtWidgets import (
@@ -9,24 +9,46 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
     QStyle,
 )
-from PyQt6.QtCore import Qt, QRectF
-from PyQt6.QtGui import QPixmap, QFont, QBrush, QPen
+from PyQt6.QtCore import Qt, QRectF, QObject, pyqtSignal
+from PyQt6.QtGui import QPixmap, QFont, QBrush, QPen, QTransform
 from config import *
-import random
 
 
-class ShelfItem(QGraphicsPixmapItem):
-    _pixmaps = []
+class ShelfItem(QObject, QGraphicsPixmapItem):
+    # Signal senden, wenn geklickt (Index des Regals)
+    clicked = pyqtSignal(int)
+    
+    _pixmaps = {}
     _images_loaded = False
 
-    def __init__(self, x, y, index=0, size=SHELF_SIZE, show_label=True):
-        super().__init__()
+    def __init__(self, x, y, index=0, size=SHELF_SIZE, show_label=True, 
+                 angle=0, variant=1, mirrored=False):
+        # QObject Init
+        QObject.__init__(self)
+        # GraphicsItem Init
+        QGraphicsPixmapItem.__init__(self)
+        
         self.setPos(x, y)
         self.index = index
         self.size = size
         self.show_label = show_label
+        
+        self.angle = angle
+        self.variant = variant if variant > 0 else 1
+        self.mirrored = mirrored
+        
         self.setZValue(5)
+        # Hand Cursor signalisiert Klickbarkeit
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        
+        self.setTransformOriginPoint(0, 0)
+        self.setRotation(self.angle)
+        
+        if self.mirrored:
+            tr = QTransform()
+            tr.scale(-1, 1)
+            self.setTransform(tr)
 
         self._load_images()
         self.set_visuals()
@@ -36,19 +58,25 @@ class ShelfItem(QGraphicsPixmapItem):
     def _load_images(cls):
         if cls._images_loaded:
             return
-        for img_name in IMG_SHELVES:
-            path = IMAGE_DIR / img_name
+        
+        for i in range(1, 6):
+            path = IMAGE_DIR / f"regal{i}.png"
             if path.exists():
-                cls._pixmaps.append(QPixmap(str(path)))
+                cls._pixmaps[i] = QPixmap(str(path))
+            else:
+                fallback = IMAGE_DIR / "regal.png"
+                if fallback.exists():
+                    cls._pixmaps[i] = QPixmap(str(fallback))
+                    
         cls._images_loaded = True
 
     def set_visuals(self):
-        self.pixmap_data = (
-            random.choice(ShelfItem._pixmaps) if ShelfItem._pixmaps else None
-        )
+        pix = self._pixmaps.get(self.variant)
+        if not pix and 1 in self._pixmaps:
+            pix = self._pixmaps[1]
 
-        if self.pixmap_data:
-            scaled = self.pixmap_data.scaled(
+        if pix:
+            scaled = pix.scaled(
                 int(self.size),
                 int(self.size),
                 Qt.AspectRatioMode.IgnoreAspectRatio,
@@ -68,7 +96,11 @@ class ShelfItem(QGraphicsPixmapItem):
         br = self.label.boundingRect()
         self.label.setPos(-br.width() / 2, -br.height() / 2)
         
-        # Visibility control
+        if self.mirrored:
+            tr = QTransform()
+            tr.scale(-1, 1)
+            self.label.setTransform(tr)
+            
         self.label.setVisible(self.show_label)
 
     def paint(self, painter, option, widget=None):
@@ -87,3 +119,8 @@ class ShelfItem(QGraphicsPixmapItem):
             painter.setPen(QPen(COLOR_SELECTION, 2))
             bbox = self.boundingRect()
             painter.drawRect(bbox)
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit(self.index)

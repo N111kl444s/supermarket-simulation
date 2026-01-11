@@ -31,7 +31,7 @@
         50
     ],
     "offset_queue_left": [
-        46,
+        47,
         65
     ],
     "offset_queue_right": [
@@ -47,10 +47,10 @@
         55
     ],
     "size_customer": 50,
-    "size_shelf": 35,
-    "size_cashier": 34,
+    "size_shelf": 100,
+    "size_cashier": 55,
     "size_checkout_width": 150,
-    "size_checkout_height": 150,
+    "size_checkout_height": 80,
     "show_exit_area": false,
     "show_shelf_numbers": false,
     "show_checkout_numbers": false

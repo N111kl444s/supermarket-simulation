@@ -1,6 +1,7 @@
 """
 Sidebar Component.
 Contains the TabWidget with Input, Simulation, Statistics, Editor, and Data tabs.
+Updated: Default background scale UI set to 0.5.
 """
 
 from PyQt6.QtWidgets import (
@@ -175,7 +176,8 @@ class Sidebar(QWidget):
         
         r3 = QHBoxLayout()
         r3.addWidget(QLabel("Skalierung:"))
-        self.spin_bg_scale = self._create_double_spin(1.0, 0.1, 10.0)
+        # UPDATE: Standard auf 0.5
+        self.spin_bg_scale = self._create_double_spin(0.5, 0.1, 10.0)
         r3.addWidget(self.spin_bg_scale)
         l_map.addLayout(r3)
         layout.addWidget(gb_map)

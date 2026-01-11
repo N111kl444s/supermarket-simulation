@@ -3,6 +3,7 @@ Customer agent logic.
 Refactored:
 - Customers spawn with 0 items.
 - Item count increases during shopping phase.
+- FIX: Handles new Dictionary-based Shelf data structure.
 """
 
 import math
@@ -31,7 +32,7 @@ class CustomerModel:
         items_params=(12, 4)
     ):
         self.shopping_route = shopping_route
-        self.all_shelves = shelves
+        self.all_shelves = shelves # Jetzt Liste von Dicts!
         self.start_area = start_area_rect
         self.waiting_area = waiting_area_rect
         self.exit_area = exit_area_rect
@@ -60,9 +61,8 @@ class CustomerModel:
         mu_items, sigma_items = items_params
         item_val = int(random.normalvariate(mu_items, sigma_items))
         
-        # FIX: Kunde startet ohne Artikel!
         self.item_count = 0  # Startet leer
-        self.target_item_count = max(1, item_val) # Das ist der Plan
+        self.target_item_count = max(1, item_val)
         
         self.target_shelves = []
         
@@ -78,6 +78,16 @@ class CustomerModel:
 
         self._init_pathing()
 
+    def _get_shelf_pos(self, shelf_data):
+        """
+        Helper: Extrahiert QPointF aus Regal-Daten (Dict oder QPointF).
+        """
+        if isinstance(shelf_data, dict):
+            return QPointF(shelf_data.get("x", 0), shelf_data.get("y", 0))
+        elif isinstance(shelf_data, (list, tuple)) and len(shelf_data) >= 2:
+            return QPointF(shelf_data[0], shelf_data[1])
+        return shelf_data # Fallback, falls es schon QPointF ist
+
     def _init_pathing(self):
         if self.start_area:
             rx = random.uniform(self.start_area.x(), self.start_area.x() + self.start_area.width())
@@ -87,8 +97,6 @@ class CustomerModel:
             self.pos = QPointF(self.shopping_route[0])
 
         if self.all_shelves:
-            # Wir besuchen maximal so viele Regale, wie wir Artikel wollen
-            # (Vereinfachung: 1 Artikel pro Regal)
             num_targets = min(len(self.all_shelves), self.target_item_count)
             indices = random.sample(range(len(self.all_shelves)), num_targets)
             self.target_shelves = [self.all_shelves[i] for i in indices]
@@ -111,7 +119,10 @@ class CustomerModel:
             route_points = list(self.shopping_route)
             shelf_assignments = {}
             
-            for shelf_pos in self.target_shelves:
+            for shelf_data in self.target_shelves:
+                # FIX: Convert dict to QPointF
+                shelf_pos = self._get_shelf_pos(shelf_data)
+                
                 best_idx = 0
                 min_dist = float('inf')
                 for i, rp in enumerate(route_points):
@@ -159,7 +170,7 @@ class CustomerModel:
                 if self.picking_timer > 0.5: # 0.5 Sekunden "Greifzeit"
                     self.picking_timer = 0
                     self.is_picking = False
-                    self.item_count += 1 # Hier sammelt er den Artikel ein
+                    self.item_count += 1 
             else:
                 self._move_along_path(dt)
         
@@ -193,8 +204,11 @@ class CustomerModel:
         if dist < 5.0:
             is_shelf = False
             # Check if current target is one of our target shelves
-            for s in self.target_shelves:
-                if QVector2D(self.pos - s).length() < 2.0:
+            for s_data in self.target_shelves:
+                # FIX: Convert dict to QPointF
+                s_pos = self._get_shelf_pos(s_data)
+                
+                if QVector2D(self.pos - s_pos).length() < 2.0:
                     is_shelf = True
                     break
             

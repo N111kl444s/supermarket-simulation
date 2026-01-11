@@ -562,114 +562,195 @@
         ]
     },
     "shelves": [
-        [
-            600.0,
-            630.0
-        ],
-        [
-            500.0,
-            630.0
-        ],
-        [
-            400.0,
-            630.0
-        ],
-        [
-            300.0,
-            630.0
-        ],
-        [
-            400.0,
-            450.0
-        ],
-        [
-            500.0,
-            450.0
-        ],
-        [
-            600.0,
-            450.0
-        ],
-        [
-            200.0,
-            630.0
-        ],
-        [
-            140.0,
-            550.0
-        ],
-        [
-            140.0,
-            450.0
-        ],
-        [
-            140.0,
-            350.0
-        ],
-        [
-            140.0,
-            250.0
-        ],
-        [
-            140.0,
-            150.0
-        ],
-        [
-            250.0,
-            150.0
-        ],
-        [
-            400.0,
-            150.0
-        ],
-        [
-            500.0,
-            150.0
-        ],
-        [
-            600.0,
-            150.0
-        ],
-        [
-            700.0,
-            150.0
-        ],
-        [
-            800.0,
-            150.0
-        ],
-        [
-            900.0,
-            150.0
-        ],
-        [
-            1000.0,
-            150.0
-        ],
-        [
-            400.0,
-            380.0
-        ],
-        [
-            400.0,
-            310.0
-        ],
-        [
-            500.0,
-            310.0
-        ],
-        [
-            600.0,
-            310.0
-        ],
-        [
-            700.0,
-            310.0
-        ],
-        [
-            800.0,
-            310.0
-        ]
+        {
+            "x": 600.0,
+            "y": 630.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 500.0,
+            "y": 630.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 400.0,
+            "y": 630.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 300.0,
+            "y": 630.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 400.0,
+            "y": 450.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 500.0,
+            "y": 450.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 600.0,
+            "y": 450.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 200.0,
+            "y": 630.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 140.0,
+            "y": 550.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 140.0,
+            "y": 450.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 140.0,
+            "y": 350.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 140.0,
+            "y": 250.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 140.0,
+            "y": 150.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 250.0,
+            "y": 150.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 400.0,
+            "y": 150.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 500.0,
+            "y": 150.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 600.0,
+            "y": 150.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 700.0,
+            "y": 150.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 800.0,
+            "y": 150.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 900.0,
+            "y": 150.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 1000.0,
+            "y": 150.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 400.0,
+            "y": 380.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 400.0,
+            "y": 310.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 500.0,
+            "y": 310.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 600.0,
+            "y": 310.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 700.0,
+            "y": 310.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        },
+        {
+            "x": 800.0,
+            "y": 310.0,
+            "angle": 0,
+            "variant": 0,
+            "mirrored": false
+        }
     ],
     "checkouts": [
         {
@@ -681,7 +762,8 @@
             "open": true,
             "skill": "Azubi",
             "max_queue": 5,
-            "angle": 90
+            "angle": 0,
+            "cashier_skill": "Azubi"
         },
         {
             "id": 2,
@@ -759,5 +841,5 @@
     ],
     "global_exit_direction": "Rechts",
     "background_image": "bg_Standard (Einfach).png",
-    "background_scale": 0.5000000000000001
+    "background_scale": 1.0
 }

@@ -1,12 +1,12 @@
 """
 Visual Controller.
 Manages the graphical representation of the simulation (Scene, Items).
-Updated: Passes visibility flags for numbering to items.
+Updated: Connects Shelf clicks to callback.
 """
 
 import math
 from PyQt6.QtGui import QColor, QPen, QBrush, QPixmap, QPainterPath
-from PyQt6.QtWidgets import QGraphicsPixmapItem, QGraphicsPathItem
+from PyQt6.QtWidgets import QGraphicsPixmapItem, QGraphicsPathItem, QGraphicsEllipseItem
 from PyQt6.QtCore import Qt, QPointF
 from config import COLOR_BLUE, COLOR_RED, CASHIER_SIZE
 from views.items import (
@@ -15,9 +15,6 @@ from views.items import (
 )
 
 class VisualController:
-    """
-    Verwaltet die QGraphicsScene und alle visuellen Items.
-    """
     def __init__(self, scene, settings):
         self.scene = scene
         self.settings = settings
@@ -26,6 +23,7 @@ class VisualController:
         self.checkout_items = []
         self.cashier_items = []
         self.route_debug_items = []
+        self.queue_debug_items = []
         self.customer_items = {} 
         
         self.waiting_area_item = None
@@ -33,10 +31,14 @@ class VisualController:
         self.exit_area_item = None
         self.background_item = None
         
-        self.on_checkout_clicked = None 
+        self.on_checkout_clicked = None
+        self.on_shelf_clicked = None # NEU
 
     def set_checkout_click_callback(self, callback):
         self.on_checkout_clicked = callback
+
+    def set_shelf_click_callback(self, callback): # NEU
+        self.on_shelf_clicked = callback
 
     def update_background(self, image_path, scale, maps_dir):
         if self.background_item and self.background_item.scene():
@@ -70,7 +72,6 @@ class VisualController:
             if obj_type == "checkout": return selected_spec["id"] == idx_or_id
             return False
 
-        # Areas
         if map_manager.waiting_area_rect and self.settings.get("show_waiting_area", True):
             self.waiting_area_item = WaitingAreaItem(map_manager.waiting_area_rect)
             self.scene.addItem(self.waiting_area_item)
@@ -85,24 +86,41 @@ class VisualController:
 
         # Regale
         show_s_nums = self.settings.get("show_shelf_numbers", True)
-        for idx, p in enumerate(map_manager.all_shelves):
+        for idx, s_data in enumerate(map_manager.all_shelves):
+            sx = s_data.get("x", 0)
+            sy = s_data.get("y", 0)
             show = self.settings["show_shelves"] or is_selected("shelf", idx)
             if show:
-                # FIX: show_label übergeben
-                s = ShelfItem(p.x(), p.y(), index=idx, size=self.settings.get("size_shelf", 32), show_label=show_s_nums)
+                s = ShelfItem(
+                    sx, sy, 
+                    index=idx, 
+                    size=self.settings.get("size_shelf", 32), 
+                    show_label=show_s_nums,
+                    angle=s_data.get("angle", 0),
+                    variant=s_data.get("variant", 0),
+                    mirrored=s_data.get("mirrored", False)
+                )
+                
+                # Signal verbinden
+                if self.on_shelf_clicked:
+                    s.clicked.connect(self.on_shelf_clicked)
+                    
                 self.scene.addItem(s)
                 self.shelf_items.append(s)
                 if is_selected("shelf", idx): s.setSelected(True)
 
-        # Kassen & Kassierer
+        # Kassen & Queues
         show_c_nums = self.settings.get("show_checkout_numbers", True)
+        show_queues = self.settings.get("show_queues", False) or highlight_queues
+        
         for cd in map_manager.checkouts_data:
             show = self.settings["show_checkouts"] or is_selected("checkout", cd["id"])
             if show:
-                # FIX: show_id übergeben
                 self._draw_single_checkout(cd, is_selected("checkout", cd["id"]), show_id=show_c_nums)
+            
+            if show_queues:
+                self._draw_queue_visuals(cd)
 
-        # Routen
         if self.settings["show_routes"]:
             self._draw_routes(map_manager)
 
@@ -123,7 +141,7 @@ class VisualController:
             cd["x"], cd["y"], c_type, ori, cd["open"], self.settings["show_cashiers"], 
             cd.get("id"), lo, 
             width=cw, height=ch, angle=angle,
-            show_id=show_id # Hier anwenden
+            show_id=show_id
         )
         if self.on_checkout_clicked:
             ci.clicked.connect(self.on_checkout_clicked)
@@ -131,37 +149,69 @@ class VisualController:
         self.checkout_items.append(ci)
         if is_selected: ci.setSelected(True)
 
-        # Kassierer
         if c_type == "Normal" and self.settings["show_cashiers"] and cd.get("open", True):
              skill = cd.get("cashier_skill") or cd.get("skill") or "Azubi"
-             
              offset_key = "offset_cashier_left" if ori == "Left" else "offset_cashier_right"
              off_x, off_y = self.settings.get(offset_key, [0, 0])
              
              cx, cy = cd["x"], cd["y"]
              center_x = cx + cw / 2
              center_y = cy + ch / 2
-             
              p_unrot_x = cx + off_x
              p_unrot_y = cy + off_y
-             
              rad = math.radians(angle)
              tx = p_unrot_x - center_x
              ty = p_unrot_y - center_y
-             
              rx = tx * math.cos(rad) - ty * math.sin(rad)
              ry = tx * math.sin(rad) + ty * math.cos(rad)
-             
              final_x = rx + center_x
              final_y = ry + center_y
 
-             cai = CashierItem(
-                 final_x, final_y, 
-                 skill, 
-                 size=self.settings.get("size_cashier", CASHIER_SIZE)
-             )
+             cai = CashierItem(final_x, final_y, skill, size=self.settings.get("size_cashier", CASHIER_SIZE))
              self.scene.addItem(cai)
              self.cashier_items.append(cai)
+
+    def _draw_queue_visuals(self, cd):
+        cw = self.settings.get("size_checkout_width", 100)
+        ch = self.settings.get("size_checkout_height", 100)
+        spacing = 36
+        max_q = cd.get("max_queue", 5)
+        
+        cx, cy = cd["x"], cd["y"]
+        ori = cd.get("orientation", "Right")
+        c_type = cd["type"]
+        angle = cd.get("angle", 0)
+        
+        offset_key = "offset_queue_" + ("sb_" if c_type == "SB" else "") + ("left" if ori == "Left" else "right")
+        off = self.settings.get(offset_key, [0, 0])
+        qx_local, qy_local = off[0], off[1]
+        
+        center_x = cx + cw / 2
+        center_y = cy + ch / 2
+        p_unrot_x = cx + qx_local
+        p_unrot_y = cy + qy_local
+        
+        rad = math.radians(angle)
+        tx = p_unrot_x - center_x
+        ty = p_unrot_y - center_y
+        rx = tx * math.cos(rad) - ty * math.sin(rad)
+        ry = tx * math.sin(rad) + ty * math.cos(rad)
+        start_point_x = rx + center_x
+        start_point_y = ry + center_y
+        
+        dir_x = -math.sin(rad)
+        dir_y = math.cos(rad)
+        
+        for i in range(max_q):
+            px = start_point_x + dir_x * (i * spacing)
+            py = start_point_y + dir_y * (i * spacing)
+            
+            dot = QGraphicsEllipseItem(px - 3, py - 3, 6, 6)
+            dot.setBrush(QBrush(QColor(255, 165, 0, 180))) 
+            dot.setPen(QPen(Qt.GlobalColor.white, 1))
+            dot.setZValue(20)
+            self.scene.addItem(dot)
+            self.queue_debug_items.append(dot)
 
     def _draw_routes(self, map_manager):
         def draw(routes, col):
@@ -197,12 +247,13 @@ class VisualController:
                 self.customer_items[model].sync_visuals()
 
     def _clear_static_items(self):
-        for i in self.shelf_items + self.checkout_items + self.cashier_items + self.route_debug_items:
+        for i in self.shelf_items + self.checkout_items + self.cashier_items + self.route_debug_items + self.queue_debug_items:
             if i.scene(): self.scene.removeItem(i)
         self.shelf_items.clear()
         self.checkout_items.clear()
         self.cashier_items.clear()
         self.route_debug_items.clear()
+        self.queue_debug_items.clear()
         if self.waiting_area_item and self.waiting_area_item.scene(): self.scene.removeItem(self.waiting_area_item)
         if self.start_area_item and self.start_area_item.scene(): self.scene.removeItem(self.start_area_item)
         if self.exit_area_item and self.exit_area_item.scene(): self.scene.removeItem(self.exit_area_item)
