@@ -1,7 +1,8 @@
 """
 Dialogs for configuration settings.
 Refactored:
-- CheckoutConfigDialog: White styled, added Cashier Type selection (Azubi/Pro).
+- CheckoutConfigDialog now correctly resolves legacy skill keys to match visuals.
+- Robust Styling.
 """
 
 from PyQt6.QtWidgets import (
@@ -21,6 +22,60 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import pyqtSignal, Qt
 from config import COLOR_ACCENT, COLOR_BORDER, COLOR_TEXT_MAIN
 
+# Zentrales Stylesheet für alle Dialoge
+DIALOG_STYLE = f"""
+    QDialog {{
+        background-color: #FFFFFF;
+        color: #000000;
+        font-family: "Segoe UI", sans-serif;
+    }}
+    QLabel {{
+        color: #1F2937;
+        font-weight: 500;
+        font-size: 13px;
+        background-color: transparent;
+    }}
+    QCheckBox {{
+        color: #1F2937;
+        spacing: 5px;
+    }}
+    QGroupBox {{
+        border: 1px solid #D1D5DB;
+        border-radius: 6px;
+        margin-top: 10px;
+        padding-top: 15px;
+        font-weight: bold;
+        color: #3B82F6;
+    }}
+    QGroupBox::title {{
+        subcontrol-origin: margin;
+        subcontrol-position: top left;
+        padding: 0 5px;
+        left: 10px;
+    }}
+    QSpinBox, QDoubleSpinBox, QComboBox {{
+        background-color: #F9FAFB;
+        border: 1px solid #D1D5DB;
+        border-radius: 4px;
+        padding: 4px;
+        color: #000000;
+        min-height: 25px;
+        selection-background-color: #3B82F6;
+        selection-color: #FFFFFF;
+    }}
+    QPushButton {{
+        background-color: #F3F4F6;
+        border: 1px solid #D1D5DB;
+        border-radius: 4px;
+        padding: 6px 12px;
+        color: #1F2937;
+    }}
+    QPushButton:hover {{
+        background-color: #E5E7EB;
+        border-color: #3B82F6;
+    }}
+"""
+
 
 class VisibilityDialog(QDialog):
     settings_changed = pyqtSignal(dict)
@@ -28,6 +83,7 @@ class VisibilityDialog(QDialog):
     def __init__(self, current_settings, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Sichtbarkeit")
+        self.setStyleSheet(DIALOG_STYLE)
         self.settings = current_settings.copy()
         self.checks = {}
 
@@ -63,13 +119,16 @@ class OffsetDialog(QDialog):
     def __init__(self, current_settings, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Globale Offsets (Live)")
-        self.resize(400, 500)
+        self.resize(450, 600)
+        self.setStyleSheet(DIALOG_STYLE)
+
         self.settings = current_settings.copy()
         self.inputs = {}
         layout = QVBoxLayout(self)
-        
+
         layout.addWidget(QLabel("Änderungen werden sofort sichtbar."))
 
+        # 1. Kunden
         gb_move = QGroupBox("Kundenbewegung")
         l_move = QFormLayout(gb_move)
         sb_path = QSpinBox()
@@ -81,12 +140,14 @@ class OffsetDialog(QDialog):
         l_move.addRow("Maximaler Versatz (Jitter):", sb_path)
         layout.addWidget(gb_move)
 
+        # 2. Warteschlangen
         gb_q = QGroupBox("Warteschlangen Position")
         l_q = QFormLayout(gb_q)
         self.add_xy_row(l_q, "offset_queue", "Warteschlange (Normal)")
         self.add_xy_row(l_q, "offset_queue_sb", "Warteschlange (SB)")
         layout.addWidget(gb_q)
 
+        # 3. Kassen Elemente
         gb_c = QGroupBox("Kassierer & Ampel")
         l_c = QFormLayout(gb_c)
         self.add_xy_row(l_c, "offset_cashier", "Kassierer")
@@ -102,17 +163,17 @@ class OffsetDialog(QDialog):
         for suffix in ["_left", "_right"]:
             full_key = prefix + suffix
             val = self.settings.get(full_key, [0, 0])
-            
+
             sb_x = QSpinBox()
             sb_x.setRange(-10000, 10000)
             sb_x.setValue(int(val[0]))
             sb_x.valueChanged.connect(self.emit_live_update)
-            
+
             sb_y = QSpinBox()
             sb_y.setRange(-10000, 10000)
             sb_y.setValue(int(val[1]))
             sb_y.valueChanged.connect(self.emit_live_update)
-            
+
             layout.addRow(
                 f"{title} ({'Links' if 'left' in suffix else 'Rechts'}) X/Y:",
                 self.create_hbox(sb_x, sb_y),
@@ -129,12 +190,14 @@ class OffsetDialog(QDialog):
 
     def emit_live_update(self):
         current_data = self.settings.copy()
-        current_data["customer_path_offset"] = self.inputs["customer_path_offset"].value()
+        current_data["customer_path_offset"] = self.inputs[
+            "customer_path_offset"
+        ].value()
         for key, widgets in self.inputs.items():
             if key == "customer_path_offset":
                 continue
             current_data[key] = [widgets[0].value(), widgets[1].value()]
-        
+
         self.settings_changed.emit(current_data)
 
 
@@ -143,69 +206,56 @@ class CheckoutConfigDialog(QDialog):
         super().__init__(parent)
         self.data = data
         self.setWindowTitle(f"Kasse #{data['id']} konfigurieren")
-        
-        # Style: Weißer Hintergrund, moderne Schrift
-        self.setStyleSheet(f"""
-            QDialog {{
-                background-color: #FFFFFF;
-                font-family: "Segoe UI", sans-serif;
-                color: {COLOR_TEXT_MAIN.name()};
-            }}
-            QLabel {{
-                font-weight: 500;
-                font-size: 14px;
-            }}
-            QCheckBox {{
-                font-size: 14px;
-                padding: 5px;
-            }}
-            QComboBox, QSpinBox {{
-                border: 1px solid {COLOR_BORDER.name()};
-                border-radius: 4px;
-                padding: 4px;
-                background-color: #F9FAFB;
-                min-height: 25px;
-            }}
-            QComboBox:hover, QSpinBox:hover {{
-                border: 1px solid {COLOR_ACCENT.name()};
-            }}
-        """)
-        
+        self.setStyleSheet(DIALOG_STYLE)
+
         layout = QVBoxLayout(self)
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
-        
-        # Header
+
         lbl_header = QLabel(f"Einstellungen für Kasse {data['id']}")
-        lbl_header.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 10px;")
+        lbl_header.setStyleSheet(
+            "font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #1F2937;"
+        )
         layout.addWidget(lbl_header)
 
         form = QFormLayout()
         form.setSpacing(10)
 
-        # 1. Warteschlange
         self.sb_queue = QSpinBox()
         self.sb_queue.setRange(1, 50)
         self.sb_queue.setValue(data.get("max_queue", 5))
         form.addRow("Max. Warteschlange:", self.sb_queue)
 
-        # 2. Personal (Skill) - Nur relevant, wenn KEINE SB-Kasse (falls SB Kassen keine Kassierer haben)
-        # Wir zeigen es immer an, außer du willst es für SB deaktivieren.
+        # --- FIX START ---
+        # Skill Logik korrigiert: Prüfe Legacy Keys und setze korrekten Standard
         self.combo_staff = QComboBox()
         self.combo_staff.addItems(["Azubi", "Festangestellter"])
-        # Standard ist Festangestellter, falls nichts gesetzt
-        current_staff = data.get("cashier_skill", "Festangestellter")
+
+        # 1. Versuche 'cashier_skill' (Neu)
+        current_staff = data.get("cashier_skill")
+        # 2. Versuche 'skill' (Alt)
+        if not current_staff:
+            current_staff = data.get("skill")
+        # 3. Fallback auf Azubi (Konsistent mit VisualController)
+        if not current_staff:
+            current_staff = "Azubi"
+
         self.combo_staff.setCurrentText(current_staff)
+
+        # SB Kassen haben kein Personal
+        if data.get("type") == "SB":
+            self.combo_staff.setDisabled(True)
+            self.combo_staff.setToolTip("SB-Kassen haben kein Personal.")
+        # --- FIX END ---
+
         form.addRow("Mitarbeiter:", self.combo_staff)
 
-        # 3. Status
         self.cb_open = QCheckBox("Kasse geöffnet")
         self.cb_open.setChecked(data.get("open", True))
         form.addRow("", self.cb_open)
 
         layout.addLayout(form)
-        
-        # Buttons
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save
             | QDialogButtonBox.StandardButton.Cancel
@@ -218,7 +268,7 @@ class CheckoutConfigDialog(QDialog):
         return {
             "max_queue": self.sb_queue.value(),
             "open": self.cb_open.isChecked(),
-            "cashier_skill": self.combo_staff.currentText()
+            "cashier_skill": self.combo_staff.currentText(),
         }
 
 
@@ -230,17 +280,11 @@ class ObjectPositionDialog(QDialog):
     def __init__(self, title, x, y, orientation=None, angle=0, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
-        
-        # Auch hier ein leichter Clean-Look
-        self.setStyleSheet("""
-            QDialog { background-color: #FFFFFF; font-family: "Segoe UI"; }
-            QLabel { font-size: 13px; }
-            QDoubleSpinBox, QComboBox { min-height: 25px; }
-        """)
-        
+        self.setStyleSheet(DIALOG_STYLE)
+
         layout = QVBoxLayout(self)
         form = QFormLayout()
-        
+
         self.sb_x = QDoubleSpinBox()
         self.sb_x.setRange(-10000, 10000)
         self.sb_x.setValue(x)
@@ -254,9 +298,11 @@ class ObjectPositionDialog(QDialog):
             self.combo_ori = QComboBox()
             self.combo_ori.addItems(["Left", "Right"])
             self.combo_ori.setCurrentText(orientation)
-            self.combo_ori.currentTextChanged.connect(self.orientation_changed.emit)
+            self.combo_ori.currentTextChanged.connect(
+                self.orientation_changed.emit
+            )
             form.addRow("Typ:", self.combo_ori)
-        
+
         if orientation is not None:
             self.combo_angle = QComboBox()
             self.combo_angle.addItem("0°", 0)
@@ -270,10 +316,10 @@ class ObjectPositionDialog(QDialog):
             form.addRow("Rotation:", self.combo_angle)
 
         layout.addLayout(form)
-        
+
         self.sb_x.valueChanged.connect(self.emit_pos)
         self.sb_y.valueChanged.connect(self.emit_pos)
-        
+
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
         btns.accepted.connect(self.accept)
         layout.addWidget(btns)

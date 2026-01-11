@@ -7,12 +7,12 @@
     "show_start_area": false,
     "customer_path_offset": 50,
     "offset_cashier_left": [
-        113,
-        67
+        108,
+        50
     ],
     "offset_cashier_right": [
-        37,
-        67
+        40,
+        51
     ],
     "offset_light_normal_left": [
         93,
@@ -48,7 +48,7 @@
     ],
     "size_customer": 50,
     "size_shelf": 50,
-    "size_cashier": 55,
+    "size_cashier": 38,
     "size_checkout_width": 150,
     "size_checkout_height": 150
 }

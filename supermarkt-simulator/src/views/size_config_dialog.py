@@ -1,5 +1,6 @@
 """
 Dialog for configuring global object sizes.
+Updated: Added Styling to fix black-on-black issue.
 """
 
 from PyQt6.QtWidgets import (
@@ -12,6 +13,42 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal
 
+# Einheitliches Styling für Dialoge
+DIALOG_STYLE = """
+    QDialog {
+        background-color: #FFFFFF;
+        color: #1F2937;
+        font-family: "Segoe UI", sans-serif;
+    }
+    QLabel {
+        color: #1F2937;
+        font-weight: 500;
+        font-size: 13px;
+        background-color: transparent;
+    }
+    QSpinBox {
+        background-color: #F9FAFB;
+        border: 1px solid #D1D5DB;
+        border-radius: 4px;
+        padding: 4px;
+        color: #000000;
+        min-height: 25px;
+        selection-background-color: #3B82F6;
+        selection-color: #FFFFFF;
+    }
+    QDialogButtonBox QPushButton {
+        background-color: #F3F4F6;
+        border: 1px solid #D1D5DB;
+        border-radius: 4px;
+        padding: 6px 12px;
+        color: #1F2937;
+    }
+    QDialogButtonBox QPushButton:hover {
+        background-color: #E5E7EB;
+        border-color: #3B82F6;
+    }
+"""
+
 
 class SizeConfigDialog(QDialog):
     """
@@ -23,6 +60,8 @@ class SizeConfigDialog(QDialog):
     def __init__(self, current_settings, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Größen Konfiguration")
+        self.setStyleSheet(DIALOG_STYLE)  # Style anwenden
+        self.resize(350, 300)
         self.settings = current_settings.copy()
         self.setup_ui()
 
@@ -31,11 +70,12 @@ class SizeConfigDialog(QDialog):
 
         info = QLabel(
             "Ändern Sie die globalen Anzeigegrößen der Objekte.\n"
-            "Hinweis: Änderungen werden sofort wirksam und gespeichert."
+            "Hinweis: Änderungen werden sofort wirksam."
         )
         layout.addWidget(info)
 
         form = QFormLayout()
+        form.setSpacing(10)
 
         self.spin_customer = self._create_spin("size_customer")
         form.addRow("Kunden Größe (px):", self.spin_customer)
