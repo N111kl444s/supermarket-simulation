@@ -18,3 +18,9 @@
         self.btn_skip.setObjectName("ToolbarButton")
         self.btn_skip.setFixedWidth(60) # Reduziert von 60 auf 45
         self.btn_skip.setStyleSheet("font-size: 16px;")
+
+
+        B7B7B7
+        20
+        0
+        100

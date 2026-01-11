@@ -1,6 +1,6 @@
 """
 Shelf item visualization.
-Refactored: Supports dynamic sizing.
+Refactored: Supports dynamic sizing and label toggle.
 """
 
 from PyQt6.QtWidgets import (
@@ -19,11 +19,12 @@ class ShelfItem(QGraphicsPixmapItem):
     _pixmaps = []
     _images_loaded = False
 
-    def __init__(self, x, y, index=0, size=SHELF_SIZE):
+    def __init__(self, x, y, index=0, size=SHELF_SIZE, show_label=True):
         super().__init__()
         self.setPos(x, y)
         self.index = index
         self.size = size
+        self.show_label = show_label
         self.setZValue(5)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
 
@@ -66,6 +67,9 @@ class ShelfItem(QGraphicsPixmapItem):
 
         br = self.label.boundingRect()
         self.label.setPos(-br.width() / 2, -br.height() / 2)
+        
+        # Visibility control
+        self.label.setVisible(self.show_label)
 
     def paint(self, painter, option, widget=None):
         if not self.pixmap() or self.pixmap().isNull():

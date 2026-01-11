@@ -1,5 +1,6 @@
 """
 Custom graphics view module.
+Refactored: Smart zoom limits relative to window size.
 """
 
 from PyQt6.QtWidgets import QGraphicsView
@@ -14,14 +15,6 @@ class AutoFitGraphicsView(QGraphicsView):
     """
 
     def __init__(self, scene, parent=None):
-        """
-        Initializes the view.
-
-        @param scene: The graphics scene to display.
-        @type scene: QGraphicsScene
-        @param parent: Parent widget.
-        @type parent: QWidget
-        """
         super().__init__(scene, parent)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -29,95 +22,76 @@ class AutoFitGraphicsView(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
-        # Interaction: Allow dragging the map with the mouse
+        # Interaction
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
 
-        # Zoom logic: Zoom towards the mouse cursor
-        self.setTransformationAnchor(
-            QGraphicsView.ViewportAnchor.AnchorUnderMouse
-        )
+        # Zoom logic
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
-
         self.setMouseTracking(True)
 
-        # Flag to track if user has interfered with the auto-fit
         self._is_manually_zoomed = False
 
     def wheelEvent(self, event: QWheelEvent):
         """
-        Handles mouse wheel events to zoom in and out with limits.
-        Disables auto-fit mode.
-
-        @param event: Wheel event.
-        @type event: QWheelEvent
+        Handles mouse wheel events with dynamic limits.
         """
-        # Mark as manually zoomed -> disable AutoFit in resizeEvent
         self._is_manually_zoomed = True
-
         zoom_factor = 1.15
-
-        # Current Scale Factor (m11 is horizontal scale)
         current_scale = self.transform().m11()
 
+        # Berechne den Skalierungsfaktor, wenn die Map perfekt eingepasst wäre
+        fit_scale = self._calculate_fit_scale()
+        
+        # Limit: Maximal 1 Stufe weiter raus als "Fit" (ca. 85% der Fit-Größe)
+        min_allowed_scale = fit_scale * 0.85 
+
         if event.angleDelta().y() > 0:
-            # Zoom In
-            # Optional: Max Zoom Limit (e.g., 5.0x)
+            # Zoom In (Rein) - Limit 5.0x
             if current_scale < 5.0:
                 self.scale(zoom_factor, zoom_factor)
         else:
-            # Zoom Out
-            # Limit: Do not zoom out if scale is too small (e.g., 0.5x)
-            # Adjust '0.1' or '0.5' based on how small you want it to go.
-            # 0.5 means 50% of original size (1 pixel = 0.5 screen pixels)
-            if current_scale > 0.2:
+            # Zoom Out (Raus) - Dynamisches Limit
+            new_scale = current_scale / zoom_factor
+            if new_scale >= min_allowed_scale:
                 self.scale(1 / zoom_factor, 1 / zoom_factor)
+            else:
+                # Wenn wir zu weit raus wären, setzen wir auf das Minimum zurück (optional)
+                # Oder machen einfach nichts. Hier: Nichts tun.
+                pass
 
-        # Accept event to prevent default scrolling
         event.accept()
 
     def resizeEvent(self, e):
-        """
-        Handles resize events.
-        Only applies Auto-Fit if the user hasn't zoomed manually.
-
-        @param e: Resize event.
-        @type e: QResizeEvent
-        """
         super().resizeEvent(e)
-
-        # If user is zooming manually, do NOT reset the view
         if self._is_manually_zoomed:
             return
-
         if self.scene() and not self.sceneRect().isEmpty():
             self._apply_auto_fit()
 
     def reset_zoom(self):
-        """
-        Resets the view to Auto-Fit mode (showing the whole map or target quadrant).
-        """
+        """Resets to Auto-Fit."""
         self._is_manually_zoomed = False
         self._apply_auto_fit()
 
+    def _calculate_fit_scale(self):
+        """Calculates the scale factor if the scene were fitted right now."""
+        if not self.scene() or self.sceneRect().isEmpty():
+            return 1.0
+            
+        vp = self.viewport().rect()
+        scene = self.sceneRect()
+        
+        ratio_w = vp.width() / scene.width()
+        ratio_h = vp.height() / scene.height()
+        
+        return min(ratio_w, ratio_h)
+
     def _apply_auto_fit(self):
-        """
-        Internal method to fit the scene or quadrant into the view.
-        """
         mw = self.window()
-        # Check for specific Quadrant 1 Zoom
-        if (
-            mw
-            and hasattr(mw, "is_q1_maximized")
-            and mw.is_q1_maximized
-            and hasattr(mw, "item_q1")
-            and mw.item_q1
-        ):
-            self.fitInView(
-                mw.item_q1.boundingRect(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-            )
+        # Quadrant 1 Zoom Logic
+        if (mw and hasattr(mw, "is_q1_maximized") and mw.is_q1_maximized 
+            and hasattr(mw, "item_q1") and mw.item_q1):
+            self.fitInView(mw.item_q1.boundingRect(), Qt.AspectRatioMode.KeepAspectRatio)
         else:
-            # Fit whole scene
-            self.fitInView(
-                self.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio
-            )
+            self.fitInView(self.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)

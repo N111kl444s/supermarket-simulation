@@ -1,8 +1,8 @@
 """
 Customer agent logic.
 Refactored:
-- Uses Uniform Distribution for Scan Speed.
-- Uses Normal Distribution for Movement and Items (Configurable).
+- Customers spawn with 0 items.
+- Item count increases during shopping phase.
 """
 
 import math
@@ -53,16 +53,17 @@ class CustomerModel:
         else:
             mu, sigma = speed_walk_params
             
-        # Normalverteilung berechnen
         val = random.normalvariate(mu, sigma)
-        # Clipping: Geschwindigkeit darf nicht <= 0.1 sein
         self.speed = max(0.1, val)
 
         # --- ARTIKELANZAHL (Normalverteilung) ---
         mu_items, sigma_items = items_params
         item_val = int(random.normalvariate(mu_items, sigma_items))
-        self.item_count = max(1, item_val)
-        self.target_item_count = self.item_count
+        
+        # FIX: Kunde startet ohne Artikel!
+        self.item_count = 0  # Startet leer
+        self.target_item_count = max(1, item_val) # Das ist der Plan
+        
         self.target_shelves = []
         
         self.assigned_checkout_id = None
@@ -86,6 +87,8 @@ class CustomerModel:
             self.pos = QPointF(self.shopping_route[0])
 
         if self.all_shelves:
+            # Wir besuchen maximal so viele Regale, wie wir Artikel wollen
+            # (Vereinfachung: 1 Artikel pro Regal)
             num_targets = min(len(self.all_shelves), self.target_item_count)
             indices = random.sample(range(len(self.all_shelves)), num_targets)
             self.target_shelves = [self.all_shelves[i] for i in indices]
@@ -153,10 +156,10 @@ class CustomerModel:
         if self.state == "FOLLOWING_ROUTE":
             if self.is_picking:
                 self.picking_timer += dt
-                if self.picking_timer > 0.5:
+                if self.picking_timer > 0.5: # 0.5 Sekunden "Greifzeit"
                     self.picking_timer = 0
                     self.is_picking = False
-                    self.item_count += 1
+                    self.item_count += 1 # Hier sammelt er den Artikel ein
             else:
                 self._move_along_path(dt)
         
@@ -189,6 +192,7 @@ class CustomerModel:
         dist = self._move_to_target(dt)
         if dist < 5.0:
             is_shelf = False
+            # Check if current target is one of our target shelves
             for s in self.target_shelves:
                 if QVector2D(self.pos - s).length() < 2.0:
                     is_shelf = True

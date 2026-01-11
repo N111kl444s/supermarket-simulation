@@ -1,28 +1,18 @@
 """
 Dialogs for configuration settings.
 Refactored:
-- CheckoutConfigDialog now correctly resolves legacy skill keys to match visuals.
-- Robust Styling.
+- Added toggles for numbering visibility (Shelves & Checkouts).
 """
 
 from PyQt6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QFormLayout,
-    QSpinBox,
-    QDialogButtonBox,
-    QCheckBox,
-    QLabel,
-    QDoubleSpinBox,
-    QGroupBox,
-    QWidget,
-    QHBoxLayout,
+    QDialog, QVBoxLayout, QFormLayout, QSpinBox, QDialogButtonBox,
+    QCheckBox, QLabel, QDoubleSpinBox, QGroupBox, QWidget, QHBoxLayout,
     QComboBox,
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 from config import COLOR_ACCENT, COLOR_BORDER, COLOR_TEXT_MAIN
 
-# Zentrales Stylesheet für alle Dialoge
+# Zentrales Stylesheet
 DIALOG_STYLE = f"""
     QDialog {{
         background-color: #FFFFFF;
@@ -76,7 +66,6 @@ DIALOG_STYLE = f"""
     }}
 """
 
-
 class VisibilityDialog(QDialog):
     settings_changed = pyqtSignal(dict)
 
@@ -91,10 +80,13 @@ class VisibilityDialog(QDialog):
         opts = [
             ("show_routes", "Routen anzeigen"),
             ("show_shelves", "Regale anzeigen"),
+            ("show_shelf_numbers", "Regal-Nummern anzeigen"), # NEU
             ("show_checkouts", "Kassen anzeigen"),
+            ("show_checkout_numbers", "Kassen-Nummern anzeigen"), # NEU
             ("show_cashiers", "Kassierer anzeigen"),
             ("show_waiting_area", "Wartebereich anzeigen"),
             ("show_start_area", "Startbereich anzeigen"),
+            ("show_exit_area", "Ausgangsfläche anzeigen"),
         ]
 
         for key, label in opts:
@@ -121,14 +113,13 @@ class OffsetDialog(QDialog):
         self.setWindowTitle("Globale Offsets (Live)")
         self.resize(450, 600)
         self.setStyleSheet(DIALOG_STYLE)
-
+        
         self.settings = current_settings.copy()
         self.inputs = {}
         layout = QVBoxLayout(self)
-
+        
         layout.addWidget(QLabel("Änderungen werden sofort sichtbar."))
 
-        # 1. Kunden
         gb_move = QGroupBox("Kundenbewegung")
         l_move = QFormLayout(gb_move)
         sb_path = QSpinBox()
@@ -140,14 +131,12 @@ class OffsetDialog(QDialog):
         l_move.addRow("Maximaler Versatz (Jitter):", sb_path)
         layout.addWidget(gb_move)
 
-        # 2. Warteschlangen
         gb_q = QGroupBox("Warteschlangen Position")
         l_q = QFormLayout(gb_q)
         self.add_xy_row(l_q, "offset_queue", "Warteschlange (Normal)")
         self.add_xy_row(l_q, "offset_queue_sb", "Warteschlange (SB)")
         layout.addWidget(gb_q)
 
-        # 3. Kassen Elemente
         gb_c = QGroupBox("Kassierer & Ampel")
         l_c = QFormLayout(gb_c)
         self.add_xy_row(l_c, "offset_cashier", "Kassierer")
@@ -163,17 +152,17 @@ class OffsetDialog(QDialog):
         for suffix in ["_left", "_right"]:
             full_key = prefix + suffix
             val = self.settings.get(full_key, [0, 0])
-
+            
             sb_x = QSpinBox()
             sb_x.setRange(-10000, 10000)
             sb_x.setValue(int(val[0]))
             sb_x.valueChanged.connect(self.emit_live_update)
-
+            
             sb_y = QSpinBox()
             sb_y.setRange(-10000, 10000)
             sb_y.setValue(int(val[1]))
             sb_y.valueChanged.connect(self.emit_live_update)
-
+            
             layout.addRow(
                 f"{title} ({'Links' if 'left' in suffix else 'Rechts'}) X/Y:",
                 self.create_hbox(sb_x, sb_y),
@@ -190,14 +179,12 @@ class OffsetDialog(QDialog):
 
     def emit_live_update(self):
         current_data = self.settings.copy()
-        current_data["customer_path_offset"] = self.inputs[
-            "customer_path_offset"
-        ].value()
+        current_data["customer_path_offset"] = self.inputs["customer_path_offset"].value()
         for key, widgets in self.inputs.items():
             if key == "customer_path_offset":
                 continue
             current_data[key] = [widgets[0].value(), widgets[1].value()]
-
+        
         self.settings_changed.emit(current_data)
 
 
@@ -207,15 +194,13 @@ class CheckoutConfigDialog(QDialog):
         self.data = data
         self.setWindowTitle(f"Kasse #{data['id']} konfigurieren")
         self.setStyleSheet(DIALOG_STYLE)
-
+        
         layout = QVBoxLayout(self)
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
-
+        
         lbl_header = QLabel(f"Einstellungen für Kasse {data['id']}")
-        lbl_header.setStyleSheet(
-            "font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #1F2937;"
-        )
+        lbl_header.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #1F2937;")
         layout.addWidget(lbl_header)
 
         form = QFormLayout()
@@ -226,28 +211,21 @@ class CheckoutConfigDialog(QDialog):
         self.sb_queue.setValue(data.get("max_queue", 5))
         form.addRow("Max. Warteschlange:", self.sb_queue)
 
-        # --- FIX START ---
-        # Skill Logik korrigiert: Prüfe Legacy Keys und setze korrekten Standard
         self.combo_staff = QComboBox()
         self.combo_staff.addItems(["Azubi", "Festangestellter"])
-
-        # 1. Versuche 'cashier_skill' (Neu)
+        
         current_staff = data.get("cashier_skill")
-        # 2. Versuche 'skill' (Alt)
         if not current_staff:
             current_staff = data.get("skill")
-        # 3. Fallback auf Azubi (Konsistent mit VisualController)
         if not current_staff:
             current_staff = "Azubi"
-
+            
         self.combo_staff.setCurrentText(current_staff)
-
-        # SB Kassen haben kein Personal
+        
         if data.get("type") == "SB":
             self.combo_staff.setDisabled(True)
             self.combo_staff.setToolTip("SB-Kassen haben kein Personal.")
-        # --- FIX END ---
-
+        
         form.addRow("Mitarbeiter:", self.combo_staff)
 
         self.cb_open = QCheckBox("Kasse geöffnet")
@@ -255,7 +233,7 @@ class CheckoutConfigDialog(QDialog):
         form.addRow("", self.cb_open)
 
         layout.addLayout(form)
-
+        
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save
             | QDialogButtonBox.StandardButton.Cancel
@@ -268,7 +246,7 @@ class CheckoutConfigDialog(QDialog):
         return {
             "max_queue": self.sb_queue.value(),
             "open": self.cb_open.isChecked(),
-            "cashier_skill": self.combo_staff.currentText(),
+            "cashier_skill": self.combo_staff.currentText()
         }
 
 
@@ -281,10 +259,10 @@ class ObjectPositionDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setStyleSheet(DIALOG_STYLE)
-
+        
         layout = QVBoxLayout(self)
         form = QFormLayout()
-
+        
         self.sb_x = QDoubleSpinBox()
         self.sb_x.setRange(-10000, 10000)
         self.sb_x.setValue(x)
@@ -298,11 +276,9 @@ class ObjectPositionDialog(QDialog):
             self.combo_ori = QComboBox()
             self.combo_ori.addItems(["Left", "Right"])
             self.combo_ori.setCurrentText(orientation)
-            self.combo_ori.currentTextChanged.connect(
-                self.orientation_changed.emit
-            )
+            self.combo_ori.currentTextChanged.connect(self.orientation_changed.emit)
             form.addRow("Typ:", self.combo_ori)
-
+        
         if orientation is not None:
             self.combo_angle = QComboBox()
             self.combo_angle.addItem("0°", 0)
@@ -316,10 +292,10 @@ class ObjectPositionDialog(QDialog):
             form.addRow("Rotation:", self.combo_angle)
 
         layout.addLayout(form)
-
+        
         self.sb_x.valueChanged.connect(self.emit_pos)
         self.sb_y.valueChanged.connect(self.emit_pos)
-
+        
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
         btns.accepted.connect(self.accept)
         layout.addWidget(btns)

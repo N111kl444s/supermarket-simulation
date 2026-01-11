@@ -1,6 +1,6 @@
 """
 Checkout item visualization.
-Refactored: Supports Rotation (Angle).
+Refactored: Supports Rotation (Angle) and ID toggle.
 """
 
 from PyQt6.QtWidgets import QGraphicsObject, QStyle
@@ -29,7 +29,8 @@ class CheckoutItem(QGraphicsObject):
         light_offset=(0, 0),
         width=CHECKOUT_WIDTH,
         height=CHECKOUT_HEIGHT,
-        angle=0,  # NEU: Winkel
+        angle=0,
+        show_id=True # NEU: Toggle für ID
     ):
         super().__init__()
         self.setPos(x, y)
@@ -38,12 +39,12 @@ class CheckoutItem(QGraphicsObject):
         self.is_open = is_open
         self.show_light = show_light
         self.data_id = data_id
+        self.show_id = show_id # Speichern
         
         self.width = width
         self.height = height
         self.angle = angle
         
-        # WICHTIG: Damit die Rotation um die eigene Mitte geschieht
         self.setTransformOriginPoint(self.width / 2, self.height / 2)
         self.setRotation(self.angle)
         
@@ -143,13 +144,13 @@ class CheckoutItem(QGraphicsObject):
                 lx, ly = lx[0], lx[1]
             painter.drawEllipse(int(lx), int(ly), 8, 8)
 
-        if self.data_id is not None:
+        # FIX: Nur zeichnen, wenn aktiviert
+        if self.data_id is not None and self.show_id:
             font = QFont()
             font.setPixelSize(12)
             font.setBold(True)
             painter.setFont(font)
             
-            # Simple Text Draw (Rotation handled by QGraphicsItem)
             painter.setPen(QPen(Qt.GlobalColor.black))
             text_rect = rect.adjusted(2, 2, 2, 2)
             painter.drawText(
