@@ -1,5 +1,5 @@
 {
-    "show_routes": false,
+    "show_routes": true,
     "show_shelves": true,
     "show_checkouts": true,
     "show_cashiers": true,
@@ -46,12 +46,13 @@
         37,
         55
     ],
-    "size_customer": 50,
+    "size_customer": 45,
     "size_shelf": 100,
     "size_cashier": 55,
     "size_checkout_width": 150,
     "size_checkout_height": 80,
-    "show_exit_area": false,
+    "show_exit_area": true,
     "show_shelf_numbers": false,
-    "show_checkout_numbers": false
+    "show_checkout_numbers": false,
+    "show_queues": true
 }
