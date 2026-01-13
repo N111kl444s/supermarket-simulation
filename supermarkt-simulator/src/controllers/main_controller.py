@@ -1,6 +1,6 @@
 """
 Main Controller.
-Refactored: Connects InteractionController signals for UI updates.
+Refactored: Focuses camera on Supermarket (MapGroup) after load.
 """
 
 from PyQt6.QtWidgets import QMessageBox, QInputDialog, QFileDialog, QListWidgetItem, QGraphicsView
@@ -63,7 +63,6 @@ class MainController:
             self.settings["size_cashier"] = CASHIER_SIZE
 
     def _connect_ui_signals(self):
-        # FIX: Interaction Controller Signal verbinden
         self.interaction_controller.map_data_changed.connect(self.update_object_list)
         
         self.view.btn_play_pause.clicked.connect(self.toggle_play_pause)
@@ -73,7 +72,9 @@ class MainController:
         self.view.btn_speed_1.clicked.connect(lambda: self.sim_manager.set_time_factor(FACTOR_1X)) 
         self.view.btn_speed_2.clicked.connect(lambda: self.sim_manager.set_time_factor(FACTOR_2X))
         self.view.btn_speed_3.clicked.connect(lambda: self.sim_manager.set_time_factor(FACTOR_6X))
-        self.view.btn_reset_zoom.clicked.connect(self.view.reset_sim_zoom)
+        
+        # Reset Button ruft auch die Zentrierung auf (Mitte Grundriss)
+        self.view.btn_reset_zoom.clicked.connect(self._reset_zoom_on_map)
         
         self.sim_manager.time_updated.connect(self.view.lbl_clock.setText)
         self.sim_manager.stats_updated.connect(lambda w, c, t: (
@@ -92,7 +93,9 @@ class MainController:
         self.view.btn_delete_map.clicked.connect(self.delete_current_map)
         self.view.btn_set_background.clicked.connect(self.select_map_background)
         self.view.btn_remove_background.clicked.connect(self.remove_map_background)
-        self.view.spin_bg_scale.valueChanged.connect(self.visual_controller.update_bg_scale)
+        
+        self.view.spin_bg_scale.valueChanged.connect(self._on_bg_scale_changed)
+        
         self.view.mode_combo.currentTextChanged.connect(self.on_mode_changed)
 
         ic = self.interaction_controller
@@ -109,6 +112,8 @@ class MainController:
         self.view.btn_sl.clicked.connect(lambda: ic.set_tool("checkout", {"type":"SB", "ori":"Left"}, self.view.btn_sl))
         self.view.btn_sr.clicked.connect(lambda: ic.set_tool("checkout", {"type":"SB", "ori":"Right"}, self.view.btn_sr))
         
+        self.view.btn_move_map.clicked.connect(lambda: ic.set_tool("move_map", button_ref=self.view.btn_move_map))
+        
         self.view.btn_save_admin.clicked.connect(ic.finish_route_drawing)
         self.view.btn_cancel_route.clicked.connect(ic.cancel_route_drawing)
         
@@ -121,10 +126,15 @@ class MainController:
         self.view.btn_offsets.clicked.connect(self.open_offsets_dialog)
         self.view.btn_config_sizes.clicked.connect(self.open_size_config_dialog)
 
-    # ... RESTLICHEN METHODEN BLEIBEN GLEICH ...
-    # (toggle_play_pause, start_simulation, reset_simulation, _disable_inputs, on_mode_changed, etc.)
-    # Aus Platzgründen gekürzt, da unverändert, nur __init__ und _connect_ui_signals waren wichtig.
-    
+    def _on_bg_scale_changed(self, value):
+        self.map_manager.background_scale = value
+        self.visual_controller.update_bg_scale(value)
+
+    # NEU: Helper um auf Map zu zentrieren
+    def _reset_zoom_on_map(self):
+        center = self.visual_controller.get_map_center()
+        self.view.reset_sim_zoom(center)
+
     def toggle_play_pause(self):
         if self.sim_manager.is_running:
             self.sim_manager.pause()
@@ -160,6 +170,8 @@ class MainController:
         self.view.btn_play_pause.setText("▶")
         self._disable_inputs(False)
         self.view.list_log.clear()
+        # Reset Zoom auch beim Simulation Reset? Optional.
+        self._reset_zoom_on_map()
 
     def _disable_inputs(self, disabled):
         self.view.time_open.setEnabled(not disabled)
@@ -188,6 +200,9 @@ class MainController:
             self.visual_controller.update_background(self.map_manager.background_image_path, self.map_manager.background_scale, MAPS_DIR)
             self.update_object_list()
             self.visual_controller.draw_map_elements(self.map_manager)
+            
+            # WICHTIG: Nach Laden zentrieren
+            self._reset_zoom_on_map()
 
     def save_current_map(self):
         if self.map_manager.save_map(self.view.combo_global_exit.currentText()):
@@ -246,7 +261,6 @@ class MainController:
             item.setData(Qt.ItemDataRole.UserRole, {"type": "checkout", "id": c["id"]})
             self.view.object_list_widget.addItem(item)
         for idx, p in enumerate(self.map_manager.all_shelves):
-            # p ist jetzt ein Dict
             item = QListWidgetItem(f"Regal #{idx+1}")
             item.setData(Qt.ItemDataRole.UserRole, {"type": "shelf", "index": idx})
             self.view.object_list_widget.addItem(item)

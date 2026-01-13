@@ -1,7 +1,7 @@
 """
 Map Manager Module.
-Handles loading, saving, and managing map data (routes, shelves, checkouts).
-Updated: Default background scale set to 0.5.
+Handles loading, saving, and managing map data.
+Updated: Stores 'map_position' relative to Earth background.
 """
 
 import json
@@ -25,9 +25,13 @@ class MapManager:
         self.start_area_rect = None
         self.exit_area_rect = None
         
+        # Supermarkt-Hintergrund (Floor Plan)
         self.background_image_path = None
-        # UPDATE: Standard auf 0.5
         self.background_scale = 0.5
+        
+        # Position des Supermarktes auf der Erde
+        self.map_pos_x = 0.0
+        self.map_pos_y = 0.0
 
         self._ensure_maps_dir()
 
@@ -73,11 +77,7 @@ class MapManager:
                     })
                 elif isinstance(s, list): 
                     self.all_shelves.append({
-                        "x": s[0],
-                        "y": s[1],
-                        "angle": 0,
-                        "variant": 0,
-                        "mirrored": False
+                        "x": s[0], "y": s[1], "angle": 0, "variant": 0, "mirrored": False
                     })
 
             self.checkouts_data = data.get("checkouts", [])
@@ -87,8 +87,11 @@ class MapManager:
             self.exit_area_rect = QRectF(*data["exit_area"]) if data.get("exit_area") else None
 
             self.background_image_path = data.get("background_image", None)
-            # UPDATE: Standard auf 0.5 beim Laden, falls nicht vorhanden
             self.background_scale = data.get("background_scale", 0.5)
+            
+            # NEU: Map Position
+            self.map_pos_x = data.get("map_pos_x", 0.0)
+            self.map_pos_y = data.get("map_pos_y", 0.0)
             
             return True, data.get("global_exit_direction", "Rechts")
         except Exception as e:
@@ -113,7 +116,9 @@ class MapManager:
             "exit_area": [self.exit_area_rect.x(), self.exit_area_rect.y(), self.exit_area_rect.width(), self.exit_area_rect.height()] if self.exit_area_rect else None,
             "global_exit_direction": global_exit_direction,
             "background_image": self.background_image_path,
-            "background_scale": self.background_scale
+            "background_scale": self.background_scale,
+            "map_pos_x": self.map_pos_x,
+            "map_pos_y": self.map_pos_y
         }
         try:
             with open(self.current_map_file, "w") as f:
@@ -126,7 +131,7 @@ class MapManager:
     def create_new_map(self, name):
         if not name.endswith(".json"): name += ".json"
         path = MAPS_DIR / name
-        default_data = {"routes": {}, "start_routes": {}, "exit_routes": {}, "shelves": [], "checkouts": []}
+        default_data = {"routes": {}, "shelves": [], "checkouts": []}
         try:
             with open(path, "w") as f:
                 json.dump(default_data, f, indent=4)
@@ -164,7 +169,7 @@ class MapManager:
         try:
             shutil.copy(src, dest_path)
             self.background_image_path = dest_name
-            self.background_scale = 0.5 # Auch beim neuen Bild 0.5 als Start
+            self.background_scale = 0.5
             return True
         except Exception:
             return False

@@ -1,20 +1,15 @@
 """
-Central configuration module for the supermarket simulation.
-Includes a modern 'Flat Light' Color Palette and compatibility aliases.
-Refactored for PyInstaller (EXE) Support.
-Updated: INCREASED CASHIER_SIZE to 55.
+Configuration module.
+Stores global constants and settings.
+Updated: Restored PATH_AZUBI and PATH_PRO definitions.
 """
 
 import sys
-import os
 from pathlib import Path
 from PyQt6.QtGui import QColor
 
 # --- PATH HANDLING FOR EXE VS SCRIPT ---
 def get_paths():
-    """
-    Determines the correct paths for resources (read-only) and user data (read-write).
-    """
     if getattr(sys, 'frozen', False):
         INTERNAL_DIR = Path(sys._MEIPASS)
         EXTERNAL_DIR = Path(sys.executable).parent
@@ -44,10 +39,13 @@ if getattr(sys, 'frozen', False):
 
 # --- HELPER: Auto-Load Images ---
 def get_image_files(prefix):
-    """Sucht automatisch nach PNG-Dateien, die mit dem prefix beginnen."""
     if not IMAGE_DIR.exists():
         return []
     files = list(IMAGE_DIR.glob(f"{prefix}*.png"))
+    if not files:
+        generic = IMAGE_DIR / f"{prefix}.png"
+        if generic.exists():
+            return [generic.name]
     return [f.name for f in files]
 
 # --- WINDOW ---
@@ -71,9 +69,9 @@ COLOR_SHELF = QColor("#64748B")
 COLOR_CUSTOMER = QColor("#EC4899")
 COLOR_CASHIER = QColor("#F59E0B")
 COLOR_CHECKOUT = QColor("#3B82F6")
-COLOR_WAITING_AREA = QColor(59, 130, 246, 40)
-COLOR_START_AREA = QColor(16, 185, 129, 40)
-COLOR_EXIT_AREA = QColor(239, 68, 68, 40)
+COLOR_WAITING_AREA = QColor(59, 130, 246, 60)
+COLOR_START_AREA = QColor(16, 185, 129, 60)
+COLOR_EXIT_AREA = QColor(239, 68, 68, 60)
 COLOR_SELECTION = QColor("#EF4444")
 COLOR_QUEUE_HIGHLIGHT = QColor("#8B5CF6")
 COLOR_SCAN_PROGRESS = QColor("#10B981")
@@ -90,11 +88,10 @@ COLOR_LIGHT_BG = COLOR_BG_MAIN
 COLOR_WHITE_BG = COLOR_BG_PANEL
 
 # --- Constants ---
-SHELF_SIZE = 32
+SHELF_SIZE = 50.0 
 CUSTOMER_SIZE = 32
-# HIER GEÄNDERT: Von 45 auf 55 für noch bessere Sichtbarkeit
 CASHIER_SIZE = 55
-CHECKOUT_WIDTH = 100
+CHECKOUT_WIDTH = 120
 CHECKOUT_HEIGHT = 100
 
 # --- TIME & PHYSICS ---
@@ -102,22 +99,25 @@ ANIMATION_TICK_MS = 33
 FACTOR_1X = 60.0
 FACTOR_2X = 120.0
 FACTOR_6X = 360.0
-WALK_SPEED_PPS = 2.5
+WALK_SPEED_PPS = 100.0 
 WALK_SPEED_DISABLED_FACTOR = 0.6
 DEFAULT_OPEN_TIME = (8, 0)
 DEFAULT_CLOSE_TIME = (20, 0)
-SHELF_PROBABILITY = 0.6
-ITEM_PICK_PROBABILITY = 0.7
-QUEUE_SPACING = 36
-SCAN_TIME_PER_ITEM_MS = 15000
+SCAN_TIME_PER_ITEM_MS = 1000
 
 # --- DYNAMIC IMAGE LISTS ---
 IMG_CUSTOMERS_NORMAL = get_image_files("kunde")
-IMG_CUSTOMERS_DISABLED = get_image_files("behindert")
-IMG_SHELVES = get_image_files("regal")
-IMG_CASHIERS = get_image_files("verkäufer") 
+if not IMG_CUSTOMERS_NORMAL: IMG_CUSTOMERS_NORMAL = ["customer.png"]
 
-# Pfade für spezifische Typen
+IMG_CUSTOMERS_DISABLED = get_image_files("behindert")
+if not IMG_CUSTOMERS_DISABLED: IMG_CUSTOMERS_DISABLED = ["customer_disabled.png"]
+
+IMG_SHELVES = get_image_files("regal")
+if not IMG_SHELVES: IMG_SHELVES = ["regal.png"]
+
+IMG_CHECKOUTS = ["kasse.png", "sb.png"]
+
+# FIX: Restore Specific Paths
 PATH_AZUBI = ASSETS_DIR / "azubi.png"
 if not PATH_AZUBI.exists():
     PATH_AZUBI = IMAGE_DIR / "azubi.png"
@@ -126,27 +126,37 @@ PATH_PRO = ASSETS_DIR / "festangestellter.png"
 if not PATH_PRO.exists():
     PATH_PRO = IMAGE_DIR / "festangestellter.png"
 
+# --- DEFAULT SETTINGS DICT ---
 DEFAULT_SETTINGS = {
-    "show_routes": False,
-    "show_shelves": False,
+    "show_routes": True,
+    "show_shelves": True,
+    "show_shelf_numbers": True,
     "show_checkouts": True,
+    "show_checkout_numbers": True,
     "show_cashiers": True,
+    "show_queues": False, 
     "show_waiting_area": True,
     "show_start_area": True,
-    "customer_path_offset": 10,
-    "offset_cashier_left": [-15, 8],
-    "offset_cashier_right": [45, 8],
-    "offset_light_normal_left": [36, 2],
-    "offset_light_normal_right": [36, 2],
-    "offset_light_sb_left": [36, 2],
-    "offset_light_sb_right": [36, 2],
-    "offset_queue_left": [5, -60],
-    "offset_queue_right": [35, -60],
-    "offset_queue_sb_left": [5, -60],
-    "offset_queue_sb_right": [35, -60],
-    "size_customer": CUSTOMER_SIZE,
+    "show_exit_area": True,
+    
     "size_shelf": SHELF_SIZE,
     "size_cashier": CASHIER_SIZE,
+    "size_customer": CUSTOMER_SIZE,
     "size_checkout_width": CHECKOUT_WIDTH,
     "size_checkout_height": CHECKOUT_HEIGHT,
+    
+    "customer_path_offset": 10,
+    
+    "offset_queue_left": [0, 0],
+    "offset_queue_right": [0, 0],
+    "offset_queue_sb_left": [0, 0],
+    "offset_queue_sb_right": [0, 0],
+    
+    "offset_cashier_left": [0, 0],
+    "offset_cashier_right": [0, 0],
+    
+    "offset_light_normal_left": [0, 0],
+    "offset_light_normal_right": [0, 0],
+    "offset_light_sb_left": [0, 0],
+    "offset_light_sb_right": [0, 0]
 }

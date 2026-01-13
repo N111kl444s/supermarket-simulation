@@ -1,6 +1,6 @@
 """
 Checkout item visualization.
-Refactored: Loads only 'kasse.png' and 'sb.png'.
+Refactored: Non-destructive scaling for High-Res zooming.
 """
 
 from PyQt6.QtWidgets import QGraphicsObject, QStyle
@@ -49,7 +49,6 @@ class CheckoutItem(QGraphicsObject):
         self.setFlag(QGraphicsObject.GraphicsItemFlag.ItemIsSelectable, True)
         
         self.setTransformOriginPoint(self.width / 2, self.height / 2)
-        
         self.setRotation(self.angle)
         
         if self.orientation == "Left":
@@ -58,27 +57,18 @@ class CheckoutItem(QGraphicsObject):
             self.setTransform(trans, combine=True)
 
         self.light_offset = (
-            light_offset
-            if light_offset != (0, 0)
-            else (self.width / 2, 10)
+            light_offset if light_offset != (0, 0) else (self.width / 2, 10)
         )
 
         self._load_images()
 
     @classmethod
     def _load_images(cls):
-        if cls._images_loaded:
-            return
-        
-        # WICHTIG: Nur noch kasse.png und sb.png
+        if cls._images_loaded: return
         p_n = IMAGE_DIR / "kasse.png"
         p_s = IMAGE_DIR / "sb.png"
-
-        if p_n.exists():
-            cls._pixmap_normal = QPixmap(str(p_n))
-        if p_s.exists():
-            cls._pixmap_sb = QPixmap(str(p_s))
-
+        if p_n.exists(): cls._pixmap_normal = QPixmap(str(p_n))
+        if p_s.exists(): cls._pixmap_sb = QPixmap(str(p_s))
         cls._images_loaded = True
 
     def boundingRect(self):
@@ -89,13 +79,9 @@ class CheckoutItem(QGraphicsObject):
         rect = self.boundingRect().toRect()
 
         if pixmap and not pixmap.isNull():
-            scaled = pixmap.scaled(
-                int(self.width),
-                int(self.height),
-                Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            painter.drawPixmap(0, 0, scaled)
+            # HD FIX: Zeichne Originalbild in das Zielrechteck.
+            # Keine Vorab-Skalierung via pixmap.scaled()!
+            painter.drawPixmap(rect, pixmap)
         else:
             color = QColor("#607D8B") if self.c_type == "Normal" else QColor("#455A64")
             painter.setBrush(QBrush(color))

@@ -4,6 +4,7 @@ Refactored:
 - Customers spawn with 0 items.
 - Item count increases during shopping phase.
 - FIX: Handles new Dictionary-based Shelf data structure.
+- UPDATE: Calculates facing angle based on movement.
 """
 
 import math
@@ -32,7 +33,7 @@ class CustomerModel:
         items_params=(12, 4)
     ):
         self.shopping_route = shopping_route
-        self.all_shelves = shelves # Jetzt Liste von Dicts!
+        self.all_shelves = shelves 
         self.start_area = start_area_rect
         self.waiting_area = waiting_area_rect
         self.exit_area = exit_area_rect
@@ -44,6 +45,8 @@ class CustomerModel:
         self.is_disabled = is_disabled
 
         self.pos = QPointF(0, 0)
+        self.angle = 0.0 # NEU: Blickrichtung in Grad
+        
         self.state = "SPAWNING"
         self.path = []
         self.target_pos = None
@@ -61,7 +64,7 @@ class CustomerModel:
         mu_items, sigma_items = items_params
         item_val = int(random.normalvariate(mu_items, sigma_items))
         
-        self.item_count = 0  # Startet leer
+        self.item_count = 0  
         self.target_item_count = max(1, item_val)
         
         self.target_shelves = []
@@ -79,14 +82,11 @@ class CustomerModel:
         self._init_pathing()
 
     def _get_shelf_pos(self, shelf_data):
-        """
-        Helper: Extrahiert QPointF aus Regal-Daten (Dict oder QPointF).
-        """
         if isinstance(shelf_data, dict):
             return QPointF(shelf_data.get("x", 0), shelf_data.get("y", 0))
         elif isinstance(shelf_data, (list, tuple)) and len(shelf_data) >= 2:
             return QPointF(shelf_data[0], shelf_data[1])
-        return shelf_data # Fallback, falls es schon QPointF ist
+        return shelf_data
 
     def _init_pathing(self):
         if self.start_area:
@@ -120,7 +120,6 @@ class CustomerModel:
             shelf_assignments = {}
             
             for shelf_data in self.target_shelves:
-                # FIX: Convert dict to QPointF
                 shelf_pos = self._get_shelf_pos(shelf_data)
                 
                 best_idx = 0
@@ -167,7 +166,7 @@ class CustomerModel:
         if self.state == "FOLLOWING_ROUTE":
             if self.is_picking:
                 self.picking_timer += dt
-                if self.picking_timer > 0.5: # 0.5 Sekunden "Greifzeit"
+                if self.picking_timer > 0.5:
                     self.picking_timer = 0
                     self.is_picking = False
                     self.item_count += 1 
@@ -203,11 +202,8 @@ class CustomerModel:
         dist = self._move_to_target(dt)
         if dist < 5.0:
             is_shelf = False
-            # Check if current target is one of our target shelves
             for s_data in self.target_shelves:
-                # FIX: Convert dict to QPointF
                 s_pos = self._get_shelf_pos(s_data)
-                
                 if QVector2D(self.pos - s_pos).length() < 2.0:
                     is_shelf = True
                     break
@@ -240,6 +236,10 @@ class CustomerModel:
         if dist > 0:
             dx = vec.x() / dist
             dy = vec.y() / dist
+            
+            # NEU: Winkel berechnen (in Grad)
+            self.angle = math.degrees(math.atan2(dy, dx))
+            
             move_dist = self.speed * dt
             
             if move_dist >= dist:

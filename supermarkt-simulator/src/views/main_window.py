@@ -1,6 +1,6 @@
 """
 Main window module.
-Refactored: Fixed parenting to prevent Segfaults.
+Refactored: Passes center point to view reset.
 """
 
 from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QSplitter
@@ -8,12 +8,9 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QBrush
 
 from .styles import get_application_style
-
-# Sub-Components
 from .components.toolbar import TopToolbar
 from .components.sidebar import Sidebar
 from .components.canvas import SimulationCanvas
-
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -21,8 +18,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Supermarkt Simulator - Workbench")
         self.setGeometry(100, 100, 1600, 900)
         self.is_admin_mode = False
-
-        # State tracking
+        
         self.is_drawing_mode = False
         self.is_placing_shelves = False
         self.is_drawing_waiting_area = False
@@ -31,14 +27,13 @@ class MainWindow(QMainWindow):
         self.is_drawing_start_route = False
         self.is_drawing_exit_route = False
         self.is_drawing_exit_area = False
-
-        # Zoom state
+        
         self.is_q1_maximized = False
-        self.item_q1 = None
+        self.item_q1 = None 
 
         self.setup_ui()
         self.setStyleSheet(get_application_style())
-
+        
         self._expose_ui_elements()
 
     def set_controller(self, c):
@@ -51,27 +46,22 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # 1. Toolbar (Parent None, Layout übernimmt Ownership)
-        self.toolbar_component = TopToolbar()
+        self.toolbar_component = TopToolbar() 
         layout.addWidget(self.toolbar_component)
 
-        # 2. Splitter
         splitter = QSplitter(Qt.Orientation.Horizontal)
         layout.addWidget(splitter)
 
-        # Sidebar (Parent None)
         self.sidebar_component = Sidebar()
         splitter.addWidget(self.sidebar_component)
 
-        # Canvas (Parent None)
-        self.canvas_component = SimulationCanvas(self)
+        self.canvas_component = SimulationCanvas(self) 
         splitter.addWidget(self.canvas_component)
 
         splitter.setSizes([450, 1150])
         splitter.setCollapsible(0, False)
 
     def _expose_ui_elements(self):
-        # -- TOOLBAR --
         t = self.toolbar_component
         self.mode_combo = t.mode_combo
         self.map_combo = t.map_combo
@@ -85,7 +75,6 @@ class MainWindow(QMainWindow):
         self.btn_reset_zoom = t.btn_reset_zoom
         self.speed_group = t.speed_group
 
-        # -- SIDEBAR --
         s = self.sidebar_component
         self.control_tabs = s.control_tabs
         # Input
@@ -139,6 +128,7 @@ class MainWindow(QMainWindow):
         self.btn_kr = s.btn_kr
         self.btn_sl = s.btn_sl
         self.btn_sr = s.btn_sr
+        self.btn_move_map = s.btn_move_map
         self.admin_toolbar = s.admin_toolbar
         self.btn_save_admin = s.btn_save_admin
         self.btn_cancel_route = s.btn_cancel_route
@@ -163,27 +153,22 @@ class MainWindow(QMainWindow):
 
     def update_sidebar_mode(self, mode_text):
         is_sim = mode_text == "Simulation"
-
-        self.control_tabs.setTabVisible(0, is_sim)  # Eingabe
-        self.control_tabs.setTabVisible(1, is_sim)  # Simulation
-        self.control_tabs.setTabVisible(2, is_sim)  # Stats
-
-        self.control_tabs.setTabVisible(3, not is_sim)  # Editor
-        self.control_tabs.setTabVisible(4, not is_sim)  # Daten
-
+        self.control_tabs.setTabVisible(0, is_sim)
+        self.control_tabs.setTabVisible(1, is_sim)
+        self.control_tabs.setTabVisible(2, is_sim)
+        self.control_tabs.setTabVisible(3, not is_sim)
+        self.control_tabs.setTabVisible(4, not is_sim)
         self.control_tabs.setCurrentIndex(0 if is_sim else 3)
-
         self.btn_play_pause.setEnabled(is_sim)
         self.btn_reset.setEnabled(is_sim)
         self.btn_skip.setEnabled(is_sim)
         self.btn_speed_1.setEnabled(is_sim)
         self.btn_speed_2.setEnabled(is_sim)
         self.btn_speed_3.setEnabled(is_sim)
-
         self.time_open.setEnabled(is_sim)
         self.time_close.setEnabled(is_sim)
 
-    # Brücken-Methode für MainController
-    def reset_sim_zoom(self):
+    # Brücke: Akzeptiert target_center
+    def reset_sim_zoom(self, target_center=None):
         if self.sim_view:
-            self.sim_view.reset_zoom()
+            self.sim_view.reset_zoom(target_center)
