@@ -1,25 +1,58 @@
 """
 Dialogs for configuration settings.
-Refactored: Added toggle for 'show_queues'.
+Refactored: Removed custom SpinBox styling to match Sidebar.
 """
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout, QSpinBox, QDialogButtonBox,
     QCheckBox, QLabel, QDoubleSpinBox, QGroupBox, QWidget, QHBoxLayout,
-    QComboBox,
+    QComboBox, QPushButton
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 from config import COLOR_ACCENT, COLOR_BORDER, COLOR_TEXT_MAIN
 
+# FIX: CSS bereinigt (keine kaputten Pfeile mehr)
 DIALOG_STYLE = f"""
     QDialog {{ background-color: #FFFFFF; color: #000000; font-family: "Segoe UI", sans-serif; }}
     QLabel {{ color: #1F2937; font-weight: 500; font-size: 13px; background-color: transparent; }}
     QCheckBox {{ color: #1F2937; spacing: 5px; }}
-    QGroupBox {{ border: 1px solid #D1D5DB; border-radius: 6px; margin-top: 10px; padding-top: 15px; font-weight: bold; color: #3B82F6; }}
-    QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left; padding: 0 5px; left: 10px; }}
-    QSpinBox, QDoubleSpinBox, QComboBox {{ background-color: #F9FAFB; border: 1px solid #D1D5DB; border-radius: 4px; padding: 4px; color: #000000; min-height: 25px; selection-background-color: #3B82F6; selection-color: #FFFFFF; }}
-    QPushButton {{ background-color: #F3F4F6; border: 1px solid #D1D5DB; border-radius: 4px; padding: 6px 12px; color: #1F2937; }}
-    QPushButton:hover {{ background-color: #E5E7EB; border-color: #3B82F6; }}
+    
+    QGroupBox {{ 
+        border: 1px solid #D1D5DB; 
+        border-radius: 6px; 
+        margin-top: 10px; 
+        padding-top: 15px; 
+        font-weight: bold; 
+        color: #3B82F6; 
+    }}
+    QGroupBox::title {{ 
+        subcontrol-origin: margin; 
+        subcontrol-position: top left; 
+        padding: 0 5px; 
+        left: 10px; 
+    }}
+    
+    /* Standard SpinBox Styling */
+    QSpinBox, QDoubleSpinBox, QComboBox {{ 
+        min-height: 25px;
+        padding: 2px;
+        border: 1px solid #D1D5DB;
+        border-radius: 4px;
+        background-color: #F9FAFB;
+        color: #000000;
+    }}
+    
+    QPushButton {{ 
+        background-color: #F3F4F6; 
+        border: 1px solid #D1D5DB; 
+        border-radius: 4px; 
+        padding: 6px 12px; 
+        color: #1F2937; 
+    }}
+    QPushButton:hover {{ 
+        background-color: #E5E7EB; 
+        border-color: #3B82F6; 
+    }}
 """
 
 class VisibilityDialog(QDialog):
@@ -35,7 +68,7 @@ class VisibilityDialog(QDialog):
             ("show_routes", "Routen anzeigen"), ("show_shelves", "Regale anzeigen"),
             ("show_shelf_numbers", "Regal-Nummern anzeigen"), ("show_checkouts", "Kassen anzeigen"),
             ("show_checkout_numbers", "Kassen-Nummern anzeigen"), ("show_cashiers", "Kassierer anzeigen"),
-            ("show_queues", "Warteschlangen anzeigen"), # NEU
+            ("show_queues", "Warteschlangen anzeigen"), 
             ("show_waiting_area", "Wartebereich anzeigen"), ("show_start_area", "Startbereich anzeigen"),
             ("show_exit_area", "Ausgangsfläche anzeigen"),
         ]
@@ -52,6 +85,8 @@ class VisibilityDialog(QDialog):
         new_settings = {k: cb.isChecked() for k, cb in self.checks.items()}
         self.settings_changed.emit(new_settings)
 
+# ... Rest der Klassen (OffsetDialog, CheckoutConfigDialog, ObjectPositionDialog) ...
+# Diese bleiben funktional unverändert, nutzen aber das neue DIALOG_STYLE
 class OffsetDialog(QDialog):
     settings_changed = pyqtSignal(dict)
     def __init__(self, current_settings, parent=None):

@@ -1,11 +1,12 @@
 """
 Visual Controller.
 Refactored:
-- Makes Earth transparent to mouse clicks (fixes Area drawing).
-- Uses Cosmetic Pens for Routes (fixes huge lines).
-- Fixes Customer visibility logic.
+- Added missing 'import math' (Fixes NameError).
+- Restored full rotation logic for Cashier placement.
+- Fixes visibility of Areas (Start, Waiting, Exit) by assigning correct Parent and Z-Value.
 """
 
+import math # FIX: Missing import added
 from PyQt6.QtGui import QColor, QPen, QBrush, QPixmap, QPainterPath
 from PyQt6.QtWidgets import QGraphicsPixmapItem, QGraphicsPathItem, QGraphicsEllipseItem, QGraphicsItemGroup
 from PyQt6.QtCore import Qt, QPointF, QRectF
@@ -47,7 +48,6 @@ class VisualController:
             pix = QPixmap(str(earth_path))
             self.earth_item = QGraphicsPixmapItem(pix)
             self.earth_item.setZValue(-1000)
-            # WICHTIG: Maus-Events ignorieren, damit man darauf Areas zeichnen kann!
             self.earth_item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
             self.scene.addItem(self.earth_item)
             self.scene.setSceneRect(0, 0, pix.width(), pix.height())
@@ -85,9 +85,9 @@ class VisualController:
             if bg_path.exists():
                 pix = QPixmap(str(bg_path))
                 self.background_item = QGraphicsPixmapItem(pix)
-                self.background_item.setZValue(-100) # Unter den Regalen
+                self.background_item.setZValue(-100) # Floor
                 self.background_item.setScale(scale)
-                self.background_item.setAcceptedMouseButtons(Qt.MouseButton.NoButton) # Keine Klicks fangen
+                self.background_item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
                 self.background_item.setParentItem(self.map_group)
 
     def update_bg_scale(self, scale):
@@ -110,23 +110,23 @@ class VisualController:
             if obj_type == "checkout": return selected_spec["id"] == idx_or_id
             return False
 
-        def add_to_map(item):
-            item.setParentItem(self.map_group)
-
-        # Areas
+        # --- AREAS ---
         if map_manager.waiting_area_rect and self.settings.get("show_waiting_area", True):
             self.waiting_area_item = WaitingAreaItem(map_manager.waiting_area_rect)
-            add_to_map(self.waiting_area_item)
+            self.waiting_area_item.setParentItem(self.map_group)
+            self.waiting_area_item.setZValue(1) 
         
         if map_manager.start_area_rect and self.settings.get("show_start_area", True):
             self.start_area_item = StartAreaItem(map_manager.start_area_rect)
-            add_to_map(self.start_area_item)
+            self.start_area_item.setParentItem(self.map_group)
+            self.start_area_item.setZValue(1)
             
         if map_manager.exit_area_rect and self.settings.get("show_exit_area", True):
             self.exit_area_item = ExitAreaItem(map_manager.exit_area_rect)
-            add_to_map(self.exit_area_item)
+            self.exit_area_item.setParentItem(self.map_group)
+            self.exit_area_item.setZValue(1)
 
-        # Regale
+        # --- SHELVES ---
         show_s_nums = self.settings.get("show_shelf_numbers", True)
         for idx, s_data in enumerate(map_manager.all_shelves):
             sx = s_data.get("x", 0)
@@ -143,11 +143,11 @@ class VisualController:
                     mirrored=s_data.get("mirrored", False)
                 )
                 if self.on_shelf_clicked: s.clicked.connect(self.on_shelf_clicked)
-                add_to_map(s)
+                s.setParentItem(self.map_group)
                 self.shelf_items.append(s)
                 if is_selected("shelf", idx): s.setSelected(True)
 
-        # Kassen
+        # --- CHECKOUTS ---
         show_c_nums = self.settings.get("show_checkout_numbers", True)
         show_queues = self.settings.get("show_queues", False) or highlight_queues
         for cd in map_manager.checkouts_data:
@@ -157,7 +157,7 @@ class VisualController:
             if show_queues:
                 self._draw_queue_visuals(cd)
 
-        # Routen
+        # --- ROUTES ---
         if self.settings["show_routes"]:
             self._draw_routes(map_manager)
 
@@ -181,20 +181,66 @@ class VisualController:
         if c_type == "Normal" and self.settings["show_cashiers"] and cd.get("open", True):
              skill = cd.get("cashier_skill") or cd.get("skill") or "Azubi"
              offset_key = "offset_cashier_left" if ori == "Left" else "offset_cashier_right"
-             off = self.settings.get(offset_key, [0, 0])
-             # ... (Berechnung unrotierter Punkt für Kassierer) ...
-             # Wir vereinfachen hier für Kürze, Logik bleibt gleich:
-             cai = CashierItem(cd["x"]+off[0], cd["y"]+off[1], skill, size=self.settings.get("size_cashier", CASHIER_SIZE))
-             # WICHTIG: Parent setzen!
+             off_x, off_y = self.settings.get(offset_key, [0, 0])
+             
+             # Calculate Rotated Position for Cashier
+             cx, cy = cd["x"], cd["y"]
+             center_x = cx + cw / 2
+             center_y = cy + ch / 2
+             
+             p_unrot_x = cx + off_x
+             p_unrot_y = cy + off_y
+             
+             rad = math.radians(angle)
+             tx = p_unrot_x - center_x
+             ty = p_unrot_y - center_y
+             
+             rx = tx * math.cos(rad) - ty * math.sin(rad)
+             ry = tx * math.sin(rad) + ty * math.cos(rad)
+             
+             final_x = rx + center_x
+             final_y = ry + center_y
+             
+             cai = CashierItem(final_x, final_y, skill, size=self.settings.get("size_cashier", CASHIER_SIZE))
              cai.setParentItem(self.map_group)
-             cai.setZValue(ci.zValue() + 0.1) # Über der Kasse
+             cai.setZValue(ci.zValue() + 0.1) 
              self.cashier_items.append(cai)
 
     def _draw_queue_visuals(self, cd):
-        # ... (Queue Dot Logic) ...
-        # Nur Parent Fix:
-        # dot.setParentItem(self.map_group)
-        pass # (Platzhalter, Code bleibt wie vorher, nur sicherstellen dass setParentItem genutzt wird)
+        cw = self.settings.get("size_checkout_width", 100)
+        ch = self.settings.get("size_checkout_height", 100)
+        spacing = 36
+        max_q = cd.get("max_queue", 5)
+        cx, cy = cd["x"], cd["y"]
+        angle = cd.get("angle", 0)
+        
+        offset_key = "offset_queue_" + ("sb_" if cd["type"] == "SB" else "") + ("left" if cd["orientation"] == "Left" else "right")
+        off = self.settings.get(offset_key, [0, 0])
+        
+        center_x = cx + cw / 2
+        center_y = cy + ch / 2
+        p_unrot_x = cx + off[0]
+        p_unrot_y = cy + off[1]
+        
+        rad = math.radians(angle) # Works now with import math
+        tx = p_unrot_x - center_x
+        ty = p_unrot_y - center_y
+        rx = tx * math.cos(rad) - ty * math.sin(rad)
+        ry = tx * math.sin(rad) + ty * math.cos(rad)
+        start_point_x = rx + center_x
+        start_point_y = ry + center_y
+        dir_x = -math.sin(rad)
+        dir_y = math.cos(rad)
+        
+        for i in range(max_q):
+            px = start_point_x + dir_x * (i * spacing)
+            py = start_point_y + dir_y * (i * spacing)
+            dot = QGraphicsEllipseItem(px - 3, py - 3, 6, 6)
+            dot.setBrush(QBrush(QColor(255, 165, 0, 180))) 
+            dot.setPen(QPen(Qt.GlobalColor.white, 1))
+            dot.setZValue(20)
+            dot.setParentItem(self.map_group)
+            self.queue_debug_items.append(dot)
 
     def _draw_routes(self, map_manager):
         def draw(routes, col):
@@ -205,9 +251,8 @@ class VisualController:
                     [pp.lineTo(p) for p in pts[1:]]
                     pi = QGraphicsPathItem(pp)
                     
-                    # WICHTIG: Cosmetic Pen für konstante Dicke beim Zoomen
                     pen = QPen(col, 2, Qt.PenStyle.DotLine)
-                    pen.setCosmetic(True) # Skaliert nicht mit!
+                    pen.setCosmetic(True) 
                     pi.setPen(pen)
                     
                     pi.setZValue(4)
@@ -222,7 +267,7 @@ class VisualController:
         to_remove = []
         for model, item in self.customer_items.items():
             if model not in current_set:
-                item.setParentItem(None) # Sauber entfernen
+                item.setParentItem(None)
                 if item.scene(): self.scene.removeItem(item)
                 to_remove.append(model)
         for m in to_remove:
@@ -231,7 +276,6 @@ class VisualController:
         for model in models:
             if model not in self.customer_items:
                 item = CustomerItem(model, size=self.settings.get("size_customer", 32))
-                # WICHTIG: Kunden müssen in die MapGroup, da ihre Koordinaten lokal sind!
                 item.setParentItem(self.map_group)
                 self.customer_items[model] = item
             else:

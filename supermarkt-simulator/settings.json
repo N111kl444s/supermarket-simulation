@@ -1,11 +1,36 @@
 {
     "show_routes": true,
     "show_shelves": true,
+    "show_shelf_numbers": true,
     "show_checkouts": true,
+    "show_checkout_numbers": true,
     "show_cashiers": true,
-    "show_waiting_area": false,
-    "show_start_area": false,
+    "show_queues": true,
+    "show_waiting_area": true,
+    "show_start_area": true,
+    "show_exit_area": true,
+    "size_shelf": 26,
+    "size_cashier": 55,
+    "size_customer": 45,
+    "size_checkout_width": 35,
+    "size_checkout_height": 20,
     "customer_path_offset": 50,
+    "offset_queue_left": [
+        47,
+        65
+    ],
+    "offset_queue_right": [
+        104,
+        65
+    ],
+    "offset_queue_sb_left": [
+        114,
+        55
+    ],
+    "offset_queue_sb_right": [
+        37,
+        55
+    ],
     "offset_cashier_left": [
         108,
         50
@@ -29,30 +54,5 @@
     "offset_light_sb_right": [
         96,
         50
-    ],
-    "offset_queue_left": [
-        47,
-        65
-    ],
-    "offset_queue_right": [
-        104,
-        65
-    ],
-    "offset_queue_sb_left": [
-        114,
-        55
-    ],
-    "offset_queue_sb_right": [
-        37,
-        55
-    ],
-    "size_customer": 45,
-    "size_shelf": 20,
-    "size_cashier": 20,
-    "size_checkout_width": 35,
-    "size_checkout_height": 20,
-    "show_exit_area": true,
-    "show_shelf_numbers": false,
-    "show_checkout_numbers": false,
-    "show_queues": true
+    ]
 }

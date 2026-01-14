@@ -1,6 +1,7 @@
 """
 Main Controller.
-Refactored: Focuses camera on Supermarket (MapGroup) after load.
+Refactored: 
+- Object List now displays coordinates [x, y] for better orientation.
 """
 
 from PyQt6.QtWidgets import QMessageBox, QInputDialog, QFileDialog, QListWidgetItem, QGraphicsView
@@ -73,7 +74,6 @@ class MainController:
         self.view.btn_speed_2.clicked.connect(lambda: self.sim_manager.set_time_factor(FACTOR_2X))
         self.view.btn_speed_3.clicked.connect(lambda: self.sim_manager.set_time_factor(FACTOR_6X))
         
-        # Reset Button ruft auch die Zentrierung auf (Mitte Grundriss)
         self.view.btn_reset_zoom.clicked.connect(self._reset_zoom_on_map)
         
         self.sim_manager.time_updated.connect(self.view.lbl_clock.setText)
@@ -130,7 +130,6 @@ class MainController:
         self.map_manager.background_scale = value
         self.visual_controller.update_bg_scale(value)
 
-    # NEU: Helper um auf Map zu zentrieren
     def _reset_zoom_on_map(self):
         center = self.visual_controller.get_map_center()
         self.view.reset_sim_zoom(center)
@@ -170,7 +169,6 @@ class MainController:
         self.view.btn_play_pause.setText("▶")
         self._disable_inputs(False)
         self.view.list_log.clear()
-        # Reset Zoom auch beim Simulation Reset? Optional.
         self._reset_zoom_on_map()
 
     def _disable_inputs(self, disabled):
@@ -200,8 +198,6 @@ class MainController:
             self.visual_controller.update_background(self.map_manager.background_image_path, self.map_manager.background_scale, MAPS_DIR)
             self.update_object_list()
             self.visual_controller.draw_map_elements(self.map_manager)
-            
-            # WICHTIG: Nach Laden zentrieren
             self._reset_zoom_on_map()
 
     def save_current_map(self):
@@ -255,13 +251,22 @@ class MainController:
         for r in self.map_manager.shop_routes: self.view.route_list_widget.addItem(r)
         for r in self.map_manager.start_routes: self.view.route_list_widget.addItem(r)
         for r in self.map_manager.exit_routes: self.view.route_list_widget.addItem(r)
+        
         self.view.object_list_widget.clear()
+        
+        # Checkouts with Coords
         for c in self.map_manager.checkouts_data:
-            item = QListWidgetItem(f"Kasse #{c['id']} ({c['type']})")
+            cx, cy = int(c["x"]), int(c["y"])
+            text = f"Kasse #{c['id']} ({c['type']})  [{cx}, {cy}]"
+            item = QListWidgetItem(text)
             item.setData(Qt.ItemDataRole.UserRole, {"type": "checkout", "id": c["id"]})
             self.view.object_list_widget.addItem(item)
+            
+        # Shelves with Coords
         for idx, p in enumerate(self.map_manager.all_shelves):
-            item = QListWidgetItem(f"Regal #{idx+1}")
+            sx, sy = int(p["x"]), int(p["y"])
+            text = f"Regal #{idx+1}  [{sx}, {sy}]"
+            item = QListWidgetItem(text)
             item.setData(Qt.ItemDataRole.UserRole, {"type": "shelf", "index": idx})
             self.view.object_list_widget.addItem(item)
 

@@ -1,13 +1,12 @@
 """
 Checkout item visualization.
-Refactored: Non-destructive scaling for High-Res zooming.
+Refactored: Right-Click Edit & Thin Selection Frame.
 """
 
 from PyQt6.QtWidgets import QGraphicsObject, QStyle
 from PyQt6.QtCore import Qt, QRectF, pyqtSignal
 from PyQt6.QtGui import QPen, QBrush, QPixmap, QPainter, QColor, QFont, QTransform
 from config import *
-
 
 class CheckoutItem(QGraphicsObject):
     clicked = pyqtSignal(int)
@@ -16,21 +15,7 @@ class CheckoutItem(QGraphicsObject):
     _pixmap_sb = None
     _images_loaded = False
 
-    def __init__(
-        self,
-        x,
-        y,
-        c_type="Normal",
-        orientation="Right",
-        is_open=True,
-        show_light=True,
-        data_id=None,
-        light_offset=(0, 0),
-        width=CHECKOUT_WIDTH,
-        height=CHECKOUT_HEIGHT,
-        angle=0,
-        show_id=True
-    ):
+    def __init__(self, x, y, c_type="Normal", orientation="Right", is_open=True, show_light=True, data_id=None, light_offset=(0, 0), width=CHECKOUT_WIDTH, height=CHECKOUT_HEIGHT, angle=0, show_id=True):
         super().__init__()
         self.setPos(x, y)
         self.c_type = c_type
@@ -48,6 +33,9 @@ class CheckoutItem(QGraphicsObject):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFlag(QGraphicsObject.GraphicsItemFlag.ItemIsSelectable, True)
         
+        # FIX: Rechtsklick erlauben
+        self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton | Qt.MouseButton.RightButton)
+        
         self.setTransformOriginPoint(self.width / 2, self.height / 2)
         self.setRotation(self.angle)
         
@@ -56,10 +44,7 @@ class CheckoutItem(QGraphicsObject):
             trans.scale(-1, 1) 
             self.setTransform(trans, combine=True)
 
-        self.light_offset = (
-            light_offset if light_offset != (0, 0) else (self.width / 2, 10)
-        )
-
+        self.light_offset = (light_offset if light_offset != (0, 0) else (self.width / 2, 10))
         self._load_images()
 
     @classmethod
@@ -79,8 +64,6 @@ class CheckoutItem(QGraphicsObject):
         rect = self.boundingRect().toRect()
 
         if pixmap and not pixmap.isNull():
-            # HD FIX: Zeichne Originalbild in das Zielrechteck.
-            # Keine Vorab-Skalierung via pixmap.scaled()!
             painter.drawPixmap(rect, pixmap)
         else:
             color = QColor("#607D8B") if self.c_type == "Normal" else QColor("#455A64")
@@ -88,17 +71,16 @@ class CheckoutItem(QGraphicsObject):
             painter.setPen(QPen(Qt.GlobalColor.black))
             painter.drawRect(rect)
             painter.setPen(Qt.GlobalColor.white)
-            
             painter.save()
             if self.transform().m11() < 0:
-                 painter.scale(-1, 1)
-                 painter.translate(-self.width, 0)
+                 painter.scale(-1, 1); painter.translate(-self.width, 0)
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.c_type)
             painter.restore()
 
         if option.state & QStyle.StateFlag.State_Selected:
-            painter.setPen(QPen(COLOR_SELECTION, 3))
             painter.setBrush(Qt.BrushStyle.NoBrush)
+            # FIX: Dünnerer Rahmen (1.5)
+            painter.setPen(QPen(COLOR_SELECTION, 1.5))
             painter.drawRect(rect.adjusted(1, 1, -1, -1))
 
         if self.show_light:
@@ -115,24 +97,18 @@ class CheckoutItem(QGraphicsObject):
                 painter.translate(self.width / 2, self.height / 2)
                 painter.scale(-1, 1)
                 painter.translate(-self.width / 2, -self.height / 2)
-
-            font = QFont()
-            font.setPixelSize(12)
-            font.setBold(True)
-            painter.setFont(font)
-            
+            font = QFont(); font.setPixelSize(12); font.setBold(True); painter.setFont(font)
             painter.setPen(QPen(Qt.GlobalColor.black))
-            text_rect = rect.adjusted(2, 2, 2, 2)
-            painter.drawText(text_rect, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft, f"#{self.data_id}")
-            
+            painter.drawText(rect.adjusted(2, 2, 2, 2), Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft, f"#{self.data_id}")
             painter.setPen(QPen(Qt.GlobalColor.white))
-            text_rect = rect.adjusted(1, 1, 1, 1)
-            painter.drawText(text_rect, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft, f"#{self.data_id}")
-            
+            painter.drawText(rect.adjusted(1, 1, 1, 1), Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft, f"#{self.data_id}")
             painter.restore()
 
     def mousePressEvent(self, event):
         super().mousePressEvent(event)
-        if event.button() == Qt.MouseButton.LeftButton:
+        event.accept()
+        
+        # FIX: Rechtsklick
+        if event.button() == Qt.MouseButton.RightButton:
             if self.data_id is not None:
                 self.clicked.emit(self.data_id)
