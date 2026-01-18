@@ -1,27 +1,26 @@
 """
 Checkout item visualization.
-Refactored: Right-Click Edit & Thin Selection Frame.
+Refactored: Removed internal light drawing (handled by VisualController).
 """
 
 from PyQt6.QtWidgets import QGraphicsObject, QStyle
 from PyQt6.QtCore import Qt, QRectF, pyqtSignal
-from PyQt6.QtGui import QPen, QBrush, QPixmap, QPainter, QColor, QFont, QTransform
+from PyQt6.QtGui import QPen, QBrush, QPixmap, QPainter, QColor, QFont, QTransform, QPainterPath
 from config import *
 
 class CheckoutItem(QGraphicsObject):
     clicked = pyqtSignal(int)
-    
     _pixmap_normal = None
     _pixmap_sb = None
     _images_loaded = False
 
-    def __init__(self, x, y, c_type="Normal", orientation="Right", is_open=True, show_light=True, data_id=None, light_offset=(0, 0), width=CHECKOUT_WIDTH, height=CHECKOUT_HEIGHT, angle=0, show_id=True):
+    def __init__(self, x, y, c_type="Normal", orientation="Right", is_open=True, show_light=True, data_id=None, light_offset=(0, 0), width=CHECKOUT_WIDTH, height=CHECKOUT_HEIGHT, angle=0, show_id=True, light_size=8):
         super().__init__()
         self.setPos(x, y)
         self.c_type = c_type
         self.orientation = orientation
         self.is_open = is_open
-        self.show_light = show_light
+        self.show_light = show_light # Kept for API compatibility, but unused for drawing
         self.data_id = data_id
         self.show_id = show_id
         
@@ -32,8 +31,6 @@ class CheckoutItem(QGraphicsObject):
         self.setZValue(6)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFlag(QGraphicsObject.GraphicsItemFlag.ItemIsSelectable, True)
-        
-        # FIX: Rechtsklick erlauben
         self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton | Qt.MouseButton.RightButton)
         
         self.setTransformOriginPoint(self.width / 2, self.height / 2)
@@ -44,7 +41,6 @@ class CheckoutItem(QGraphicsObject):
             trans.scale(-1, 1) 
             self.setTransform(trans, combine=True)
 
-        self.light_offset = (light_offset if light_offset != (0, 0) else (self.width / 2, 10))
         self._load_images()
 
     @classmethod
@@ -58,6 +54,11 @@ class CheckoutItem(QGraphicsObject):
 
     def boundingRect(self):
         return QRectF(0, 0, self.width, self.height)
+
+    def shape(self):
+        path = QPainterPath()
+        path.addRect(self.boundingRect())
+        return path
 
     def paint(self, painter: QPainter, option, widget=None):
         pixmap = self._pixmap_sb if self.c_type == "SB" else self._pixmap_normal
@@ -79,17 +80,10 @@ class CheckoutItem(QGraphicsObject):
 
         if option.state & QStyle.StateFlag.State_Selected:
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            # FIX: Dünnerer Rahmen (1.5)
             painter.setPen(QPen(COLOR_SELECTION, 1.5))
             painter.drawRect(rect.adjusted(1, 1, -1, -1))
 
-        if self.show_light:
-            status_color = Qt.GlobalColor.green if self.is_open else Qt.GlobalColor.red
-            painter.setBrush(QBrush(status_color))
-            painter.setPen(QPen(Qt.GlobalColor.black, 1))
-            lx, ly = self.light_offset
-            if isinstance(lx, (list, tuple)): lx, ly = lx[0], lx[1]
-            painter.drawEllipse(int(lx), int(ly), 8, 8)
+        # LIGHT IS NOW DRAWN EXTERNALLY IN VISUAL CONTROLLER
 
         if self.data_id is not None and self.show_id:
             painter.save()
@@ -105,10 +99,7 @@ class CheckoutItem(QGraphicsObject):
             painter.restore()
 
     def mousePressEvent(self, event):
-        super().mousePressEvent(event)
         event.accept()
-        
-        # FIX: Rechtsklick
-        if event.button() == Qt.MouseButton.RightButton:
+        if event.button() == Qt.MouseButton.LeftButton or event.button() == Qt.MouseButton.RightButton:
             if self.data_id is not None:
                 self.clicked.emit(self.data_id)

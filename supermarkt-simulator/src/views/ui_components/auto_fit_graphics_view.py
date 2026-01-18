@@ -1,12 +1,12 @@
 """
-Custom graphics view.
-Refactored: 
-- Robust detection of selectable items using scene().items().
-- Ensures Right-Click always passes through to items.
+Custom graphics view module.
+Refactored:
+- STRICT Middle Mouse Panning.
+- UNCONDITIONAL pass-through for Left/Right clicks to the Scene/Items.
 """
 
-from PyQt6.QtWidgets import QGraphicsView, QGraphicsItem
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QGraphicsView
+from PyQt6.QtCore import Qt, QPoint
 from PyQt6.QtGui import QPainter, QWheelEvent, QMouseEvent
 
 class AutoFitGraphicsView(QGraphicsView):
@@ -30,6 +30,7 @@ class AutoFitGraphicsView(QGraphicsView):
 
         self._is_manually_zoomed = False
         self._is_panning = False
+        self._last_pan_pos = QPoint()
 
     def wheelEvent(self, event: QWheelEvent):
         self._is_manually_zoomed = True
@@ -50,52 +51,37 @@ class AutoFitGraphicsView(QGraphicsView):
         event.accept()
 
     def mousePressEvent(self, event: QMouseEvent):
-        # RECHTSKLICK: Immer durchlassen (Bearbeiten)
-        if event.button() == Qt.MouseButton.RightButton:
-            self.setDragMode(QGraphicsView.DragMode.NoDrag)
-            self._is_panning = False
-            super().mousePressEvent(event)
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self._is_panning = True
+            self._last_pan_pos = event.pos()
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            event.accept()
             return
 
-        # LINKSKLICK: Prüfen, ob wir auswählen oder ziehen wollen
-        if event.button() == Qt.MouseButton.LeftButton:
-            pos = self.mapToScene(event.pos())
+        # Pass clicks to Scene -> Items
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if self._is_panning:
+            delta = event.pos() - self._last_pan_pos
+            self._last_pan_pos = event.pos()
             
-            # WICHTIG: Wir prüfen ALLE Items an dieser Stelle, nicht nur das oberste!
-            items_at_pos = self.scene().items(pos, Qt.ItemSelectionMode.IntersectsItemShape, Qt.SortOrder.DescendingOrder, self.transform())
+            h_bar = self.horizontalScrollBar()
+            v_bar = self.verticalScrollBar()
             
-            is_interactive = False
-            
-            for item in items_at_pos:
-                # Prüfe Item und seine Eltern (wichtig bei Gruppen/Labels)
-                checker = item
-                while checker:
-                    if checker.flags() & QGraphicsItem.GraphicsItemFlag.ItemIsSelectable:
-                        is_interactive = True
-                        break
-                    checker = checker.parentItem()
-                
-                if is_interactive:
-                    break
-            
-            if is_interactive:
-                # Wählbares Item getroffen -> Klicken/Selektieren
-                self.setDragMode(QGraphicsView.DragMode.NoDrag)
-                self._is_panning = False
-                super().mousePressEvent(event) # Event weitergeben!
-            else:
-                # Leerraum -> Verschieben
-                self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
-                self._is_panning = True
-                super().mousePressEvent(event)
+            h_bar.setValue(h_bar.value() - delta.x())
+            v_bar.setValue(v_bar.value() - delta.y())
+            event.accept()
         else:
-            super().mousePressEvent(event)
+            super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent):
-        super().mouseReleaseEvent(event)
-        if self._is_panning:
-            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+        if self._is_panning and event.button() == Qt.MouseButton.MiddleButton:
             self._is_panning = False
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
 
     def resizeEvent(self, e):
         super().resizeEvent(e)

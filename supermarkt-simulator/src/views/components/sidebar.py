@@ -1,12 +1,12 @@
 """
 Sidebar Component.
-Ensures buttons are instance variables.
+Refactored: Removed specific Mode Selection buttons (Middle Mouse approach).
 """
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QTabWidget, QScrollArea, QGroupBox, QFormLayout, 
     QTimeEdit, QSpinBox, QDoubleSpinBox, QLabel, QHBoxLayout, QListWidget,
-    QPushButton, QComboBox, QSizePolicy
+    QPushButton, QComboBox, QSizePolicy, QButtonGroup
 )
 from PyQt6.QtCore import Qt, QTime
 from PyQt6.QtGui import QBrush, QColor
@@ -30,7 +30,6 @@ class Sidebar(QWidget):
         self._init_editor_tab()
         self._init_data_tab()
 
-    # ... (input, sim, stats tabs bleiben gleich - platzsparend gekürzt) ...
     def _init_input_tab(self):
         scroll = QScrollArea(); scroll.setWidgetResizable(True)
         content = QWidget(); content.setObjectName("ConfigContent")
@@ -75,6 +74,8 @@ class Sidebar(QWidget):
         layout.addWidget(self.plot_widget); self.control_tabs.addTab(widget, "Statistiken")
 
     def _init_editor_tab(self):
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -82,7 +83,6 @@ class Sidebar(QWidget):
         gb_map = QGroupBox("Map-Verwaltung")
         l_map = QVBoxLayout(gb_map)
         r1 = QHBoxLayout()
-        # WICHTIG: self.btn_new_map
         self.btn_new_map = QPushButton("Neu")
         self.btn_save_map = QPushButton("Speichern")
         self.btn_delete_map = QPushButton("Löschen")
@@ -111,9 +111,8 @@ class Sidebar(QWidget):
         r3.addWidget(self.spin_bg_scale)
         l_map.addLayout(r3)
         
-        self.btn_move_map = QPushButton("🗺️ Karte verschieben")
-        self.btn_move_map.setCheckable(True)
-        self.btn_move_map.setStyleSheet("font-weight: bold; padding: 5px;")
+        self.btn_move_map = QPushButton("🗺️ Karte zentrieren")
+        self.btn_move_map.setCheckable(False) 
         l_map.addWidget(self.btn_move_map)
         layout.addWidget(gb_map)
 
@@ -170,7 +169,8 @@ class Sidebar(QWidget):
         layout.addWidget(self.admin_toolbar)
         self.admin_toolbar.hide()
 
-        self.control_tabs.addTab(widget, "Editor")
+        scroll.setWidget(widget)
+        self.control_tabs.addTab(scroll, "Editor")
 
     def _init_data_tab(self):
         widget = QWidget(); layout = QVBoxLayout(widget)

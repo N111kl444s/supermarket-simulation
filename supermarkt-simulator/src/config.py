@@ -1,15 +1,21 @@
 """
-Configuration module.
-Stores global constants and settings.
-Updated: Restored PATH_AZUBI and PATH_PRO definitions.
+Central configuration module.
+Refactored: 
+- Restored dynamic path handling (EXE support).
+- Restored Image Lists (Normal/Disabled customers).
+- Added Queue and Light sizing settings.
 """
 
 import sys
+import os
 from pathlib import Path
 from PyQt6.QtGui import QColor
 
 # --- PATH HANDLING FOR EXE VS SCRIPT ---
 def get_paths():
+    """
+    Determines the correct paths for resources (read-only) and user data (read-write).
+    """
     if getattr(sys, 'frozen', False):
         INTERNAL_DIR = Path(sys._MEIPASS)
         EXTERNAL_DIR = Path(sys.executable).parent
@@ -39,6 +45,7 @@ if getattr(sys, 'frozen', False):
 
 # --- HELPER: Auto-Load Images ---
 def get_image_files(prefix):
+    """Sucht automatisch nach PNG-Dateien, die mit dem prefix beginnen."""
     if not IMAGE_DIR.exists():
         return []
     files = list(IMAGE_DIR.glob(f"{prefix}*.png"))
@@ -90,7 +97,7 @@ COLOR_WHITE_BG = COLOR_BG_PANEL
 # --- Constants ---
 SHELF_SIZE = 50.0 
 CUSTOMER_SIZE = 32
-CASHIER_SIZE = 55
+CASHIER_SIZE = 8
 CHECKOUT_WIDTH = 120
 CHECKOUT_HEIGHT = 100
 
@@ -117,7 +124,7 @@ if not IMG_SHELVES: IMG_SHELVES = ["regal.png"]
 
 IMG_CHECKOUTS = ["kasse.png", "sb.png"]
 
-# FIX: Restore Specific Paths
+# Restore Specific Paths
 PATH_AZUBI = ASSETS_DIR / "azubi.png"
 if not PATH_AZUBI.exists():
     PATH_AZUBI = IMAGE_DIR / "azubi.png"
@@ -144,6 +151,11 @@ DEFAULT_SETTINGS = {
     "size_customer": CUSTOMER_SIZE,
     "size_checkout_width": CHECKOUT_WIDTH,
     "size_checkout_height": CHECKOUT_HEIGHT,
+    
+    # NEU: Einstellungen für Warteschlange & Ampel
+    "size_queue_dot": 4,        # Größe der Punkte
+    "dist_queue_spacing": 20,   # Abstand der Punkte
+    "size_checkout_light": 8,   # Größe der Ampel
     
     "customer_path_offset": 10,
     

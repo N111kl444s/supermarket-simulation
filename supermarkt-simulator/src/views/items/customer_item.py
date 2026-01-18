@@ -2,6 +2,7 @@
 Visual representation of a customer.
 Refactored: 
 - HD Rendering support.
+- Static movement (No rotation).
 - Correctly handles Normal vs. Disabled customer images.
 """
 
@@ -44,10 +45,7 @@ class CustomerItem(QGraphicsPixmapItem):
         cls._images_loaded = True
 
     def set_visuals(self):
-        # Wähle passenden Pool
         pool = self._pixmaps_disabled if self.model.is_disabled else self._pixmaps_normal
-        
-        # Fallback auf Normal, falls Disabled leer
         if not pool and self.model.is_disabled:
             pool = self._pixmaps_normal
             
@@ -56,16 +54,15 @@ class CustomerItem(QGraphicsPixmapItem):
         raw_pixmap = random.choice(pool)
         self.setPixmap(raw_pixmap)
         
-        # Scale Item down to target size (HD Rendering)
         if raw_pixmap.width() > 0:
             scale = self.target_size / raw_pixmap.width()
             self.setScale(scale)
             
-        # Offset (in Original-Pixeln) damit Drehung um Mitte erfolgt
         w = raw_pixmap.width()
         h = raw_pixmap.height()
         self.setOffset(-w/2, -h/2)
 
     def sync_visuals(self):
         self.setPos(self.model.pos)
-        self.setRotation(self.model.angle)
+        # FIX: Keine Rotation mehr (Kunden laufen statisch)
+        # self.setRotation(self.model.angle)

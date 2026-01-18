@@ -1,13 +1,11 @@
 """
 Shelf item visualization.
-Refactored: 
-- Right-Click to Edit.
-- Thinner Selection Frame.
+Refactored: Implemented shape() for precise hit detection.
 """
 
 from PyQt6.QtWidgets import QGraphicsObject, QGraphicsTextItem, QStyle
 from PyQt6.QtCore import Qt, QRectF, pyqtSignal
-from PyQt6.QtGui import QPixmap, QFont, QBrush, QPen, QTransform, QPainter, QColor
+from PyQt6.QtGui import QPixmap, QFont, QBrush, QPen, QTransform, QPainter, QColor, QPainterPath
 from config import *
 
 class ShelfItem(QGraphicsObject):
@@ -30,7 +28,6 @@ class ShelfItem(QGraphicsObject):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFlag(QGraphicsObject.GraphicsItemFlag.ItemIsSelectable, True)
         
-        # WICHTIG: Rechtsklick aktivieren
         self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton | Qt.MouseButton.RightButton)
         
         self._load_images()
@@ -72,6 +69,11 @@ class ShelfItem(QGraphicsObject):
             return QRectF(-w/2, -h/2, w, h)
         return QRectF(-self.target_size/2, -self.target_size/2, self.target_size, self.target_size)
 
+    def shape(self):
+        path = QPainterPath()
+        path.addRect(self.boundingRect())
+        return path
+
     def _create_label(self):
         self.label = QGraphicsTextItem(str(self.index + 1), self)
         font = QFont()
@@ -99,19 +101,12 @@ class ShelfItem(QGraphicsObject):
             
         if option.state & QStyle.StateFlag.State_Selected:
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            
-            # FIX: Viel dünnerer Rahmen (1.0 statt 4.0)
             pen_width = 1.0
             if self.scale() > 0: pen_width = 1.0 / self.scale()
-                
             painter.setPen(QPen(COLOR_SELECTION, pen_width))
             painter.drawRect(rect)
 
     def mousePressEvent(self, event):
-        # Event an Basisklasse für Selektion weitergeben
-        super().mousePressEvent(event)
         event.accept()
-        
-        # FIX: Bearbeiten bei Rechtsklick
-        if event.button() == Qt.MouseButton.RightButton:
+        if event.button() == Qt.MouseButton.LeftButton or event.button() == Qt.MouseButton.RightButton:
             self.clicked.emit(self.index)

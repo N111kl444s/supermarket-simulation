@@ -1,7 +1,8 @@
 """
 Main Controller.
 Refactored: 
-- Object List now displays coordinates [x, y] for better orientation.
+- Calls showMaximized() explicitly on startup.
+- Cleaned up signal connections.
 """
 
 from PyQt6.QtWidgets import QMessageBox, QInputDialog, QFileDialog, QListWidgetItem, QGraphicsView
@@ -49,11 +50,9 @@ class MainController:
         self.sim_manager.time_updated.emit(self.sim_manager.sim_time.toString("HH:mm"))
         self.sim_manager.set_param_accessor(self._get_sim_params_from_ui)
 
-        if self.view.sim_view:
-            self.view.sim_view.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
-
     def show(self):
-        self.view.show()
+        # FIX: Explicit call to maximize window on startup (prevents resize glitch)
+        self.view.showMaximized()
 
     def _load_settings(self):
         if self.settings_file.exists():
@@ -254,7 +253,6 @@ class MainController:
         
         self.view.object_list_widget.clear()
         
-        # Checkouts with Coords
         for c in self.map_manager.checkouts_data:
             cx, cy = int(c["x"]), int(c["y"])
             text = f"Kasse #{c['id']} ({c['type']})  [{cx}, {cy}]"
@@ -262,7 +260,6 @@ class MainController:
             item.setData(Qt.ItemDataRole.UserRole, {"type": "checkout", "id": c["id"]})
             self.view.object_list_widget.addItem(item)
             
-        # Shelves with Coords
         for idx, p in enumerate(self.map_manager.all_shelves):
             sx, sy = int(p["x"]), int(p["y"])
             text = f"Regal #{idx+1}  [{sx}, {sy}]"

@@ -1,6 +1,8 @@
 """
 Main window module.
-Refactored: Passes center point to view reset.
+Refactored: 
+- Removed self.showMaximized() from __init__ to prevent resize glitches on startup.
+- Connects Scene to MainWindow for Tool Detection.
 """
 
 from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QSplitter
@@ -16,9 +18,10 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Supermarkt Simulator - Workbench")
-        self.setGeometry(100, 100, 1600, 900)
-        self.is_admin_mode = False
+        # FIX: showMaximized() hier entfernt. Wird vom Controller aufgerufen.
         
+        # States
+        self.is_admin_mode = False
         self.is_drawing_mode = False
         self.is_placing_shelves = False
         self.is_drawing_waiting_area = False
@@ -33,8 +36,11 @@ class MainWindow(QMainWindow):
 
         self.setup_ui()
         self.setStyleSheet(get_application_style())
-        
         self._expose_ui_elements()
+        
+        # Scene connection
+        if hasattr(self, 'sim_scene'):
+            self.sim_scene.main_window = self
 
     def set_controller(self, c):
         self.controller = c
@@ -168,7 +174,6 @@ class MainWindow(QMainWindow):
         self.time_open.setEnabled(is_sim)
         self.time_close.setEnabled(is_sim)
 
-    # Brücke: Akzeptiert target_center
     def reset_sim_zoom(self, target_center=None):
         if self.sim_view:
             self.sim_view.reset_zoom(target_center)

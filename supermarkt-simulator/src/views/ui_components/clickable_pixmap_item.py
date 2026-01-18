@@ -55,6 +55,7 @@ class ClickablePixmapItem(QGraphicsObject):
         @param e: Mouse event.
         @type e: QGraphicsSceneMouseEvent
         """
+        print("Test")
         if e.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
             e.accept()
