@@ -1,7 +1,10 @@
 """
 Simulation Manager Module.
 Handles the game loop, time management, and entity lifecycle.
-Refactored: Passes map_manager to CustomerModel.
+Updated:
+- Queue Logic synchronized with VisualController (Horizontal alignment).
+- Handles Left/Right orientation correctly for customer positioning.
+- Uses dynamic spacing from settings.
 """
 
 import random
@@ -18,6 +21,10 @@ from config import (
 
 
 class SimulationManager(QObject):
+    """
+    Steuert den Zeitablauf und die Logik der Simulation.
+    """
+
     time_updated = pyqtSignal(str)
     stats_updated = pyqtSignal(int, int, int)
     day_finished = pyqtSignal()
@@ -42,11 +49,13 @@ class SimulationManager(QObject):
         self.checkout_queues = {}
 
         self.total_customers_spawned = 0
+
         self.target_daily_customers = 50
         self.spawn_timer_acc = 0.0
         self.next_spawn_interval = 0.0
         self.average_spawn_interval = 10.0
         self.prob_disabled = 0.1
+
         self.param_access_func = None
 
         self.sim_timer = QTimer()
@@ -74,9 +83,11 @@ class SimulationManager(QObject):
         self.checkout_queues = {}
         self.total_customers_spawned = 0
         self.store_is_closed_trigger = False
+
         self.sim_time = open_time_val
         self.open_time = open_time_val
         self.time_accumulator_sec = 0.0
+
         self.time_updated.emit(self.sim_time.toString("HH:mm"))
         self.stats_updated.emit(0, 0, 0)
 
@@ -89,6 +100,7 @@ class SimulationManager(QObject):
         self.time_accumulator_sec = 0.0
         self.total_customers_spawned = 0
         self.store_is_closed_trigger = False
+
         seconds_open = self.open_time.secsTo(self.close_time)
         if seconds_open <= 0:
             seconds_open = 1
@@ -97,6 +109,7 @@ class SimulationManager(QObject):
         )
         self.spawn_timer_acc = 0.0
         self._calc_next_spawn()
+
         self.is_initialized = True
         self.log_message.emit(
             f"Laden geöffnet. Erwarte ca. {self.target_daily_customers} Kunden.",
@@ -113,6 +126,7 @@ class SimulationManager(QObject):
     def _tick(self):
         real_dt = ANIMATION_TICK_MS / 1000.0
         game_dt = real_dt * self.time_factor
+
         self.time_accumulator_sec += game_dt
         while self.time_accumulator_sec >= 60.0:
             self.sim_time = self.sim_time.addSecs(60)
@@ -120,12 +134,15 @@ class SimulationManager(QObject):
             self.time_updated.emit(self.sim_time.toString("HH:mm"))
 
         is_closing_time = self.sim_time >= self.close_time
+
         if is_closing_time:
             if not self.store_is_closed_trigger:
                 self.log_message.emit(
-                    "Ladenschluss! Eingang geschlossen...", "orange"
+                    "Ladenschluss! Eingang geschlossen, arbeite Rest ab...",
+                    "orange",
                 )
                 self.store_is_closed_trigger = True
+
             if not self.customers_model:
                 self.pause()
                 self.time_updated.emit(self.sim_time.toString("HH:mm"))
@@ -139,6 +156,7 @@ class SimulationManager(QObject):
 
         active_models = []
         waiting_cnt = 0
+
         for model in self.customers_model:
             model.tick(game_dt)
             if model.state == "WAITING_AREA":
@@ -168,10 +186,16 @@ class SimulationManager(QObject):
                     self.checkout_queues[cid].pop(0)
                     self._advance_queue(cid)
                     model.assigned_checkout_id = None
+
             if model.state == "GONE":
-                pass
+                now_sec = self.open_time.secsTo(self.sim_time)
+                duration = int((now_sec - model.entry_time_sec) / 60)
+                self.log_message.emit(
+                    f"Kunde hat Laden nach {duration} Min verlassen.", "gray"
+                )
             else:
                 active_models.append(model)
+
         self.customers_model = active_models
         self.stats_updated.emit(
             waiting_cnt,
@@ -191,7 +215,12 @@ class SimulationManager(QObject):
         self.next_spawn_interval = self.average_spawn_interval * variance
 
     def _spawn_single_customer(self):
+        route_names = list(self.map_mgr.shop_routes.keys())
+        if not route_names:
+            return
+        r_name = random.choice(route_names)
         is_disabled = random.random() < self.prob_disabled
+
         if self.param_access_func:
             params = self.param_access_func(is_disabled)
         else:
@@ -201,16 +230,19 @@ class SimulationManager(QObject):
                 "items": (12, 4),
                 "scan": (0.5, 1.5),
             }
+
         if params is None:
             return
         offset = self.settings.get("customer_path_offset", 10)
 
-        # FIX: Pass self.map_mgr instead of loose components
         model = CustomerModel(
-            self.map_mgr,
-            self.map_mgr.shop_routes.get(
-                "ShopRoute_1", []
-            ),  # Fallback/Hint route
+            self.map_mgr.shop_routes[r_name],
+            self.map_mgr.all_shelves,
+            self.map_mgr.start_area_rect,
+            self.map_mgr.waiting_area_rect,
+            exit_area_rect=self.map_mgr.exit_area_rect,
+            start_routes=self.map_mgr.start_routes,
+            exit_routes=self.map_mgr.exit_routes,
             max_offset=offset,
             is_disabled=is_disabled,
             speed_walk_params=params["walk"],
@@ -221,7 +253,9 @@ class SimulationManager(QObject):
         total_seconds_today = self.open_time.secsTo(self.sim_time)
         model.entry_time_sec = total_seconds_today
         self.customers_model.append(model)
+
         self.total_customers_spawned += 1
+
         type_str = "Kunde (eingeschränkt)" if is_disabled else "Kunde"
         self.log_message.emit(f"{type_str} hat den Laden betreten.", "green")
 
@@ -261,6 +295,8 @@ class SimulationManager(QObject):
 
         cw = self.settings.get("size_checkout_width", 100)
         ch = self.settings.get("size_checkout_height", 100)
+
+        # FIX: Use spacing from settings
         spacing = self.settings.get("dist_queue_spacing", 36)
 
         cx, cy = c_data["x"], c_data["y"]
@@ -288,15 +324,20 @@ class SimulationManager(QObject):
         ry = tx * math.sin(rad) + ty * math.cos(rad)
         start_point = QPointF(rx + center_x, ry + center_y)
 
-        # Matches Visual Controller Logic
+        # FIX: Direction Logic must match VisualController
         if ori == "Left":
+            # Left: Direction = Angle
             dir_rad = math.radians(angle)
         else:
+            # Right: Direction = Angle + 180 (Opposite)
             dir_rad = math.radians(angle + 180)
 
+        # FIX: Use cos/sin for Horizontal Queue (was -sin/cos for Vertical)
         dir_x = math.cos(dir_rad)
         dir_y = math.sin(dir_rad)
+
         dir_vec = QVector2D(dir_x, dir_y)
         offset_vec = dir_vec * (q_index * spacing)
+
         target = start_point + offset_vec.toPointF()
         model.go_to_queue(target, cid, None)
