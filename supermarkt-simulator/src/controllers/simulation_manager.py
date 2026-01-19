@@ -2,11 +2,13 @@
 Simulation Manager Module.
 Handles the game loop, time management, and entity lifecycle.
 Updated:
-- Total customer counter.
-- Simulation continues after closing time until last customer leaves.
+- Queue Logic synchronized with VisualController (Horizontal alignment).
+- Handles Left/Right orientation correctly for customer positioning.
+- Uses dynamic spacing from settings.
 """
 
 import random
+import math
 from PyQt6.QtCore import QTimer, QTime, QObject, pyqtSignal, QPointF
 from PyQt6.QtGui import QVector2D
 from models.customer import CustomerModel
@@ -23,11 +25,10 @@ class SimulationManager(QObject):
     Steuert den Zeitablauf und die Logik der Simulation.
     """
 
-    time_updated = pyqtSignal(str)  # "HH:mm"
-    # Update: Jetzt 3 Argumente: (waiting, in_store, total_today)
+    time_updated = pyqtSignal(str)
     stats_updated = pyqtSignal(int, int, int)
     day_finished = pyqtSignal()
-    log_message = pyqtSignal(str, str)  # text, color
+    log_message = pyqtSignal(str, str)
 
     def __init__(self, map_manager, settings):
         super().__init__()
@@ -40,17 +41,14 @@ class SimulationManager(QObject):
         self.time_factor = FACTOR_1X
         self.time_accumulator_sec = 0.0
 
-        # Status Flags
         self.is_running = False
         self.is_initialized = False
-        self.store_is_closed_trigger = (
-            False  # Hilfsflag für einmalige Meldung "Laden zu"
-        )
+        self.store_is_closed_trigger = False
 
         self.customers_model = []
         self.checkout_queues = {}
 
-        self.total_customers_spawned = 0  # Neuer Counter
+        self.total_customers_spawned = 0
 
         self.target_daily_customers = 50
         self.spawn_timer_acc = 0.0
@@ -71,17 +69,14 @@ class SimulationManager(QObject):
         self.time_factor = factor
 
     def start(self):
-        """Startet den Timer (Resume)."""
         self.is_running = True
         self.sim_timer.start()
 
     def pause(self):
-        """Pausiert den Timer."""
         self.sim_timer.stop()
         self.is_running = False
 
     def reset(self, open_time_val):
-        """Setzt die Simulation komplett zurück."""
         self.pause()
         self.is_initialized = False
         self.customers_model.clear()
@@ -97,7 +92,6 @@ class SimulationManager(QObject):
         self.stats_updated.emit(0, 0, 0)
 
     def init_day(self, target_customers, prob_disabled, open_t, close_t):
-        """Initialisiert die Werte für einen neuen Tag."""
         self.target_daily_customers = target_customers
         self.prob_disabled = prob_disabled / 100.0
         self.open_time = open_t
@@ -133,18 +127,15 @@ class SimulationManager(QObject):
         real_dt = ANIMATION_TICK_MS / 1000.0
         game_dt = real_dt * self.time_factor
 
-        # 1. Zeit fortschreiben
         self.time_accumulator_sec += game_dt
         while self.time_accumulator_sec >= 60.0:
             self.sim_time = self.sim_time.addSecs(60)
             self.time_accumulator_sec -= 60.0
             self.time_updated.emit(self.sim_time.toString("HH:mm"))
 
-        # 2. Prüfen auf Schließzeit
         is_closing_time = self.sim_time >= self.close_time
 
         if is_closing_time:
-            # Einmalige Meldung
             if not self.store_is_closed_trigger:
                 self.log_message.emit(
                     "Ladenschluss! Eingang geschlossen, arbeite Rest ab...",
@@ -152,7 +143,6 @@ class SimulationManager(QObject):
                 )
                 self.store_is_closed_trigger = True
 
-            # Abbruchbedingung: Laden zu UND leer
             if not self.customers_model:
                 self.pause()
                 self.time_updated.emit(self.sim_time.toString("HH:mm"))
@@ -162,10 +152,8 @@ class SimulationManager(QObject):
                 self.day_finished.emit()
                 return
         else:
-            # Spawning nur wenn Laden noch offen
             self._attempt_spawn(game_dt)
 
-        # 3. Modelle aktualisieren
         active_models = []
         waiting_cnt = 0
 
@@ -209,7 +197,6 @@ class SimulationManager(QObject):
                 active_models.append(model)
 
         self.customers_model = active_models
-        # Sende 3 Werte: Wartende, Im Laden, Gesamt Heute
         self.stats_updated.emit(
             waiting_cnt,
             len(self.customers_model),
@@ -267,7 +254,7 @@ class SimulationManager(QObject):
         model.entry_time_sec = total_seconds_today
         self.customers_model.append(model)
 
-        self.total_customers_spawned += 1  # Zähler erhöhen
+        self.total_customers_spawned += 1
 
         type_str = "Kunde (eingeschränkt)" if is_disabled else "Kunde"
         self.log_message.emit(f"{type_str} hat den Laden betreten.", "green")
@@ -306,11 +293,12 @@ class SimulationManager(QObject):
         if not c_data:
             return
 
-        import math
-
         cw = self.settings.get("size_checkout_width", 100)
         ch = self.settings.get("size_checkout_height", 100)
-        spacing = 36
+
+        # FIX: Use spacing from settings
+        spacing = self.settings.get("dist_queue_spacing", 36)
+
         cx, cy = c_data["x"], c_data["y"]
         ori = c_data.get("orientation", "Right")
         c_type = c_data["type"]
@@ -336,8 +324,18 @@ class SimulationManager(QObject):
         ry = tx * math.sin(rad) + ty * math.cos(rad)
         start_point = QPointF(rx + center_x, ry + center_y)
 
-        dir_x = -math.sin(rad)
-        dir_y = math.cos(rad)
+        # FIX: Direction Logic must match VisualController
+        if ori == "Left":
+            # Left: Direction = Angle
+            dir_rad = math.radians(angle)
+        else:
+            # Right: Direction = Angle + 180 (Opposite)
+            dir_rad = math.radians(angle + 180)
+
+        # FIX: Use cos/sin for Horizontal Queue (was -sin/cos for Vertical)
+        dir_x = math.cos(dir_rad)
+        dir_y = math.sin(dir_rad)
+
         dir_vec = QVector2D(dir_x, dir_y)
         offset_vec = dir_vec * (q_index * spacing)
 
