@@ -1,17 +1,16 @@
 """
 Customer agent logic.
 Refactored:
-- Customers spawn with 0 items.
-- Item count increases during shopping phase.
-- FIX: Handles new Dictionary-based Shelf data structure.
-- UPDATE: Calculates facing angle based on movement.
+- Support for Handheld Scanners (One-time checkout).
+- Smart Shelf Selection (Closest).
+- Pathing updates.
 """
 
 import math
 import random
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QVector2D
-from config import WALK_SPEED_PPS, WALK_SPEED_DISABLED_FACTOR, SCAN_TIME_PER_ITEM_MS
+from config import WALK_SPEED_PPS, WALK_SPEED_DISABLED_FACTOR, SCAN_TIME_PER_ITEM_MS, SHELF_SIZE
 
 class CustomerModel:
     def __init__(
@@ -25,9 +24,8 @@ class CustomerModel:
         exit_routes=None,
         max_offset=10,
         is_disabled=False,
-        # Uniform Params (Min, Max)
+        uses_handheld=False, # NEU: Handheld Flag
         scan_speed_range=(0.5, 1.5),
-        # Normal Params (Mean, Std)
         speed_walk_params=(2.5, 0.5),
         speed_roll_params=(1.5, 0.3),
         items_params=(12, 4)
@@ -43,15 +41,16 @@ class CustomerModel:
 
         self.max_offset = max_offset
         self.is_disabled = is_disabled
+        self.uses_handheld = uses_handheld # Speichern
 
         self.pos = QPointF(0, 0)
-        self.angle = 0.0 # NEU: Blickrichtung in Grad
+        self.angle = 0.0 
         
         self.state = "SPAWNING"
         self.path = []
         self.target_pos = None
         
-        # --- BEWEGUNG (Normalverteilung) ---
+        # --- BEWEGUNG ---
         if self.is_disabled:
             mu, sigma = speed_roll_params
         else:
@@ -60,7 +59,7 @@ class CustomerModel:
         val = random.normalvariate(mu, sigma)
         self.speed = max(0.1, val)
 
-        # --- ARTIKELANZAHL (Normalverteilung) ---
+        # --- ARTIKELANZAHL ---
         mu_items, sigma_items = items_params
         item_val = int(random.normalvariate(mu_items, sigma_items))
         
@@ -72,7 +71,7 @@ class CustomerModel:
         self.assigned_checkout_id = None
         self.entry_time_sec = 0
         
-        # --- SCANGESCHWINDIGKEIT (Gleichverteilung) ---
+        # --- SCANGESCHWINDIGKEIT ---
         self.scan_duration_per_item = random.uniform(scan_speed_range[0], scan_speed_range[1])
         self.scan_time_elapsed = 0.0
         
@@ -96,7 +95,23 @@ class CustomerModel:
         elif self.shopping_route:
             self.pos = QPointF(self.shopping_route[0])
 
-        if self.all_shelves:
+        if self.all_shelves and self.shopping_route:
+            candidates = []
+            for shelf in self.all_shelves:
+                s_pos = self._get_shelf_pos(shelf)
+                min_dist_to_route = float('inf')
+                for rp in self.shopping_route:
+                    if isinstance(rp, (list, tuple)): rp = QPointF(rp[0], rp[1])
+                    dist = QVector2D(s_pos - rp).length()
+                    if dist < min_dist_to_route:
+                        min_dist_to_route = dist
+                candidates.append((min_dist_to_route, shelf))
+            
+            candidates.sort(key=lambda x: x[0])
+            num_targets = min(len(candidates), self.target_item_count)
+            self.target_shelves = [c[1] for c in candidates[:num_targets]]
+            
+        elif self.all_shelves:
             num_targets = min(len(self.all_shelves), self.target_item_count)
             indices = random.sample(range(len(self.all_shelves)), num_targets)
             self.target_shelves = [self.all_shelves[i] for i in indices]
@@ -111,6 +126,7 @@ class CustomerModel:
 
     def _build_full_shopping_path(self):
         full_path = []
+        
         start_route = self._get_nearest_route(self.pos, self.available_start_routes)
         if start_route:
             full_path.extend(start_route)
@@ -121,11 +137,11 @@ class CustomerModel:
             
             for shelf_data in self.target_shelves:
                 shelf_pos = self._get_shelf_pos(shelf_data)
-                
                 best_idx = 0
                 min_dist = float('inf')
                 for i, rp in enumerate(route_points):
-                    dist = QVector2D(shelf_pos - rp).length()
+                    pt = rp if isinstance(rp, QPointF) else QPointF(rp[0], rp[1])
+                    dist = QVector2D(shelf_pos - pt).length()
                     if dist < min_dist:
                         min_dist = dist
                         best_idx = i
@@ -137,12 +153,24 @@ class CustomerModel:
             for i, rp in enumerate(route_points):
                 ox = random.uniform(-self.max_offset, self.max_offset)
                 oy = random.uniform(-self.max_offset, self.max_offset)
-                jittered_pos = rp + QPointF(ox, oy)
+                pt = rp if isinstance(rp, QPointF) else QPointF(rp[0], rp[1])
+                jittered_pos = pt + QPointF(ox, oy)
+                
                 full_path.append(jittered_pos)
                 
                 if i in shelf_assignments:
                     for s_pos in shelf_assignments[i]:
-                        full_path.append(s_pos)
+                        direction = QVector2D(s_pos - jittered_pos)
+                        length = direction.length()
+                        stop_dist = (SHELF_SIZE / 2) + 20 
+                        
+                        if length > stop_dist:
+                            offset = direction.normalized() * (length - stop_dist)
+                            target_stop = jittered_pos + offset.toPointF()
+                        else:
+                            target_stop = s_pos 
+
+                        full_path.append(target_stop)
                         full_path.append(jittered_pos)
 
         return full_path
@@ -154,7 +182,7 @@ class CustomerModel:
         min_dist = float('inf')
         for name, points in routes_dict.items():
             if not points: continue
-            start_node = points[0]
+            start_node = points[0] if isinstance(points[0], QPointF) else QPointF(points[0][0], points[0][1])
             vec = QVector2D(start_node - current_pos)
             dist = vec.length()
             if dist < min_dist:
@@ -185,11 +213,18 @@ class CustomerModel:
             self.scan_time_elapsed += dt
             if self.scan_time_elapsed >= self.scan_duration_per_item:
                 self.scan_time_elapsed = 0.0
-                if self.item_count > 0:
-                    self.item_count -= 1
                 
-                if self.item_count <= 0:
+                # NEU: Handheld Logik
+                if self.uses_handheld:
+                    # Kunde zahlt sofort alles auf einmal (nur 1 "Scan")
                     self._finish_checkout()
+                else:
+                    # Normaler Kunde: Artikel einzeln scannen
+                    if self.item_count > 0:
+                        self.item_count -= 1
+                    
+                    if self.item_count <= 0:
+                        self._finish_checkout()
         
         elif self.state == "LEAVING":
             self._move_leaving(dt)
@@ -204,7 +239,7 @@ class CustomerModel:
             is_shelf = False
             for s_data in self.target_shelves:
                 s_pos = self._get_shelf_pos(s_data)
-                if QVector2D(self.pos - s_pos).length() < 2.0:
+                if QVector2D(self.pos - s_pos).length() < 60.0:
                     is_shelf = True
                     break
             
@@ -236,12 +271,8 @@ class CustomerModel:
         if dist > 0:
             dx = vec.x() / dist
             dy = vec.y() / dist
-            
-            # NEU: Winkel berechnen (in Grad)
             self.angle = math.degrees(math.atan2(dy, dx))
-            
             move_dist = self.speed * dt
-            
             if move_dist >= dist:
                 self.pos = self.target_pos
                 return 0.0
@@ -263,7 +294,7 @@ class CustomerModel:
         
         self.path = []
         if selected_exit_route:
-            self.path = [QPointF(p) for p in selected_exit_route]
+            self.path = [QPointF(p) if isinstance(p, QPointF) else QPointF(p[0], p[1]) for p in selected_exit_route]
             if self.path:
                 self.target_pos = self.path.pop(0)
         else:

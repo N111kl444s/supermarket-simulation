@@ -2,7 +2,7 @@
 Main Controller.
 Refactored: 
 - Calls showMaximized() explicitly on startup.
-- Cleaned up signal connections.
+- Includes 'handheld' probability in simulation parameters.
 """
 
 from PyQt6.QtWidgets import QMessageBox, QInputDialog, QFileDialog, QListWidgetItem, QGraphicsView
@@ -51,7 +51,6 @@ class MainController:
         self.sim_manager.set_param_accessor(self._get_sim_params_from_ui)
 
     def show(self):
-        # FIX: Explicit call to maximize window on startup (prevents resize glitch)
         self.view.showMaximized()
 
     def _load_settings(self):
@@ -319,6 +318,7 @@ class MainController:
                 "walk": (self.view.speed_walk_mean.value(), self.view.speed_walk_std.value()),
                 "roll": (self.view.speed_roll_mean.value(), self.view.speed_roll_std.value()),
                 "items": (self.view.items_mean.value(), self.view.items_std.value()),
-                "scan": scan
+                "scan": scan,
+                "handheld": self.view.hand_scanner_prob.value() # NEU: Handheld Prob
             }
         except: return None

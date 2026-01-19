@@ -10,7 +10,7 @@
     "show_start_area": false,
     "show_exit_area": false,
     "size_shelf": 26,
-    "size_cashier": 8,
+    "size_cashier": 10,
     "size_customer": 10,
     "size_checkout_width": 28,
     "size_checkout_height": 14,

@@ -1,9 +1,7 @@
 """
 Central configuration module.
 Refactored: 
-- Restored dynamic path handling (EXE support).
-- Restored Image Lists (Normal/Disabled customers).
-- Added Queue and Light sizing settings.
+- Added IMG_CUSTOMERS_HANDHELD_DISABLED for disabled customers with scanners.
 """
 
 import sys
@@ -13,9 +11,6 @@ from PyQt6.QtGui import QColor
 
 # --- PATH HANDLING FOR EXE VS SCRIPT ---
 def get_paths():
-    """
-    Determines the correct paths for resources (read-only) and user data (read-write).
-    """
     if getattr(sys, 'frozen', False):
         INTERNAL_DIR = Path(sys._MEIPASS)
         EXTERNAL_DIR = Path(sys.executable).parent
@@ -29,10 +24,8 @@ def get_paths():
 
 INTERNAL_BASE, EXTERNAL_BASE = get_paths()
 
-# --- DIRECTORIES ---
 ASSETS_DIR = INTERNAL_BASE / "assets"
 IMAGE_DIR = ASSETS_DIR / "images"
-
 MAPS_DIR = EXTERNAL_BASE / "maps"
 SETTINGS_FILE = EXTERNAL_BASE / "settings.json"
 
@@ -43,9 +36,7 @@ if getattr(sys, 'frozen', False):
         except Exception:
             pass
 
-# --- HELPER: Auto-Load Images ---
 def get_image_files(prefix):
-    """Sucht automatisch nach PNG-Dateien, die mit dem prefix beginnen."""
     if not IMAGE_DIR.exists():
         return []
     files = list(IMAGE_DIR.glob(f"{prefix}*.png"))
@@ -86,7 +77,6 @@ COLOR_WALL = QColor("#374151")
 COLOR_FLOOR = QColor("#E5E7EB")
 COLOR_GRID = QColor("#D1D5DB")
 
-# Aliases
 COLOR_GREEN = COLOR_SUCCESS
 COLOR_RED = COLOR_ERROR
 COLOR_BLUE = COLOR_ACCENT
@@ -97,7 +87,7 @@ COLOR_WHITE_BG = COLOR_BG_PANEL
 # --- Constants ---
 SHELF_SIZE = 50.0 
 CUSTOMER_SIZE = 32
-CASHIER_SIZE = 8
+CASHIER_SIZE = 10
 CHECKOUT_WIDTH = 120
 CHECKOUT_HEIGHT = 100
 
@@ -113,25 +103,35 @@ DEFAULT_CLOSE_TIME = (20, 0)
 SCAN_TIME_PER_ITEM_MS = 1000
 
 # --- DYNAMIC IMAGE LISTS ---
+# 1. Normal
 IMG_CUSTOMERS_NORMAL = get_image_files("kunde")
 if not IMG_CUSTOMERS_NORMAL: IMG_CUSTOMERS_NORMAL = ["customer.png"]
 
+# 2. Behindert
 IMG_CUSTOMERS_DISABLED = get_image_files("behindert")
 if not IMG_CUSTOMERS_DISABLED: IMG_CUSTOMERS_DISABLED = ["customer_disabled.png"]
+
+# 3. Handheld (Normal)
+IMG_CUSTOMERS_HANDHELD = get_image_files("handheld_kunde")
+if not IMG_CUSTOMERS_HANDHELD: 
+    IMG_CUSTOMERS_HANDHELD = IMG_CUSTOMERS_NORMAL
+
+# 4. NEU: Handheld (Behindert)
+IMG_CUSTOMERS_HANDHELD_DISABLED = get_image_files("handheld_behindert")
+if not IMG_CUSTOMERS_HANDHELD_DISABLED:
+    # Fallback: Wenn keine speziellen Bilder da sind, normale behinderte Bilder nehmen
+    IMG_CUSTOMERS_HANDHELD_DISABLED = IMG_CUSTOMERS_DISABLED
 
 IMG_SHELVES = get_image_files("regal")
 if not IMG_SHELVES: IMG_SHELVES = ["regal.png"]
 
 IMG_CHECKOUTS = ["kasse.png", "sb.png"]
 
-# Restore Specific Paths
 PATH_AZUBI = ASSETS_DIR / "azubi.png"
-if not PATH_AZUBI.exists():
-    PATH_AZUBI = IMAGE_DIR / "azubi.png"
+if not PATH_AZUBI.exists(): PATH_AZUBI = IMAGE_DIR / "azubi.png"
 
 PATH_PRO = ASSETS_DIR / "festangestellter.png" 
-if not PATH_PRO.exists():
-    PATH_PRO = IMAGE_DIR / "festangestellter.png"
+if not PATH_PRO.exists(): PATH_PRO = IMAGE_DIR / "festangestellter.png"
 
 # --- DEFAULT SETTINGS DICT ---
 DEFAULT_SETTINGS = {
@@ -152,10 +152,9 @@ DEFAULT_SETTINGS = {
     "size_checkout_width": CHECKOUT_WIDTH,
     "size_checkout_height": CHECKOUT_HEIGHT,
     
-    # NEU: Einstellungen für Warteschlange & Ampel
-    "size_queue_dot": 4,        # Größe der Punkte
-    "dist_queue_spacing": 20,   # Abstand der Punkte
-    "size_checkout_light": 8,   # Größe der Ampel
+    "size_queue_dot": 4,
+    "dist_queue_spacing": 20,
+    "size_checkout_light": 8,
     
     "customer_path_offset": 10,
     
