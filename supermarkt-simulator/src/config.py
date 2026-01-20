@@ -2,6 +2,8 @@
 Central configuration module.
 Refactored: 
 - Added IMG_CUSTOMERS_HANDHELD_DISABLED for disabled customers with scanners.
+- Added Icon Paths for Scanner, Cash, and Card.
+- UPDATED: Added Worker and Tool paths.
 """
 
 import sys
@@ -116,7 +118,7 @@ IMG_CUSTOMERS_HANDHELD = get_image_files("handheld_kunde")
 if not IMG_CUSTOMERS_HANDHELD: 
     IMG_CUSTOMERS_HANDHELD = IMG_CUSTOMERS_NORMAL
 
-# 4. NEU: Handheld (Behindert)
+# 4. Handheld (Behindert)
 IMG_CUSTOMERS_HANDHELD_DISABLED = get_image_files("handheld_behindert")
 if not IMG_CUSTOMERS_HANDHELD_DISABLED:
     # Fallback: Wenn keine speziellen Bilder da sind, normale behinderte Bilder nehmen
@@ -125,13 +127,25 @@ if not IMG_CUSTOMERS_HANDHELD_DISABLED:
 IMG_SHELVES = get_image_files("regal")
 if not IMG_SHELVES: IMG_SHELVES = ["regal.png"]
 
+# 5. Kassierer (Azubi)
+IMG_CASHIER_NEWBIE = get_image_files("azubi")
+if not IMG_CASHIER_NEWBIE: IMG_CASHIER_NEWBIE = ["azubi.png"]
+
+# 6. Kassierer (Profi)
+IMG_CASHIER_PRO = get_image_files("festangestellter")
+if not IMG_CASHIER_PRO: IMG_CASHIER_PRO = ["festangestellter.png"]
+
 IMG_CHECKOUTS = ["kasse.png", "sb.png"]
 
-PATH_AZUBI = ASSETS_DIR / "azubi.png"
-if not PATH_AZUBI.exists(): PATH_AZUBI = IMAGE_DIR / "azubi.png"
+# 7. WORKER
+IMG_WORKER = ASSETS_DIR / "worker.png"
+if not IMG_WORKER.exists(): IMG_WORKER = IMAGE_DIR / "worker.png"
 
-PATH_PRO = ASSETS_DIR / "festangestellter.png" 
-if not PATH_PRO.exists(): PATH_PRO = IMAGE_DIR / "festangestellter.png"
+# --- ICONS ---
+ICON_SCANNER = ASSETS_DIR / "icons" / "thermal-scanner.png"
+ICON_CASH = ASSETS_DIR / "icons" / "cash.png"
+ICON_CARD = ASSETS_DIR / "icons" / "card.png"
+ICON_TOOL = ASSETS_DIR / "icons" / "tool.png" # NEU
 
 # --- DEFAULT SETTINGS DICT ---
 DEFAULT_SETTINGS = {

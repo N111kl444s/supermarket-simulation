@@ -1,15 +1,16 @@
 """
 Sidebar Component.
 Refactored:
-- Added "(Normalverteilung)" label to Shopping section.
-- UPDATED: Added "(Gleichverteilung)" labels to Scan and Staff sections.
-- LAYOUT UPDATE: Split 'Eingabe' tab into 3 sub-tabs (Laden, Kunden, Personal).
-- NEW: Added hint text and spacing above sub-tabs.
-- NEW: Added tooltip icons with calculation formulas for distributions.
-- FIX: Removed invalid 'cursor' property from stylesheet (fixed console errors).
-- FIX: Transparent background for scroll areas to match modern UI theme.
-- FIX: Corrected cursor shape name (HelpCursor -> WhatsThisCursor).
-- FIX: Removed margins from nested layouts in FormLayouts to ensure consistent alignment.
+- Layout cleanup: Tooltips (Help Icons) moved next to distribution labels.
+- Added explicit "(Normalverteilung)" label to Movement section.
+- Removed tooltips from individual input rows for cleaner look.
+- Helper method `_add_sublabel_with_help` introduced.
+- FIX: Replaced emoji label with robust QToolButton using standard Qt Help Icon.
+- FIX: Consistent margins/spacing for all spinbox rows.
+- NEW: Added Payment Configuration (Cash/Card percentages linked to sum 100%).
+- NEW: Added Payment Duration settings (Min/Max).
+- NEW: Added Maintenance Duration settings in 'Laden' tab.
+- NEW: Added Editor tools for Worker Spawn and Routes.
 """
 
 from PyQt6.QtWidgets import (
@@ -29,6 +30,8 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QSizePolicy,
     QButtonGroup,
+    QStyle,
+    QToolButton,
 )
 from PyQt6.QtCore import Qt, QTime
 from PyQt6.QtGui import QBrush, QColor
@@ -61,12 +64,8 @@ class Sidebar(QWidget):
         layout_container.setSpacing(10)
 
         # 1. Hinweistext & Abstand
-        lbl_hint = QLabel(
-            "Konfigurieren Sie hier die Simulationsparameter.\nNutzen Sie die Tabs unten für Details."
-        )
-        lbl_hint.setStyleSheet(
-            "color: #555; font-style: italic; margin-bottom: 2px;"
-        )
+        lbl_hint = QLabel("Konfigurieren Sie hier die Simulationsparameter.\nNutzen Sie die Tabs unten für Details.")
+        lbl_hint.setStyleSheet("color: #555; font-style: italic; margin-bottom: 2px;")
         lbl_hint.setWordWrap(True)
         layout_container.addWidget(lbl_hint)
 
@@ -91,13 +90,27 @@ class Sidebar(QWidget):
         f_time.addRow("Schließen:", self.time_close)
         l_shop.addWidget(gb_time)
 
-        # Störung
+        # Störung & Wartung (NEU)
         gb_co = QGroupBox("Störungen & Kassen")
-        f_co = QFormLayout(gb_co)
+        l_co = QVBoxLayout(gb_co)
+        
+        f_co = QFormLayout()
         self.checkout_fail_rate_normal = self._create_spin(0, 0, 100, " %")
         self.checkout_fail_rate_sb = self._create_spin(0, 0, 100, " %")
         f_co.addRow("Ausfall (Normal):", self.checkout_fail_rate_normal)
         f_co.addRow("Ausfall (SB):", self.checkout_fail_rate_sb)
+        l_co.addLayout(f_co)
+        
+        self._add_sublabel_with_help(l_co, "Wartungsdauer (Gleichverteilung)",
+            "<b>Dauer der Reparatur</b><br>"
+            "Zeit, die der Arbeiter an der Kasse verbringt."
+        )
+        f_maint = QFormLayout()
+        self.maintain_duration_min, self.maintain_duration_max = (
+            self._create_range_row("Dauer (s):", 20.0, 60.0, f_maint)
+        )
+        l_co.addLayout(f_maint)
+        
         l_shop.addWidget(gb_co)
 
         input_tabs.addTab(tab_shop, "Laden")
@@ -106,120 +119,117 @@ class Sidebar(QWidget):
         tab_cust_container = QWidget()
         l_cust_cont = QVBoxLayout(tab_cust_container)
         l_cust_cont.setContentsMargins(0, 0, 0, 0)
-
+        
         scroll_cust = QScrollArea()
         scroll_cust.setWidgetResizable(True)
-        scroll_cust.setStyleSheet(
-            "QScrollArea { border: none; background-color: transparent; }"
-        )
-
+        scroll_cust.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        
         content_cust = QWidget()
-        content_cust.setStyleSheet("background-color: transparent;")
-
+        content_cust.setStyleSheet("background-color: transparent;") 
+        
         l_gb_cust = QVBoxLayout(content_cust)
         l_gb_cust.setAlignment(Qt.AlignmentFlag.AlignTop)
         l_gb_cust.setContentsMargins(5, 15, 5, 5)
 
         # Kundendichte
         l_gb_cust.addWidget(self._header("Kundendichte & Generierung"))
-        l_gb_cust.addWidget(self._sublabel("(Exponentialverteilung)"))
+        self._add_sublabel_with_help(l_gb_cust, "(Exponentialverteilung)",
+            "<b>Exponentialverteilung (Simulation)</b><br>"
+            "Berechnet den Zeitabstand zwischen zwei Kunden.<br>"
+            "<i>Formel:</i> <code>Interval = (Zeit / Anzahl) * random.uniform(0.7, 1.3)</code>"
+        )
         f_gen = QFormLayout()
         self.actor_count_input = self._create_spin(50, 1, 10000, " / Tag")
         self.disabled_prob_input = self._create_double_spin(10, 0, 100, " %")
-
-        # Icon für Kundendichte
-        row_anzahl = QHBoxLayout()
-        # FIX: Margins auf 0 setzen, damit es bündig mit anderen Zeilen ist
-        row_anzahl.setContentsMargins(0, 0, 0, 0)
-        row_anzahl.addWidget(self.actor_count_input)
-        row_anzahl.addWidget(
-            self._create_help_label(
-                "<b>Exponentialverteilung (Simulation)</b><br>"
-                "Berechnet den Zeitabstand zwischen zwei Kunden.<br>"
-                "<i>Formel:</i> <code>Interval = (Zeit / Anzahl) * random.uniform(0.7, 1.3)</code>"
-            )
-        )
-        f_gen.addRow("Anzahl:", row_anzahl)
+        f_gen.addRow("Anzahl:", self.actor_count_input)
         f_gen.addRow("Behinderung:", self.disabled_prob_input)
         l_gb_cust.addLayout(f_gen)
 
         # Geschwindigkeit
         l_gb_cust.addWidget(self._header("Bewegungsgeschwindigkeit (px/s)"))
+        self._add_sublabel_with_help(l_gb_cust, "(Normalverteilung)",
+            "<b>Normalverteilung (Gauß)</b><br>"
+            "Geschwindigkeit zufällig um den Mittelwert gestreut.<br>"
+            "<i>Formel:</i> <code>v = random.normalvariate(Ø, σ)</code>"
+        )
         f_move = QFormLayout()
         self.speed_walk_mean, self.speed_walk_std = self._create_dist_row(
-            "Gehen:",
-            2.5,
-            0.5,
-            f_move,
-            tooltip="<b>Normalverteilung (Gauß)</b><br>"
-            "Geschwindigkeit zufällig um den Mittelwert gestreut.<br>"
-            "<i>Formel:</i> <code>v = random.normalvariate(Ø, σ)</code>",
+            "Gehen:", 2.5, 0.5, f_move
         )
         self.speed_roll_mean, self.speed_roll_std = self._create_dist_row(
-            "Rollen:",
-            1.5,
-            0.3,
-            f_move,
-            tooltip="<b>Normalverteilung (Gauß)</b><br>"
-            "Geschwindigkeit zufällig um den Mittelwert gestreut.<br>"
-            "<i>Formel:</i> <code>v = random.normalvariate(Ø, σ)</code>",
+            "Rollen:", 1.5, 0.3, f_move
         )
         l_gb_cust.addLayout(f_move)
 
         # Einkauf
         l_gb_cust.addWidget(self._header("Einkauf"))
-        l_gb_cust.addWidget(self._sublabel("(Normalverteilung)"))
+        self._add_sublabel_with_help(l_gb_cust, "(Normalverteilung)",
+            "<b>Normalverteilung</b><br>"
+            "Bestimmt die Anzahl der Artikel im Einkaufswagen.<br>"
+            "<i>Formel:</i> <code>items = int(random.normalvariate(Ø, σ))</code>"
+        )
         f_shop = QFormLayout()
         self.items_mean = self._create_spin(12, 1, 100)
         self.items_std = self._create_double_spin(4.0, 0, 20)
-        row = QHBoxLayout()
-        # FIX: Margins auf 0 setzen
-        row.setContentsMargins(0, 0, 0, 0)
-        row.addWidget(QLabel("Ø:"))
-        row.addWidget(self.items_mean)
-        row.addWidget(QLabel("σ:"))
-        row.addWidget(self.items_std)
-        # Icon für Einkauf
-        row.addWidget(
-            self._create_help_label(
-                "<b>Normalverteilung</b><br>"
-                "Bestimmt die Anzahl der Artikel im Einkaufswagen.<br>"
-                "<i>Formel:</i> <code>items = int(random.normalvariate(Ø, σ))</code>"
-            )
-        )
-        f_shop.addRow("Artikelanzahl:", row)
+        
+        row_items = QHBoxLayout()
+        row_items.setContentsMargins(0, 0, 0, 0)
+        row_items.setSpacing(5)
+        row_items.addWidget(QLabel("Ø:"))
+        row_items.addWidget(self.items_mean)
+        row_items.addWidget(QLabel("σ:"))
+        row_items.addWidget(self.items_std)
+        
+        f_shop.addRow("Artikelanzahl:", row_items)
         self.hand_scanner_prob = self._create_double_spin(5.0, 0, 100, " %")
         f_shop.addRow("Handscanner:", self.hand_scanner_prob)
         l_gb_cust.addLayout(f_shop)
 
         # Scannen
         l_gb_cust.addWidget(self._header("Scannen (Dauer in Sek)"))
-        l_gb_cust.addWidget(self._sublabel("(Gleichverteilung)"))
+        self._add_sublabel_with_help(l_gb_cust, "(Gleichverteilung)",
+            "<b>Gleichverteilung</b><br>"
+            "Jeder Artikel braucht eine zufällige Zeit zwischen Min und Max.<br>"
+            "<i>Formel:</i> <code>t = random.uniform(Min, Max)</code>"
+        )
         f_scan = QFormLayout()
         self.scan_speed_normal_min, self.scan_speed_normal_max = (
-            self._create_range_row(
-                "Normal:",
-                0.5,
-                1.5,
-                f_scan,
-                tooltip="<b>Gleichverteilung</b><br>"
-                "Jeder Artikel braucht eine zufällige Zeit zwischen Min und Max.<br>"
-                "<i>Formel:</i> <code>t = random.uniform(Min, Max)</code>",
-            )
+            self._create_range_row("Normal:", 0.5, 1.5, f_scan)
         )
         self.scan_speed_disabled_min, self.scan_speed_disabled_max = (
-            self._create_range_row(
-                "Behindert:",
-                1.0,
-                3.0,
-                f_scan,
-                tooltip="<b>Gleichverteilung</b><br>"
-                "Jeder Artikel braucht eine zufällige Zeit zwischen Min und Max.<br>"
-                "<i>Formel:</i> <code>t = random.uniform(Min, Max)</code>",
-            )
+            self._create_range_row("Behindert:", 1.0, 3.0, f_scan)
         )
         l_gb_cust.addLayout(f_scan)
 
+        # Bezahlmethoden
+        l_gb_cust.addWidget(self._header("Bezahlmethoden & Dauer"))
+        self._add_sublabel_with_help(l_gb_cust, "(Abhängigkeit & Gleichverteilung)",
+            "<b>Bargeld vs. Karte</b><br>"
+            "Muss zusammen 100% ergeben.<br><br>"
+            "<b>Bezahldauer</b><br>"
+            "Zeit an der Kasse nach dem Scannen."
+        )
+        f_pay = QFormLayout()
+        
+        self.prob_cash = self._create_spin(30, 0, 100, " %")
+        self.prob_card = self._create_spin(70, 0, 100, " %")
+        
+        self.prob_cash.valueChanged.connect(self._on_cash_changed)
+        self.prob_card.valueChanged.connect(self._on_card_changed)
+
+        f_pay.addRow("Bargeld:", self.prob_cash)
+        f_pay.addRow("Kreditkarte:", self.prob_card)
+        l_gb_cust.addLayout(f_pay)
+
+        f_pay_dur = QFormLayout()
+        self.pay_duration_cash_min, self.pay_duration_cash_max = (
+            self._create_range_row("Dauer Bargeld (s):", 5.0, 15.0, f_pay_dur)
+        )
+        self.pay_duration_card_min, self.pay_duration_card_max = (
+            self._create_range_row("Dauer Karte (s):", 3.0, 8.0, f_pay_dur)
+        )
+        l_gb_cust.addLayout(f_pay_dur)
+        
         scroll_cust.setWidget(content_cust)
         l_cust_cont.addWidget(scroll_cust)
         input_tabs.addTab(tab_cust_container, "Kunden")
@@ -229,38 +239,37 @@ class Sidebar(QWidget):
         l_staff = QVBoxLayout(tab_staff)
         l_staff.setAlignment(Qt.AlignmentFlag.AlignTop)
         l_staff.setContentsMargins(5, 15, 5, 5)
-
+        
         l_staff.addWidget(self._header("Scangeschwindigkeit (Sek/Artikel)"))
-        l_staff.addWidget(self._sublabel("(Gleichverteilung)"))
+        self._add_sublabel_with_help(l_staff, "(Gleichverteilung)",
+            "<b>Gleichverteilung</b><br>"
+            "Scan-Dauer pro Artikel an bedienter Kasse.<br>"
+            "<i>Formel:</i> <code>t = random.uniform(Min, Max)</code>"
+        )
         f_staff = QFormLayout()
         self.scan_speed_newbie_min, self.scan_speed_newbie_max = (
-            self._create_range_row(
-                "Azubi:",
-                1.5,
-                2.5,
-                f_staff,
-                tooltip="<b>Gleichverteilung</b><br>"
-                "Scan-Dauer pro Artikel an bedienter Kasse.<br>"
-                "<i>Formel:</i> <code>t = random.uniform(Min, Max)</code>",
-            )
+            self._create_range_row("Azubi:", 1.5, 2.5, f_staff)
         )
         self.scan_speed_pro_min, self.scan_speed_pro_max = (
-            self._create_range_row(
-                "Festangestellt:",
-                0.8,
-                1.2,
-                f_staff,
-                tooltip="<b>Gleichverteilung</b><br>"
-                "Scan-Dauer pro Artikel an bedienter Kasse.<br>"
-                "<i>Formel:</i> <code>t = random.uniform(Min, Max)</code>",
-            )
+            self._create_range_row("Festangestellt:", 0.8, 1.2, f_staff)
         )
         l_staff.addLayout(f_staff)
-
+        
         input_tabs.addTab(tab_staff, "Personal")
 
         layout_container.addWidget(input_tabs)
         self.control_tabs.addTab(container, "Eingabe")
+
+    # --- Event Handler für Bezahlmethoden ---
+    def _on_cash_changed(self, val):
+        self.prob_card.blockSignals(True)
+        self.prob_card.setValue(100 - val)
+        self.prob_card.blockSignals(False)
+
+    def _on_card_changed(self, val):
+        self.prob_cash.blockSignals(True)
+        self.prob_cash.setValue(100 - val)
+        self.prob_cash.blockSignals(False)
 
     def _init_simulation_tab(self):
         widget = QWidget()
@@ -376,6 +385,16 @@ class Sidebar(QWidget):
         ]:
             layout.addWidget(b)
 
+        # NEU: Arbeiter Tools
+        layout.addSpacing(5)
+        layout.addWidget(QLabel("Arbeiter / Wartung:"))
+        row_worker = QHBoxLayout()
+        self.btn_worker_spawn = self._create_tool_btn("👷 Startpunkt")
+        self.btn_worker_route = self._create_tool_btn("🚧 Wartungs-Route")
+        row_worker.addWidget(self.btn_worker_spawn)
+        row_worker.addWidget(self.btn_worker_route)
+        layout.addLayout(row_worker)
+
         layout.addSpacing(5)
         self.btn_visibility = QPushButton("👁️ Sichtbarkeit")
         self.btn_offsets = QPushButton("📏 Globale Offsets")
@@ -477,41 +496,55 @@ class Sidebar(QWidget):
         return sb
 
     def _create_help_label(self, tooltip):
-        l = QLabel("❓")
-        l.setStyleSheet("color: #3B82F6; font-weight: bold;")
-        # FIX: Richtige Konstante für den Cursor
-        l.setCursor(Qt.CursorShape.WhatsThisCursor)
-        l.setToolTip(tooltip)
-        l.setFixedWidth(20)
-        return l
+        # FIX: Verwende QToolButton mit Standard-Icon für sauberes Rendering
+        btn = QToolButton()
+        icon = self.style().standardIcon(QStyle.StandardPixmap.SP_MessageBoxQuestion)
+        btn.setIcon(icon)
+        btn.setCursor(Qt.CursorShape.WhatsThisCursor)
+        btn.setToolTip(tooltip)
+        # Transparent und ohne Border, damit es wie ein Icon wirkt
+        btn.setStyleSheet("border: none; background-color: transparent;")
+        btn.setFixedSize(24, 24)
+        return btn
 
-    def _create_dist_row(self, label, val_mean, val_std, layout, tooltip=None):
+    def _add_sublabel_with_help(self, layout, text, tooltip):
         h = QHBoxLayout()
-        # FIX: Margins entfernen für saubere Ausrichtung
         h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(5)
+        
+        lbl = self._sublabel(text) # Returns a QLabel
+        h.addWidget(lbl)
+        
+        if tooltip:
+            icon = self._create_help_label(tooltip)
+            h.addWidget(icon)
+        
+        h.addStretch() # Align to left
+        layout.addLayout(h)
+
+    def _create_dist_row(self, label, val_mean, val_std, layout):
+        h = QHBoxLayout()
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(5)
         sb_mean = self._create_double_spin(val_mean, 0.1, 20.0)
         sb_std = self._create_double_spin(val_std, 0.0, 5.0)
         h.addWidget(QLabel("Ø:"))
         h.addWidget(sb_mean)
         h.addWidget(QLabel("σ:"))
         h.addWidget(sb_std)
-        if tooltip:
-            h.addWidget(self._create_help_label(tooltip))
         layout.addRow(label, h)
         return sb_mean, sb_std
 
-    def _create_range_row(self, label, val_min, val_max, layout, tooltip=None):
+    def _create_range_row(self, label, val_min, val_max, layout):
         h = QHBoxLayout()
-        # FIX: Margins entfernen für saubere Ausrichtung
         h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(5)
         sb_min = self._create_double_spin(val_min, 0.1, 10.0)
         sb_max = self._create_double_spin(val_max, 0.1, 10.0)
         h.addWidget(QLabel("Min:"))
         h.addWidget(sb_min)
         h.addWidget(QLabel("Max:"))
         h.addWidget(sb_max)
-        if tooltip:
-            h.addWidget(self._create_help_label(tooltip))
         layout.addRow(label, h)
         return sb_min, sb_max
 
