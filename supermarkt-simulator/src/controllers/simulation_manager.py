@@ -1,8 +1,10 @@
 """
 Simulation Manager Module.
 Updated:
-- Reads Handheld Probability from Settings.
-- Spawns Handheld Customers.
+- Handles Handheld generation reliably.
+- DYNAMICALLY sets scan speed based on checkout type (SB vs Normal) and Staff skill.
+- Refactored to fetch LIVE params for scan speed at the checkout (Uniform Distribution).
+- FIXED: Customers now choose a RANDOM shopping route from all available routes instead of just 'ShopRoute_1'.
 """
 
 import random
@@ -16,6 +18,7 @@ from config import (
     FACTOR_1X,
     ANIMATION_TICK_MS,
 )
+
 
 class SimulationManager(QObject):
     time_updated = pyqtSignal(str)
@@ -90,12 +93,18 @@ class SimulationManager(QObject):
         self.total_customers_spawned = 0
         self.store_is_closed_trigger = False
         seconds_open = self.open_time.secsTo(self.close_time)
-        if seconds_open <= 0: seconds_open = 1
-        self.average_spawn_interval = seconds_open / max(1, self.target_daily_customers)
+        if seconds_open <= 0:
+            seconds_open = 1
+        self.average_spawn_interval = seconds_open / max(
+            1, self.target_daily_customers
+        )
         self.spawn_timer_acc = 0.0
         self._calc_next_spawn()
         self.is_initialized = True
-        self.log_message.emit(f"Laden geöffnet. Erwarte ca. {self.target_daily_customers} Kunden.", "blue")
+        self.log_message.emit(
+            f"Laden geöffnet. Erwarte ca. {self.target_daily_customers} Kunden.",
+            "blue",
+        )
 
     def skip_day(self):
         self.pause()
@@ -116,12 +125,16 @@ class SimulationManager(QObject):
         is_closing_time = self.sim_time >= self.close_time
         if is_closing_time:
             if not self.store_is_closed_trigger:
-                self.log_message.emit("Ladenschluss! Eingang geschlossen...", "orange")
+                self.log_message.emit(
+                    "Ladenschluss! Eingang geschlossen...", "orange"
+                )
                 self.store_is_closed_trigger = True
             if not self.customers_model:
                 self.pause()
                 self.time_updated.emit(self.sim_time.toString("HH:mm"))
-                self.log_message.emit("Feierabend! Alle Kunden bedient.", "red")
+                self.log_message.emit(
+                    "Feierabend! Alle Kunden bedient.", "red"
+                )
                 self.day_finished.emit()
                 return
         else:
@@ -129,21 +142,86 @@ class SimulationManager(QObject):
 
         active_models = []
         waiting_cnt = 0
+
+        # UI Params einmal abholen (für Personal-Speed Check)
+        # Wir brauchen die "allgemeinen" Params (z.B. für Staff)
+        current_global_params = (
+            self.param_access_func(False) if self.param_access_func else None
+        )
+
         for model in self.customers_model:
             model.tick(game_dt)
             if model.state == "WAITING_AREA":
                 waiting_cnt += 1
                 if model.assigned_checkout_id is None:
                     self._try_assign_checkout(model)
-            elif model.state == "IN_QUEUE" and model.assigned_checkout_id is not None:
+            elif (
+                model.state == "IN_QUEUE"
+                and model.assigned_checkout_id is not None
+            ):
                 cid = model.assigned_checkout_id
                 q = self.checkout_queues.get(cid, [])
                 if q and q[0] == model:
                     dist = (model.pos - model.target_pos).manhattanLength()
-                    if dist < 5.0: model.state = "SCANNING"
-            elif model.state == "LEAVING" and model.assigned_checkout_id is not None:
+                    if dist < 5.0:
+                        # --- ANKUNFT AN DER KASSE -> SCANNING STARTEN ---
+                        model.state = "SCANNING"
+
+                        # HIER setzen wir die Scan-Geschwindigkeit dynamisch basierend auf Kasse
+                        min_s, max_s = 1.0, 2.0  # Fallback
+
+                        c_data = next(
+                            (
+                                x
+                                for x in self.map_mgr.checkouts_data
+                                if x["id"] == cid
+                            ),
+                            None,
+                        )
+                        if c_data:
+                            # 1. Fall: SB Kasse (Kunde scannt selbst)
+                            if c_data.get("type") == "SB":
+                                # Wir holen die aktuellen Params für diesen Kundentyp (behindert/nicht) live
+                                if self.param_access_func:
+                                    cust_params = self.param_access_func(
+                                        model.is_disabled
+                                    )
+                                    if cust_params and "scan" in cust_params:
+                                        min_s, max_s = cust_params["scan"]
+                                    else:
+                                        # Fallback auf Model-Werte
+                                        min_s, max_s = model.scan_speed_range
+
+                            # 2. Fall: Bediente Kasse (Personal scannt)
+                            else:
+                                # Skilllevel der Kasse bestimmen
+                                skill = c_data.get("skill", "Azubi")
+                                # Mapping auf Parameter-Keys
+                                key = "newbie" if skill == "Azubi" else "pro"
+
+                                if (
+                                    current_global_params
+                                    and "staff" in current_global_params
+                                ):
+                                    staff_rng = current_global_params[
+                                        "staff"
+                                    ].get(key)
+                                    if staff_rng:
+                                        min_s, max_s = staff_rng
+
+                        # Neue Range ins Model pushen (und sofort erste Dauer würfeln)
+                        model.set_scan_speed_range(min_s, max_s)
+
+            elif (
+                model.state == "LEAVING"
+                and model.assigned_checkout_id is not None
+            ):
                 cid = model.assigned_checkout_id
-                if cid in self.checkout_queues and self.checkout_queues[cid] and self.checkout_queues[cid][0] == model:
+                if (
+                    cid in self.checkout_queues
+                    and self.checkout_queues[cid]
+                    and self.checkout_queues[cid][0] == model
+                ):
                     self.checkout_queues[cid].pop(0)
                     self._advance_queue(cid)
                     model.assigned_checkout_id = None
@@ -152,7 +230,11 @@ class SimulationManager(QObject):
             else:
                 active_models.append(model)
         self.customers_model = active_models
-        self.stats_updated.emit(waiting_cnt, len(self.customers_model), self.total_customers_spawned)
+        self.stats_updated.emit(
+            waiting_cnt,
+            len(self.customers_model),
+            self.total_customers_spawned,
+        )
 
     def _attempt_spawn(self, dt_game_seconds):
         self.spawn_timer_acc += dt_game_seconds
@@ -167,22 +249,35 @@ class SimulationManager(QObject):
 
     def _spawn_single_customer(self):
         is_disabled = random.random() < self.prob_disabled
-        
-        # Get Params (including handheld probability)
         if self.param_access_func:
             params = self.param_access_func(is_disabled)
         else:
-            params = {"walk": (2.5, 0.5), "roll": (1.5, 0.3), "items": (12, 4), "scan": (0.5, 1.5), "handheld": 0}
-            
-        if params is None: return
+            params = None
+
+        if params is None:
+            # Fallback
+            params = {
+                "walk": (2.5, 0.5),
+                "roll": (1.5, 0.3),
+                "items": (12, 4),
+                "scan": (0.5, 1.5),
+                "handheld": 0,
+            }
+
         offset = self.settings.get("customer_path_offset", 10)
-        
-        # NEU: Handheld Entscheidung
+
         prob_handheld = params.get("handheld", 0.0) / 100.0
         uses_handheld = random.random() < prob_handheld
-        
+
+        # --- ROUTEN AUSWAHL (NEU: ZUFÄLLIG) ---
+        selected_route = []
+        if self.map_mgr.shop_routes:
+            # Wähle zufällig eine der verfügbaren Routen aus
+            all_routes = list(self.map_mgr.shop_routes.values())
+            selected_route = random.choice(all_routes)
+
         model = CustomerModel(
-            self.map_mgr.shop_routes.get("ShopRoute_1", []), # Fallback
+            selected_route,  # Hier die zufällige Route übergeben
             self.map_mgr.all_shelves,
             self.map_mgr.start_area_rect,
             self.map_mgr.waiting_area_rect,
@@ -191,7 +286,7 @@ class SimulationManager(QObject):
             exit_routes=self.map_mgr.exit_routes,
             max_offset=offset,
             is_disabled=is_disabled,
-            uses_handheld=uses_handheld, # NEU: Übergeben
+            uses_handheld=uses_handheld,
             speed_walk_params=params["walk"],
             speed_roll_params=params["roll"],
             items_params=params["items"],
@@ -201,62 +296,85 @@ class SimulationManager(QObject):
         model.entry_time_sec = total_seconds_today
         self.customers_model.append(model)
         self.total_customers_spawned += 1
-        
-        # Logging
+
         type_str = "Kunde"
-        if is_disabled: type_str = "Kunde (eingeschränkt)"
-        if uses_handheld: type_str += " [Handscanner]"
-            
+        if is_disabled:
+            type_str = "Kunde (eingeschränkt)"
+        if uses_handheld:
+            type_str += " [Handscanner]"
+
         self.log_message.emit(f"{type_str} hat den Laden betreten.", "green")
 
     def _try_assign_checkout(self, model):
         candidates = []
         for c_data in self.map_mgr.checkouts_data:
-            if not c_data.get("open", True): continue
+            if not c_data.get("open", True):
+                continue
             cid = c_data["id"]
-            if len(self.checkout_queues.get(cid, [])) < c_data.get("max_queue", 5):
+            if len(self.checkout_queues.get(cid, [])) < c_data.get(
+                "max_queue", 5
+            ):
                 candidates.append(cid)
         if candidates:
             chosen_id = random.choice(candidates)
-            if chosen_id not in self.checkout_queues: self.checkout_queues[chosen_id] = []
+            if chosen_id not in self.checkout_queues:
+                self.checkout_queues[chosen_id] = []
             self.checkout_queues[chosen_id].append(model)
-            self._set_queue_target(model, chosen_id, len(self.checkout_queues[chosen_id]) - 1)
+            self._set_queue_target(
+                model, chosen_id, len(self.checkout_queues[chosen_id]) - 1
+            )
 
     def _advance_queue(self, cid):
-        if cid not in self.checkout_queues: return
+        if cid not in self.checkout_queues:
+            return
         for idx, model in enumerate(self.checkout_queues[cid]):
             self._set_queue_target(model, cid, idx)
-            if model.state != "SCANNING": model.state = "IN_QUEUE"
+            if model.state != "SCANNING":
+                model.state = "IN_QUEUE"
 
     def _set_queue_target(self, model, cid, q_index):
-        c_data = next((x for x in self.map_mgr.checkouts_data if x["id"] == cid), None)
-        if not c_data: return
-        
+        c_data = next(
+            (x for x in self.map_mgr.checkouts_data if x["id"] == cid), None
+        )
+        if not c_data:
+            return
+
         cw = self.settings.get("size_checkout_width", 100)
         ch = self.settings.get("size_checkout_height", 100)
         spacing = self.settings.get("dist_queue_spacing", 36)
-        
+
         cx, cy = c_data["x"], c_data["y"]
         ori = c_data.get("orientation", "Right")
         c_type = c_data["type"]
         angle = c_data.get("angle", 0)
-        
-        offset_key = "offset_queue_" + ("sb_" if c_type == "SB" else "") + ("left" if ori == "Left" else "right")
+
+        offset_key = (
+            "offset_queue_"
+            + ("sb_" if c_type == "SB" else "")
+            + ("left" if ori == "Left" else "right")
+        )
         off = self.settings.get(offset_key, [0, 0])
         qx_local, qy_local = off[0], off[1]
-        
-        center_x = cx + cw / 2; center_y = cy + ch / 2
-        p_unrot_x = cx + qx_local; p_unrot_y = cy + qy_local
-        
+
+        center_x = cx + cw / 2
+        center_y = cy + ch / 2
+        p_unrot_x = cx + qx_local
+        p_unrot_y = cy + qy_local
+
         rad = math.radians(angle)
-        tx = p_unrot_x - center_x; ty = p_unrot_y - center_y
-        rx = tx * math.cos(rad) - ty * math.sin(rad); ry = tx * math.sin(rad) + ty * math.cos(rad)
+        tx = p_unrot_x - center_x
+        ty = p_unrot_y - center_y
+        rx = tx * math.cos(rad) - ty * math.sin(rad)
+        ry = tx * math.sin(rad) + ty * math.cos(rad)
         start_point = QPointF(rx + center_x, ry + center_y)
-        
-        if ori == "Left": dir_rad = math.radians(angle)
-        else: dir_rad = math.radians(angle + 180)
-            
-        dir_x = math.cos(dir_rad); dir_y = math.sin(dir_rad)
+
+        if ori == "Left":
+            dir_rad = math.radians(angle)
+        else:
+            dir_rad = math.radians(angle + 180)
+
+        dir_x = math.cos(dir_rad)
+        dir_y = math.sin(dir_rad)
         dir_vec = QVector2D(dir_x, dir_y)
         offset_vec = dir_vec * (q_index * spacing)
         target = start_point + offset_vec.toPointF()
