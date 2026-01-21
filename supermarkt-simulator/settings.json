@@ -16,32 +16,52 @@
     "size_checkout_height": 14,
     "size_queue_dot": 1,
     "dist_queue_spacing": 5,
-    "size_checkout_light": 2,
-    "customer_path_offset": 4,
+    "size_screen_normal_width": 1.87,
+    "size_screen_normal_height": 1.02,
+    "size_screen_sb_width": 3.83,
+    "size_screen_sb_height": 2.45,
+    "customer_path_offset": 4.0,
     "offset_queue_left": [
-        24,
-        65
+        24.0,
+        65.0
     ],
     "offset_queue_right": [
-        18,
-        1
+        18.0,
+        1.0
     ],
     "offset_queue_sb_left": [
-        44,
-        27
+        44.0,
+        27.0
     ],
     "offset_queue_sb_right": [
-        13,
-        27
+        13.0,
+        27.0
     ],
     "offset_cashier_left": [
-        96,
-        50
+        96.0,
+        50.0
     ],
     "offset_cashier_right": [
-        18,
-        8
+        18.0,
+        8.0
     ],
+    "offset_screen_normal_left": [
+        0.0,
+        0.0
+    ],
+    "offset_screen_normal_right": [
+        17.5,
+        3.8
+    ],
+    "offset_screen_sb_left": [
+        44.37,
+        3.3
+    ],
+    "offset_screen_sb_right": [
+        11.63,
+        3.25
+    ],
+    "size_checkout_light": 2,
     "offset_light_normal_left": [
         41,
         75

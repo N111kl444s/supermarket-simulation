@@ -862,7 +862,8 @@
             "open": true,
             "skill": "Azubi",
             "max_queue": 5,
-            "angle": 0
+            "angle": 0,
+            "cashier_skill": "Azubi"
         },
         {
             "id": 8,

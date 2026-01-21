@@ -1,22 +1,31 @@
 """
 Visual Controller.
 Refactored:
-- Queue Logic Fixed (Angle-based direction).
-- REMOVED: Random cashier assignment.
-- CHANGED: Cashier skin is now strictly determined by Checkout ID (Round-Robin).
-  ID 1 -> Image 0, ID 2 -> Image 1, etc.
+- SCREEN UPDATED: Uses COLOR_SCREEN_OPEN/CLOSED (less bright).
+- SCREEN TEXT ADDED: Displays 'Geöffnet'/'Geschlossen' scaled to fit.
+- Z-Order kept: Cashier > Screen > Checkout.
+- Uses FLOAT precision.
 """
 
 import math
-from PyQt6.QtGui import QColor, QPen, QBrush, QPixmap, QPainterPath
+from PyQt6.QtGui import QColor, QPen, QBrush, QPixmap, QPainterPath, QFont
 from PyQt6.QtWidgets import (
     QGraphicsPixmapItem,
     QGraphicsPathItem,
     QGraphicsEllipseItem,
     QGraphicsRectItem,
+    QGraphicsSimpleTextItem,
 )
 from PyQt6.QtCore import Qt, QPointF, QRectF
-from config import COLOR_BLUE, COLOR_RED, CASHIER_SIZE, IMAGE_DIR
+from config import (
+    COLOR_BLUE,
+    COLOR_RED,
+    CASHIER_SIZE,
+    IMAGE_DIR,
+    COLOR_SCREEN_OPEN,
+    COLOR_SCREEN_CLOSED,
+    COLOR_SCREEN_TEXT,
+)
 from views.items import (
     CheckoutItem,
     ShelfItem,
@@ -44,7 +53,7 @@ class VisualController:
         self.route_debug_items = []
         self.queue_debug_items = []
         self.customer_items = {}
-        self.light_items = []
+        self.screen_items = []
 
         self.waiting_area_item = None
         self.start_area_item = None
@@ -202,31 +211,43 @@ class VisualController:
         ori = cd.get("orientation", "Right")
         angle = cd.get("angle", 0)
         c_type = cd["type"]
-        key_light = (
-            "offset_light_sb_" + ("left" if ori == "Left" else "right")
-            if c_type == "SB"
-            else "offset_light_normal_"
-            + ("left" if ori == "Left" else "right")
+        is_sb = c_type == "SB"
+        is_open = cd.get("open", True)
+
+        # 1. Offsets holen (Float supported)
+        suffix = "left" if ori == "Left" else "right"
+        key_offset = (
+            "offset_screen_sb_" + suffix
+            if is_sb
+            else "offset_screen_normal_" + suffix
         )
-        lo = self.settings.get(key_light, [0, 0])
+        screen_offset = self.settings.get(key_offset, [0, 0])
+
+        # 2. Size holen (Float W/H)
+        if is_sb:
+            sw = float(self.settings.get("size_screen_sb_width", 10.0))
+            sh = float(self.settings.get("size_screen_sb_height", 10.0))
+        else:
+            sw = float(self.settings.get("size_screen_normal_width", 15.0))
+            sh = float(self.settings.get("size_screen_normal_height", 10.0))
+
         cw = self.settings.get("size_checkout_width", 100)
         ch = self.settings.get("size_checkout_height", 100)
-        ls = self.settings.get("size_checkout_light", 8)
 
+        # Checkout Item selbst (Z=6)
         ci = CheckoutItem(
             cd["x"],
             cd["y"],
             c_type,
             ori,
-            cd["open"],
-            False,
-            cd.get("id"),
-            lo,
+            is_open,
+            show_screen=False,
+            data_id=cd.get("id"),
+            screen_offset=screen_offset,
             width=cw,
             height=ch,
             angle=angle,
             show_id=show_id,
-            light_size=ls,
         )
         if self.on_checkout_clicked:
             ci.clicked.connect(self.on_checkout_clicked)
@@ -236,19 +257,11 @@ class VisualController:
             ci.setSelected(True)
 
         # CASHIER DRAWING LOGIC (ID-Based)
-        if (
-            c_type == "Normal"
-            and self.settings["show_cashiers"]
-            and cd.get("open", True)
-        ):
+        if c_type == "Normal" and self.settings["show_cashiers"] and is_open:
             skill = cd.get("cashier_skill") or cd.get("skill") or "Azubi"
 
-            # --- DETERMINISTIC VARIATION ---
-            # Wir nutzen die ID der Kasse.
-            # ID 1 -> Index 0, ID 2 -> Index 1 ...
             checkout_id = cd.get("id", 1)
             variant = max(0, checkout_id - 1)
-            # -------------------------------
 
             offset_key = (
                 "offset_cashier_left"
@@ -259,8 +272,8 @@ class VisualController:
             cx, cy = cd["x"], cd["y"]
             center_x = cx + cw / 2
             center_y = cy + ch / 2
-            p_unrot_x = cx + off_x
-            p_unrot_y = cy + off_y
+            p_unrot_x = cx + float(off_x)
+            p_unrot_y = cy + float(off_y)
             rad = math.radians(angle)
             tx = p_unrot_x - center_x
             ty = p_unrot_y - center_y
@@ -274,43 +287,95 @@ class VisualController:
                 final_y,
                 skill,
                 size=self.settings.get("size_cashier", CASHIER_SIZE),
-                variant_index=variant,  # Pass ID-based variant
+                variant_index=variant,
             )
             cai.setParentItem(self.map_group)
-            cai.setZValue(ci.zValue() + 0.1)
+
+            # Z-Value 25 ensures Cashier is ABOVE Screen (15) and Checkout (6)
+            cai.setZValue(25)
+
             self.cashier_items.append(cai)
 
+        # SCREEN DRAWING LOGIC (Z=15)
         if self.settings["show_cashiers"]:
-            ls = self.settings.get("size_checkout_light", 8)
             cx, cy = cd["x"], cd["y"]
             center_x = cx + cw / 2
             center_y = cy + ch / 2
-            lox, loy = lo
+
+            # Offset
+            lox, loy = screen_offset
             if lox == 0 and loy == 0:
                 lox, loy = cw / 2, 10
+
+            lox = float(lox)
+            loy = float(loy)
+
             p_unrot_x = cx + lox
             p_unrot_y = cy + loy
+
             rad = math.radians(angle)
             tx = p_unrot_x - center_x
             ty = p_unrot_y - center_y
             rx = tx * math.cos(rad) - ty * math.sin(rad)
             ry = tx * math.sin(rad) + ty * math.cos(rad)
-            light_x = rx + center_x
-            light_y = ry + center_y
-            light_item = QGraphicsEllipseItem(
-                light_x - ls / 2, light_y - ls / 2, ls, ls
+            screen_x = rx + center_x
+            screen_y = ry + center_y
+
+            # 1. Screen Rectangle
+            screen_item = QGraphicsRectItem(
+                -sw / 2, -sh / 2, sw, sh  # Local coordinates centered at 0,0
             )
-            col = (
-                Qt.GlobalColor.green
-                if cd.get("open", True)
-                else Qt.GlobalColor.red
+
+            # Color Logic (New Constants)
+            col = COLOR_SCREEN_OPEN if is_open else COLOR_SCREEN_CLOSED
+            screen_item.setBrush(QBrush(col))
+            screen_item.setPen(QPen(Qt.PenStyle.NoPen))
+
+            # 2. Screen Text
+            status_text = "Geöffnet" if is_open else "Geschlossen"
+            text_item = QGraphicsSimpleTextItem(
+                status_text, parent=screen_item
             )
-            light_item.setBrush(QBrush(col))
-            light_item.setPen(QPen(Qt.GlobalColor.black, 1))
-            light_item.setZValue(50)
-            light_item.setParentItem(self.map_group)
-            light_item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
-            self.light_items.append(light_item)
+            text_item.setBrush(QBrush(COLOR_SCREEN_TEXT))
+
+            # Setup Font
+            font = QFont("Segoe UI", 10, QFont.Weight.Bold)
+            text_item.setFont(font)
+
+            # Calculate Scale to Fit
+            brect = text_item.boundingRect()
+            if brect.width() > 0 and brect.height() > 0:
+                # Wir wollen einen kleinen Rand (padding)
+                target_w = sw * 0.9
+                target_h = sh * 0.9
+
+                scale_x = target_w / brect.width()
+                scale_y = target_h / brect.height()
+
+                # Nimm den kleineren Scale, damit es reinpasst (Aspect Ratio wahren)
+                scale = min(scale_x, scale_y)
+
+                text_item.setScale(scale)
+
+                # Center text
+                tx_scaled = brect.width() * scale
+                ty_scaled = brect.height() * scale
+                text_item.setPos(-tx_scaled / 2, -ty_scaled / 2)
+
+                # Optional: Wenn Text extrem klein würde (Screen winzig),
+                # könnte man ihn ausblenden oder min-size machen.
+                # Hier lassen wir ihn einfach skalieren.
+
+            # Position & Rotation
+            screen_item.setPos(screen_x, screen_y)
+            screen_item.setRotation(angle)
+
+            # Z-Value 15 (Between 6 and 25)
+            screen_item.setZValue(15)
+
+            screen_item.setParentItem(self.map_group)
+            screen_item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+            self.screen_items.append(screen_item)
 
     def _draw_queue_visuals(self, cd):
         cw = self.settings.get("size_checkout_width", 100)
@@ -329,8 +394,8 @@ class VisualController:
         off = self.settings.get(offset_key, [0, 0])
         center_x = cx + cw / 2
         center_y = cy + ch / 2
-        p_unrot_x = cx + off[0]
-        p_unrot_y = cy + off[1]
+        p_unrot_x = cx + float(off[0])
+        p_unrot_y = cy + float(off[1])
 
         rad = math.radians(angle)
         tx = p_unrot_x - center_x
@@ -423,7 +488,7 @@ class VisualController:
             + self.cashier_items
             + self.route_debug_items
             + self.queue_debug_items
-            + self.light_items
+            + self.screen_items
         ):
             i.setParentItem(None)
             if i.scene():
@@ -439,4 +504,4 @@ class VisualController:
         self.cashier_items.clear()
         self.route_debug_items.clear()
         self.queue_debug_items.clear()
-        self.light_items.clear()
+        self.screen_items.clear()

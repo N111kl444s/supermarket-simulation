@@ -1,8 +1,8 @@
 """
 Central configuration module.
 Refactored:
-- Added 'sorted()' to get_image_files to ensure deterministic order of images.
-- Replaced static cashier paths with dynamic lists (IMG_CASHIERS_AZUBI, IMG_CASHIERS_PRO)
+- ADDED: Specific screen colors (COLOR_SCREEN_OPEN, COLOR_SCREEN_CLOSED) - softer/modern.
+- ADDED: COLOR_SCREEN_TEXT.
 """
 
 import sys
@@ -67,9 +67,12 @@ COLOR_BG_INPUT = QColor("#FFFFFF")
 COLOR_BORDER = QColor("#D1D5DB")
 COLOR_ACCENT = QColor("#3B82F6")
 COLOR_ACCENT_HOVER = QColor("#2563EB")
-COLOR_SUCCESS = QColor("#10B981")
+
+# Modern, less saturated status colors
+COLOR_SUCCESS = QColor("#10B981")  # Emerald 500
 COLOR_WARNING = QColor("#F59E0B")
-COLOR_ERROR = QColor("#EF4444")
+COLOR_ERROR = QColor("#EF4444")  # Red 500
+
 COLOR_ORANGE = QColor("#F97316")
 COLOR_TEXT_MAIN = QColor("#1F2937")
 COLOR_TEXT_MUTED = QColor("#6B7280")
@@ -93,6 +96,13 @@ COLOR_BLUE = COLOR_ACCENT
 COLOR_DARK_TEXT = COLOR_TEXT_MAIN
 COLOR_LIGHT_BG = COLOR_BG_MAIN
 COLOR_WHITE_BG = COLOR_BG_PANEL
+
+# --- SCREEN COLORS (NEW) ---
+COLOR_SCREEN_OPEN = QColor(
+    "#059669"
+)  # Emerald 600 (etwas dunkler für guten Kontrast mit weißer Schrift)
+COLOR_SCREEN_CLOSED = QColor("#DC2626")  # Red 600
+COLOR_SCREEN_TEXT = QColor("#FFFFFF")  # White
 
 # --- Constants ---
 SHELF_SIZE = 50.0
@@ -142,7 +152,7 @@ if not IMG_SHELVES:
 # 6. Checkouts
 IMG_CHECKOUTS = ["kasse.png", "sb.png"]
 
-# 7. Cashiers (UPDATED)
+# 7. Cashiers
 IMG_CASHIERS_AZUBI = get_image_files("azubi")
 if not IMG_CASHIERS_AZUBI:
     IMG_CASHIERS_AZUBI = ["azubi.png"]
@@ -170,7 +180,10 @@ DEFAULT_SETTINGS = {
     "size_checkout_height": CHECKOUT_HEIGHT,
     "size_queue_dot": 4,
     "dist_queue_spacing": 20,
-    "size_checkout_light": 8,
+    "size_screen_normal_width": 15,
+    "size_screen_normal_height": 10,
+    "size_screen_sb_width": 10,
+    "size_screen_sb_height": 10,
     "customer_path_offset": 10,
     "offset_queue_left": [0, 0],
     "offset_queue_right": [0, 0],
@@ -178,8 +191,8 @@ DEFAULT_SETTINGS = {
     "offset_queue_sb_right": [0, 0],
     "offset_cashier_left": [0, 0],
     "offset_cashier_right": [0, 0],
-    "offset_light_normal_left": [0, 0],
-    "offset_light_normal_right": [0, 0],
-    "offset_light_sb_left": [0, 0],
-    "offset_light_sb_right": [0, 0],
+    "offset_screen_normal_left": [0, 0],
+    "offset_screen_normal_right": [0, 0],
+    "offset_screen_sb_left": [0, 0],
+    "offset_screen_sb_right": [0, 0],
 }
