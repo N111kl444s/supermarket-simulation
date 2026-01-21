@@ -1,10 +1,8 @@
 """
 Sidebar Component.
 Refactored:
-- ADDED: Payment methods section (Cash/Card) with auto-balancing to 100%.
-- CHANGED: Scan section title in Customer tab to match Staff tab.
-- FIXED: Help icons are now visible (added fixed size and robust style loading).
-- Tooltips moved next to distribution labels using standard icons.
+- ADDED: Payment duration settings (Cash vs Card) in Customer tab.
+- Payment method percentages section kept.
 """
 
 from PyQt6.QtWidgets import (
@@ -56,13 +54,11 @@ class Sidebar(QWidget):
         self._init_data_tab()
 
     def _init_input_tab(self):
-        # Container für den Eingabe-Tab
         container = QWidget()
         layout_container = QVBoxLayout(container)
         layout_container.setContentsMargins(5, 5, 5, 5)
         layout_container.setSpacing(10)
 
-        # 1. Hinweistext & Abstand
         lbl_hint = QLabel(
             "Konfigurieren Sie hier die Simulationsparameter.\nNutzen Sie die Tabs unten für Details."
         )
@@ -74,7 +70,6 @@ class Sidebar(QWidget):
 
         layout_container.addSpacing(5)
 
-        # 2. Das Sub-Tab-Widget
         input_tabs = QTabWidget()
 
         # --- SUB-TAB 1: LADEN ---
@@ -84,7 +79,6 @@ class Sidebar(QWidget):
         l_shop.setSpacing(10)
         l_shop.setContentsMargins(5, 15, 5, 5)
 
-        # Öffnungszeiten
         gb_time = QGroupBox("Öffnungszeiten")
         f_time = QFormLayout(gb_time)
         self.time_open = self._create_time_edit(DEFAULT_OPEN_TIME)
@@ -93,7 +87,6 @@ class Sidebar(QWidget):
         f_time.addRow("Schließen:", self.time_close)
         l_shop.addWidget(gb_time)
 
-        # Störung
         gb_co = QGroupBox("Störungen & Kassen")
         f_co = QFormLayout(gb_co)
         self.checkout_fail_rate_normal = self._create_spin(0, 0, 100, " %")
@@ -191,15 +184,15 @@ class Sidebar(QWidget):
         f_shop.addRow("Handscanner:", self.hand_scanner_prob)
         l_gb_cust.addLayout(f_shop)
 
-        # Scannen (Updated Title)
+        # Scannen
         tooltip_scan = (
             "<b>Gleichverteilung</b><br>"
-            "Jeder Artikel braucht eine zufällige Zeit zwischen Min und Max.<br>"
+            "Dauer pro Artikel beim Scannen.<br>"
             "<i>Formel:</i> <code>t = random.uniform(Min, Max)</code>"
         )
         self._add_section_header(
             l_gb_cust,
-            "Scangeschwindigkeit (Sek/Artikel)",  # CHANGED TITLE
+            "Scangeschwindigkeit (Sek/Artikel)",
             "(Gleichverteilung)",
             tooltip_scan,
         )
@@ -215,19 +208,20 @@ class Sidebar(QWidget):
 
         # --- NEU: Zahlungsmethoden ---
         tooltip_payment = (
-            "<b>Zahlungsart</b><br>"
-            "Entscheidet, wie der Kunde bezahlt.<br>"
-            "Die Summe beider Werte ergibt immer 100%."
+            "<b>Zahlungsart & Dauer</b><br>"
+            "Verteilung der Bezahlmethoden und Dauer des Bezahlvorgangs.<br>"
+            "Summe der Anteile ergibt immer 100%."
         )
         self._add_section_header(
-            l_gb_cust, "Zahlungsmethoden", "(Prozentual)", tooltip_payment
+            l_gb_cust, "Zahlungsmethoden", "(Prozent & Dauer)", tooltip_payment
         )
 
         f_pay = QFormLayout()
+
+        # 1. Prozentuale Verteilung
         self.payment_cash = self._create_double_spin(30.0, 0, 100, " %")
         self.payment_card = self._create_double_spin(70.0, 0, 100, " %")
 
-        # Logik-Verknüpfung
         self.payment_cash.valueChanged.connect(
             lambda: self._balance_payment(self.payment_cash, self.payment_card)
         )
@@ -235,8 +229,18 @@ class Sidebar(QWidget):
             lambda: self._balance_payment(self.payment_card, self.payment_cash)
         )
 
-        f_pay.addRow("Bargeld:", self.payment_cash)
-        f_pay.addRow("Karte:", self.payment_card)
+        f_pay.addRow("Anteil Bargeld:", self.payment_cash)
+        f_pay.addRow("Anteil Karte:", self.payment_card)
+
+        # 2. Dauer
+        f_pay.addRow(QLabel("<b>Bezahldauer (Sek):</b>"))
+        self.pay_duration_cash_min, self.pay_duration_cash_max = (
+            self._create_range_row("Bargeld:", 3.0, 8.0, f_pay)
+        )
+        self.pay_duration_card_min, self.pay_duration_card_max = (
+            self._create_range_row("Karte:", 1.0, 4.0, f_pay)
+        )
+
         l_gb_cust.addLayout(f_pay)
         # -----------------------------
 
@@ -499,42 +503,32 @@ class Sidebar(QWidget):
         return sb
 
     def _create_help_icon(self, tooltip):
-        """Creates a standard icon label with a tooltip."""
         lbl = QLabel()
-        # FIX: Use QApplication.style() to ensure robust loading
-        # FIX: Use SP_MessageBoxQuestion for '?' icon
         icon = QApplication.style().standardIcon(
             QStyle.StandardPixmap.SP_MessageBoxQuestion
         )
         lbl.setPixmap(icon.pixmap(16, 16))
         lbl.setToolTip(tooltip)
         lbl.setCursor(Qt.CursorShape.WhatsThisCursor)
-        # FIX: Fixed size ensures the label isn't crushed to 0 width by layout
         lbl.setFixedSize(16, 16)
         lbl.setScaledContents(True)
         return lbl
 
     def _add_section_header(self, layout, title, dist_name, tooltip=None):
-        """Adds a bold header, a gray distribution sublabel, and an optional help icon side-by-side."""
         layout.addWidget(self._header(title))
-
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(5)
-
         lbl_dist = self._sublabel(dist_name)
         row.addWidget(lbl_dist)
-
         if tooltip:
             icon = self._create_help_icon(tooltip)
             row.addWidget(icon)
-
         row.addStretch()
         layout.addLayout(row)
 
     def _create_dist_row(self, label, val_mean, val_std, layout):
         h = QHBoxLayout()
-        # FIX: Margins entfernen für saubere Ausrichtung
         h.setContentsMargins(0, 0, 0, 0)
         sb_mean = self._create_double_spin(val_mean, 0.1, 20.0)
         sb_std = self._create_double_spin(val_std, 0.0, 5.0)
@@ -547,7 +541,6 @@ class Sidebar(QWidget):
 
     def _create_range_row(self, label, val_min, val_max, layout):
         h = QHBoxLayout()
-        # FIX: Margins entfernen für saubere Ausrichtung
         h.setContentsMargins(0, 0, 0, 0)
         sb_min = self._create_double_spin(val_min, 0.1, 10.0)
         sb_max = self._create_double_spin(val_max, 0.1, 10.0)

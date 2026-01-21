@@ -3,6 +3,7 @@ Customer agent logic.
 Refactored:
 - Implements a State Machine for natural shopping behavior.
 - Adds 'trigger_scan_anim' for visual feedback.
+- UPDATED: Handles Payment Method (Cash/Card) and PAYING state.
 - UPDATED: Scan duration is now variable per item (Uniform Distribution) based on settings.
 """
 
@@ -26,7 +27,9 @@ class CustomerModel:
         max_offset=10,
         is_disabled=False,
         uses_handheld=False,
+        payment_method="card",  # "cash" oder "card"
         scan_speed_range=(0.5, 1.5),
+        payment_speed_range=(1.0, 4.0),
         speed_walk_params=(2.5, 0.5),
         speed_roll_params=(1.5, 0.3),
         items_params=(12, 4),
@@ -43,6 +46,7 @@ class CustomerModel:
         self.max_offset = max_offset
         self.is_disabled = is_disabled
         self.uses_handheld = uses_handheld
+        self.payment_method = payment_method  # Neu: Bezahlmethode
 
         self.pos = QPointF(0, 0)
         self.angle = 0.0
@@ -78,6 +82,13 @@ class CustomerModel:
         self.scan_speed_range = scan_speed_range  # (min, max)
         self.current_scan_duration = random.uniform(*self.scan_speed_range)
         self.scan_time_elapsed = 0.0
+
+        # --- PAYMENT LOGIC ---
+        self.payment_speed_range = payment_speed_range
+        self.current_payment_duration = random.uniform(
+            *self.payment_speed_range
+        )
+        self.payment_time_elapsed = 0.0
 
         # Animation Trigger
         self.trigger_scan_anim = False
@@ -215,6 +226,8 @@ class CustomerModel:
             self._move_to_target(dt)
         elif self.state == "SCANNING":
             self._update_scanning(dt)
+        elif self.state == "PAYING":  # NEU
+            self._update_paying(dt)
         elif self.state == "LEAVING":
             self._update_leaving(dt)
 
@@ -308,16 +321,29 @@ class CustomerModel:
             self.current_scan_duration = random.uniform(*self.scan_speed_range)
 
             if self.uses_handheld:
-                # Handheld: Einmal scannen -> Fertig
-                self._finish_checkout()
+                # Handheld: Einmal scannen -> Bezahlen
+                self.state = "PAYING"
+                self.payment_time_elapsed = 0.0
             else:
                 # Normal: Ein Item abziehen
                 if self.item_count > 0:
                     self.item_count -= 1
 
-                # Wenn fertig -> Gehen
+                # Wenn fertig -> Bezahlen
                 if self.item_count <= 0:
-                    self._finish_checkout()
+                    self.state = "PAYING"
+                    self.payment_time_elapsed = 0.0
+
+    def _update_paying(self, dt):
+        # Wartezeit für Bezahlvorgang
+        self.payment_time_elapsed += dt
+
+        # Nur einmal am Anfang Animation triggern (optional, hier lassen wir es blinken/faden bis fertig)
+        if self.payment_time_elapsed < dt * 1.5:
+            self.trigger_scan_anim = True
+
+        if self.payment_time_elapsed >= self.current_payment_duration:
+            self._finish_checkout()
 
     def _update_leaving(self, dt):
         if self.target_pos:

@@ -5,6 +5,7 @@ Updated:
 - DYNAMICALLY sets scan speed based on checkout type (SB vs Normal) and Staff skill.
 - Refactored to fetch LIVE params for scan speed at the checkout (Uniform Distribution).
 - FIXED: Customers now choose a RANDOM shopping route from all available routes instead of just 'ShopRoute_1'.
+- NEW: Passes payment method and speed settings to new customers.
 """
 
 import random
@@ -262,12 +263,26 @@ class SimulationManager(QObject):
                 "items": (12, 4),
                 "scan": (0.5, 1.5),
                 "handheld": 0,
+                "pay_ratio": (30, 70),  # default Cash 30, Card 70
+                "pay_cash_speed": (3.0, 8.0),
+                "pay_card_speed": (1.0, 4.0),
             }
 
         offset = self.settings.get("customer_path_offset", 10)
 
         prob_handheld = params.get("handheld", 0.0) / 100.0
         uses_handheld = random.random() < prob_handheld
+
+        # --- Bezahlmethode bestimmen ---
+        ratio = params.get("pay_ratio", (30, 70))  # (Cash%, Card%)
+        # Wir würfeln: 0..100
+        roll = random.uniform(0, 100)
+        if roll < ratio[0]:
+            pay_method = "cash"
+            pay_speed = params.get("pay_cash_speed", (3.0, 8.0))
+        else:
+            pay_method = "card"
+            pay_speed = params.get("pay_card_speed", (1.0, 4.0))
 
         # --- ROUTEN AUSWAHL (NEU: ZUFÄLLIG) ---
         selected_route = []
@@ -287,6 +302,8 @@ class SimulationManager(QObject):
             max_offset=offset,
             is_disabled=is_disabled,
             uses_handheld=uses_handheld,
+            payment_method=pay_method,
+            payment_speed_range=pay_speed,
             speed_walk_params=params["walk"],
             speed_roll_params=params["roll"],
             items_params=params["items"],
@@ -329,7 +346,7 @@ class SimulationManager(QObject):
             return
         for idx, model in enumerate(self.checkout_queues[cid]):
             self._set_queue_target(model, cid, idx)
-            if model.state != "SCANNING":
+            if model.state != "SCANNING" and model.state != "PAYING":
                 model.state = "IN_QUEUE"
 
     def _set_queue_target(self, model, cid, q_index):
