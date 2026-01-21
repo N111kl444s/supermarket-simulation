@@ -1,6 +1,9 @@
 """
 Cashier item visualization.
-Uses specific images for 'Azubi' and 'Festangestellter'.
+Refactored:
+- Uses DETERMINISTIC skin selection based on 'variant_index'.
+- Prevents cashiers from changing appearance on every redraw.
+- Loads random variants for 'Azubi' and 'Festangestellter' from configured lists.
 """
 
 from PyQt6.QtWidgets import QGraphicsPixmapItem
@@ -12,19 +15,20 @@ from config import *
 class CashierItem(QGraphicsPixmapItem):
     """
     Visual representation of a cashier employee.
-    Loads 'azubi.png' or 'festangestellter.png' depending on skill.
+    Selects a specific image from the pool based on `variant_index`.
     """
 
-    _pixmap_azubi = None
-    _pixmap_pro = None
+    _pixmaps_azubi = []
+    _pixmaps_pro = []
     _images_loaded = False
 
-    def __init__(self, x, y, skill, size=CASHIER_SIZE):
+    def __init__(self, x, y, skill, size=CASHIER_SIZE, variant_index=0):
         super().__init__()
         self._load_images()
 
         self.skill = str(skill).strip()
         self.size = size
+        self.variant_index = variant_index
 
         # Initiale Zuweisung
         self.update_skill(self.skill)
@@ -39,15 +43,17 @@ class CashierItem(QGraphicsPixmapItem):
     def update_skill(self, new_skill):
         """Updates the image based on the new skill level."""
         self.skill = str(new_skill).strip()
-        target_pixmap = None
 
-        # Mapping der Skills zu den internen Bildern
+        pool = []
         if self.skill == "Azubi":
-            target_pixmap = self._pixmap_azubi
+            pool = self._pixmaps_azubi
         elif self.skill == "Festangestellter":
-            target_pixmap = self._pixmap_pro
+            pool = self._pixmaps_pro
 
-        if target_pixmap and not target_pixmap.isNull():
+        if pool:
+            # Deterministische Auswahl: Immer das gleiche Bild für diesen Index
+            idx = self.variant_index % len(pool)
+            target_pixmap = pool[idx]
             self.setPixmap(target_pixmap)
         else:
             # Fallback Zeichnung
@@ -105,17 +111,17 @@ class CashierItem(QGraphicsPixmapItem):
         if cls._images_loaded:
             return
 
-        # Lade Azubi Bild
-        if PATH_AZUBI.exists():
-            cls._pixmap_azubi = QPixmap(str(PATH_AZUBI))
-        else:
-            print(f"WARNUNG: Bild für Azubi fehlt: {PATH_AZUBI}")
+        # Lade Azubi Bilder
+        for name in IMG_CASHIERS_AZUBI:
+            p = IMAGE_DIR / name
+            if p.exists():
+                cls._pixmaps_azubi.append(QPixmap(str(p)))
 
-        # Lade Festangestellter Bild
-        if PATH_PRO.exists():
-            cls._pixmap_pro = QPixmap(str(PATH_PRO))
-        else:
-            print(f"WARNUNG: Bild für Festangestellter fehlt: {PATH_PRO}")
+        # Lade Festangestellter Bilder
+        for name in IMG_CASHIERS_PRO:
+            p = IMAGE_DIR / name
+            if p.exists():
+                cls._pixmaps_pro.append(QPixmap(str(p)))
 
         cls._images_loaded = True
 

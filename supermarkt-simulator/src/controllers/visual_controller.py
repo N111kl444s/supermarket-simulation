@@ -1,10 +1,10 @@
 """
 Visual Controller.
 Refactored:
-- Queue Logic Fixed:
-  - Left Checkout -> Queue direction = Angle.
-  - Right Checkout -> Queue direction = Angle + 180.
-- First Queue Dot is highlighted (Red & Larger).
+- Queue Logic Fixed (Angle-based direction).
+- REMOVED: Random cashier assignment.
+- CHANGED: Cashier skin is now strictly determined by Checkout ID (Round-Robin).
+  ID 1 -> Image 0, ID 2 -> Image 1, etc.
 """
 
 import math
@@ -235,12 +235,21 @@ class VisualController:
         if is_selected:
             ci.setSelected(True)
 
+        # CASHIER DRAWING LOGIC (ID-Based)
         if (
             c_type == "Normal"
             and self.settings["show_cashiers"]
             and cd.get("open", True)
         ):
             skill = cd.get("cashier_skill") or cd.get("skill") or "Azubi"
+
+            # --- DETERMINISTIC VARIATION ---
+            # Wir nutzen die ID der Kasse.
+            # ID 1 -> Index 0, ID 2 -> Index 1 ...
+            checkout_id = cd.get("id", 1)
+            variant = max(0, checkout_id - 1)
+            # -------------------------------
+
             offset_key = (
                 "offset_cashier_left"
                 if ori == "Left"
@@ -259,11 +268,13 @@ class VisualController:
             ry = tx * math.sin(rad) + ty * math.cos(rad)
             final_x = rx + center_x
             final_y = ry + center_y
+
             cai = CashierItem(
                 final_x,
                 final_y,
                 skill,
                 size=self.settings.get("size_cashier", CASHIER_SIZE),
+                variant_index=variant,  # Pass ID-based variant
             )
             cai.setParentItem(self.map_group)
             cai.setZValue(ci.zValue() + 0.1)
@@ -329,12 +340,9 @@ class VisualController:
         start_point_x = rx + center_x
         start_point_y = ry + center_y
 
-        # FIX: Direction Logic SPLIT
         if cd.get("orientation") == "Left":
-            # Left: Direction = Angle
             dir_rad = math.radians(angle)
         else:
-            # Right: Direction = Angle + 180 (Opposite)
             dir_rad = math.radians(angle + 180)
 
         dir_x = math.cos(dir_rad)
@@ -344,7 +352,6 @@ class VisualController:
             px = start_point_x + dir_x * (i * spacing)
             py = start_point_y + dir_y * (i * spacing)
 
-            # FIX: Highlight First Dot
             current_size = dot_size
             if i == 0:
                 current_size = dot_size + 4
