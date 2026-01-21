@@ -1,10 +1,7 @@
 """
 Visual Controller.
 Refactored:
-- FIX: Updated _draw_single_checkout to match new CheckoutItem signature.
-- Removed manual creation of Cashier/Lights (now handled by CheckoutItem).
-- NEW: Added sync_workers to render the maintenance worker.
-- Queue Logic:
+- Queue Logic Fixed:
   - Left Checkout -> Queue direction = Angle.
   - Right Checkout -> Queue direction = Angle + 180.
 - First Queue Dot is highlighted (Red & Larger).
@@ -29,9 +26,6 @@ from views.items import (
     StartAreaItem,
     ExitAreaItem,
 )
-# WorkerItem importieren wir lokal oder hier, falls vorhanden.
-# Da es eine neue Datei ist, importieren wir sie:
-from views.items.worker_item import WorkerItem
 
 
 class VisualController:
@@ -46,15 +40,11 @@ class VisualController:
 
         self.shelf_items = []
         self.checkout_items = []
-        # cashier_items und light_items werden nicht mehr separat benötigt,
-        # da CheckoutItem diese nun besitzt. Wir behalten die Listen für Cleanup.
-        self.cashier_items = [] 
-        self.light_items = []
-        
+        self.cashier_items = []
         self.route_debug_items = []
         self.queue_debug_items = []
         self.customer_items = {}
-        self.worker_items = {} # NEU
+        self.light_items = []
 
         self.waiting_area_item = None
         self.start_area_item = None
@@ -198,9 +188,8 @@ class VisualController:
                 "checkout", cd["id"]
             )
             if show:
-                # FIX: Hier übergeben wir jetzt map_manager korrekt
                 self._draw_single_checkout(
-                    cd, map_manager, is_selected("checkout", cd["id"])
+                    cd, is_selected("checkout", cd["id"]), show_id=show_c_nums
                 )
             if show_queues:
                 self._draw_queue_visuals(cd)
@@ -209,21 +198,108 @@ class VisualController:
             self._draw_routes(map_manager)
         self.scene.blockSignals(False)
 
-    def _draw_single_checkout(self, cd, map_manager, is_selected):
-        # FIX: Neuer Aufruf für CheckoutItem (data, map_manager)
-        ci = CheckoutItem(cd, map_manager)
-        
+    def _draw_single_checkout(self, cd, is_selected, show_id=True):
+        ori = cd.get("orientation", "Right")
+        angle = cd.get("angle", 0)
+        c_type = cd["type"]
+        key_light = (
+            "offset_light_sb_" + ("left" if ori == "Left" else "right")
+            if c_type == "SB"
+            else "offset_light_normal_"
+            + ("left" if ori == "Left" else "right")
+        )
+        lo = self.settings.get(key_light, [0, 0])
+        cw = self.settings.get("size_checkout_width", 100)
+        ch = self.settings.get("size_checkout_height", 100)
+        ls = self.settings.get("size_checkout_light", 8)
+
+        ci = CheckoutItem(
+            cd["x"],
+            cd["y"],
+            c_type,
+            ori,
+            cd["open"],
+            False,
+            cd.get("id"),
+            lo,
+            width=cw,
+            height=ch,
+            angle=angle,
+            show_id=show_id,
+            light_size=ls,
+        )
         if self.on_checkout_clicked:
             ci.clicked.connect(self.on_checkout_clicked)
-        
         ci.setParentItem(self.map_group)
         self.checkout_items.append(ci)
-        
         if is_selected:
             ci.setSelected(True)
 
-        # HINWEIS: CashierItem und LightItem werden jetzt intern von CheckoutItem verwaltet.
-        # Der alte Code hier wurde entfernt.
+        if (
+            c_type == "Normal"
+            and self.settings["show_cashiers"]
+            and cd.get("open", True)
+        ):
+            skill = cd.get("cashier_skill") or cd.get("skill") or "Azubi"
+            offset_key = (
+                "offset_cashier_left"
+                if ori == "Left"
+                else "offset_cashier_right"
+            )
+            off_x, off_y = self.settings.get(offset_key, [0, 0])
+            cx, cy = cd["x"], cd["y"]
+            center_x = cx + cw / 2
+            center_y = cy + ch / 2
+            p_unrot_x = cx + off_x
+            p_unrot_y = cy + off_y
+            rad = math.radians(angle)
+            tx = p_unrot_x - center_x
+            ty = p_unrot_y - center_y
+            rx = tx * math.cos(rad) - ty * math.sin(rad)
+            ry = tx * math.sin(rad) + ty * math.cos(rad)
+            final_x = rx + center_x
+            final_y = ry + center_y
+            cai = CashierItem(
+                final_x,
+                final_y,
+                skill,
+                size=self.settings.get("size_cashier", CASHIER_SIZE),
+            )
+            cai.setParentItem(self.map_group)
+            cai.setZValue(ci.zValue() + 0.1)
+            self.cashier_items.append(cai)
+
+        if self.settings["show_cashiers"]:
+            ls = self.settings.get("size_checkout_light", 8)
+            cx, cy = cd["x"], cd["y"]
+            center_x = cx + cw / 2
+            center_y = cy + ch / 2
+            lox, loy = lo
+            if lox == 0 and loy == 0:
+                lox, loy = cw / 2, 10
+            p_unrot_x = cx + lox
+            p_unrot_y = cy + loy
+            rad = math.radians(angle)
+            tx = p_unrot_x - center_x
+            ty = p_unrot_y - center_y
+            rx = tx * math.cos(rad) - ty * math.sin(rad)
+            ry = tx * math.sin(rad) + ty * math.cos(rad)
+            light_x = rx + center_x
+            light_y = ry + center_y
+            light_item = QGraphicsEllipseItem(
+                light_x - ls / 2, light_y - ls / 2, ls, ls
+            )
+            col = (
+                Qt.GlobalColor.green
+                if cd.get("open", True)
+                else Qt.GlobalColor.red
+            )
+            light_item.setBrush(QBrush(col))
+            light_item.setPen(QPen(Qt.GlobalColor.black, 1))
+            light_item.setZValue(50)
+            light_item.setParentItem(self.map_group)
+            light_item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+            self.light_items.append(light_item)
 
     def _draw_queue_visuals(self, cd):
         cw = self.settings.get("size_checkout_width", 100)
@@ -253,9 +329,12 @@ class VisualController:
         start_point_x = rx + center_x
         start_point_y = ry + center_y
 
+        # FIX: Direction Logic SPLIT
         if cd.get("orientation") == "Left":
+            # Left: Direction = Angle
             dir_rad = math.radians(angle)
         else:
+            # Right: Direction = Angle + 180 (Opposite)
             dir_rad = math.radians(angle + 180)
 
         dir_x = math.cos(dir_rad)
@@ -265,6 +344,7 @@ class VisualController:
             px = start_point_x + dir_x * (i * spacing)
             py = start_point_y + dir_y * (i * spacing)
 
+            # FIX: Highlight First Dot
             current_size = dot_size
             if i == 0:
                 current_size = dot_size + 4
@@ -291,7 +371,6 @@ class VisualController:
 
     def _draw_routes(self, map_manager):
         def draw(routes, col):
-            if not routes: return
             for pts in routes.values():
                 if len(pts) > 1:
                     pp = QPainterPath()
@@ -308,8 +387,6 @@ class VisualController:
         draw(map_manager.shop_routes, QColor(100, 100, 100, 100))
         draw(map_manager.start_routes, COLOR_BLUE)
         draw(map_manager.exit_routes, COLOR_RED)
-        # NEU: Wartungs-Routen anzeigen
-        draw(map_manager.maintenance_routes, QColor("orange"))
 
     def sync_customers(self, models):
         current_set = set(models)
@@ -331,27 +408,6 @@ class VisualController:
                 self.customer_items[model] = item
             else:
                 self.customer_items[model].sync_visuals()
-
-    def sync_workers(self, models):
-        """NEU: Synchronisiert die Arbeiter-Anzeige."""
-        current_set = set(models)
-        to_remove = []
-        for model, item in self.worker_items.items():
-            if model not in current_set:
-                item.setParentItem(None)
-                if item.scene():
-                    self.scene.removeItem(item)
-                to_remove.append(model)
-        for m in to_remove:
-            del self.worker_items[m]
-            
-        for model in models:
-            if model not in self.worker_items:
-                item = WorkerItem(model, size=32)
-                item.setParentItem(self.map_group)
-                self.worker_items[model] = item
-            else:
-                self.worker_items[model].sync_visuals()
 
     def _clear_dynamic_items(self):
         for i in (

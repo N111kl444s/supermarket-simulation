@@ -3,8 +3,8 @@ Simulation Manager Module.
 Updated:
 - Handles Handheld generation reliably.
 - DYNAMICALLY sets scan speed based on checkout type (SB vs Normal) and Staff skill.
-- Payment Method parameters passed to CustomerModel.
-- NEW: Maintenance Logic (Breakdowns, Worker Queue, Dispatch).
+- Refactored to fetch LIVE params for scan speed at the checkout (Uniform Distribution).
+- FIXED: Customers now choose a RANDOM shopping route from all available routes instead of just 'ShopRoute_1'.
 """
 
 import random
@@ -12,7 +12,6 @@ import math
 from PyQt6.QtCore import QTimer, QTime, QObject, pyqtSignal, QPointF
 from PyQt6.QtGui import QVector2D
 from models.customer import CustomerModel
-from models.worker import WorkerModel # NEU
 from config import (
     DEFAULT_OPEN_TIME,
     DEFAULT_CLOSE_TIME,
@@ -44,10 +43,6 @@ class SimulationManager(QObject):
 
         self.customers_model = []
         self.checkout_queues = {}
-        
-        # --- WORKER ---
-        self.worker = None # Single instance for now
-        self.maintenance_queue = [] # Queue of checkout IDs to fix
 
         self.total_customers_spawned = 0
         self.target_daily_customers = 50
@@ -85,17 +80,6 @@ class SimulationManager(QObject):
         self.sim_time = open_time_val
         self.open_time = open_time_val
         self.time_accumulator_sec = 0.0
-        
-        # Reset Worker
-        self.worker = None
-        self.maintenance_queue.clear()
-        # Reset broken status on map checkouts
-        for c in self.map_mgr.checkouts_data:
-            # We don't have a direct 'broken' flag in data usually, 
-            # but visual controller items might need reset.
-            # Ideally map_manager reloads or visual controller clears.
-            pass
-
         self.time_updated.emit(self.sim_time.toString("HH:mm"))
         self.stats_updated.emit(0, 0, 0)
 
@@ -116,14 +100,6 @@ class SimulationManager(QObject):
         )
         self.spawn_timer_acc = 0.0
         self._calc_next_spawn()
-        
-        # Spawn Worker if spawn point exists
-        if self.map_mgr.worker_spawn_pos:
-            self.worker = WorkerModel(self.map_mgr.worker_spawn_pos, self.map_mgr.maintenance_routes)
-        else:
-            # Fallback spawn at 0,0 if not set
-            self.worker = WorkerModel(QPointF(0,0), self.map_mgr.maintenance_routes)
-
         self.is_initialized = True
         self.log_message.emit(
             f"Laden geöffnet. Erwarte ca. {self.target_daily_customers} Kunden.",
@@ -164,27 +140,17 @@ class SimulationManager(QObject):
         else:
             self._attempt_spawn(game_dt)
 
-        # --- Worker Logic ---
-        if self.worker:
-            job_done = self.worker.tick(game_dt)
-            if job_done and self.worker.target_checkout_id is not None:
-                # Reparatur fertig
-                cid = self.worker.target_checkout_id
-                self._repair_checkout(cid)
-                
-            # Neuen Job zuweisen?
-            if self.worker.state == "IDLE" and self.maintenance_queue:
-                next_cid = self.maintenance_queue.pop(0)
-                self._dispatch_worker(next_cid)
-
-        # Update Customers
         active_models = []
         waiting_cnt = 0
-        current_global_params = self.param_access_func(False) if self.param_access_func else None
+
+        # UI Params einmal abholen (für Personal-Speed Check)
+        # Wir brauchen die "allgemeinen" Params (z.B. für Staff)
+        current_global_params = (
+            self.param_access_func(False) if self.param_access_func else None
+        )
 
         for model in self.customers_model:
             model.tick(game_dt)
-            # ... (Checkout assign logic logic identical to before)
             if model.state == "WAITING_AREA":
                 waiting_cnt += 1
                 if model.assigned_checkout_id is None:
@@ -194,19 +160,57 @@ class SimulationManager(QObject):
                 and model.assigned_checkout_id is not None
             ):
                 cid = model.assigned_checkout_id
-                # Check if checkout BROKEN
-                if self._is_checkout_broken(cid):
-                    # Bleib stehen oder verlasse Queue?
-                    # Einfachste Logik: Warten bis repariert.
-                    pass
-                else:
-                    q = self.checkout_queues.get(cid, [])
-                    if q and q[0] == model:
-                        dist = (model.pos - model.target_pos).manhattanLength()
-                        if dist < 5.0:
-                            model.state = "SCANNING"
-                            # Speed logic (skipped for brevity, same as before)
-                            self._apply_scan_speed(model, cid, current_global_params)
+                q = self.checkout_queues.get(cid, [])
+                if q and q[0] == model:
+                    dist = (model.pos - model.target_pos).manhattanLength()
+                    if dist < 5.0:
+                        # --- ANKUNFT AN DER KASSE -> SCANNING STARTEN ---
+                        model.state = "SCANNING"
+
+                        # HIER setzen wir die Scan-Geschwindigkeit dynamisch basierend auf Kasse
+                        min_s, max_s = 1.0, 2.0  # Fallback
+
+                        c_data = next(
+                            (
+                                x
+                                for x in self.map_mgr.checkouts_data
+                                if x["id"] == cid
+                            ),
+                            None,
+                        )
+                        if c_data:
+                            # 1. Fall: SB Kasse (Kunde scannt selbst)
+                            if c_data.get("type") == "SB":
+                                # Wir holen die aktuellen Params für diesen Kundentyp (behindert/nicht) live
+                                if self.param_access_func:
+                                    cust_params = self.param_access_func(
+                                        model.is_disabled
+                                    )
+                                    if cust_params and "scan" in cust_params:
+                                        min_s, max_s = cust_params["scan"]
+                                    else:
+                                        # Fallback auf Model-Werte
+                                        min_s, max_s = model.scan_speed_range
+
+                            # 2. Fall: Bediente Kasse (Personal scannt)
+                            else:
+                                # Skilllevel der Kasse bestimmen
+                                skill = c_data.get("skill", "Azubi")
+                                # Mapping auf Parameter-Keys
+                                key = "newbie" if skill == "Azubi" else "pro"
+
+                                if (
+                                    current_global_params
+                                    and "staff" in current_global_params
+                                ):
+                                    staff_rng = current_global_params[
+                                        "staff"
+                                    ].get(key)
+                                    if staff_rng:
+                                        min_s, max_s = staff_rng
+
+                        # Neue Range ins Model pushen (und sofort erste Dauer würfeln)
+                        model.set_scan_speed_range(min_s, max_s)
 
             elif (
                 model.state == "LEAVING"
@@ -221,13 +225,10 @@ class SimulationManager(QObject):
                     self.checkout_queues[cid].pop(0)
                     self._advance_queue(cid)
                     model.assigned_checkout_id = None
-                    
-                    # --- FAILURE CHECK NACH KUNDE ---
-                    self._check_for_failure(cid)
-
-            if model.state != "GONE":
+            if model.state == "GONE":
+                pass
+            else:
                 active_models.append(model)
-                
         self.customers_model = active_models
         self.stats_updated.emit(
             waiting_cnt,
@@ -235,105 +236,6 @@ class SimulationManager(QObject):
             self.total_customers_spawned,
         )
 
-    def _apply_scan_speed(self, model, cid, current_global_params):
-        min_s, max_s = 1.0, 2.0
-        c_data = next((x for x in self.map_mgr.checkouts_data if x["id"] == cid), None)
-        if c_data:
-            if c_data.get("type") == "SB":
-                if self.param_access_func:
-                    cust_params = self.param_access_func(model.is_disabled)
-                    if cust_params and "scan" in cust_params:
-                        min_s, max_s = cust_params["scan"]
-                    else:
-                        min_s, max_s = model.scan_speed_range
-            else:
-                skill = c_data.get("skill", "Azubi")
-                key = "newbie" if skill == "Azubi" else "pro"
-                if current_global_params and "staff" in current_global_params:
-                    staff_rng = current_global_params["staff"].get(key)
-                    if staff_rng:
-                        min_s, max_s = staff_rng
-        model.set_scan_speed_range(min_s, max_s)
-
-    def _check_for_failure(self, cid):
-        """Prüft, ob Kasse kaputt geht."""
-        # 1. Hole Probability
-        fail_prob = 0
-        c_data = next((x for x in self.map_mgr.checkouts_data if x["id"] == cid), None)
-        if not c_data: return
-        
-        # Params sind in Sidebar/UI gespeichert, wir greifen über Accessor zu?
-        # SimulationManager liest Checkout Fail Rate am besten direkt aus den Settings
-        # oder wir nutzen die SpinBox Values (die wir hier aber nicht direkt haben).
-        # Workaround: Wir nutzen param_access_func für Global Configs (Laden)
-        
-        # Wir nehmen an param_access_func gibt uns ein Dict zurück das auch "shop" enthält
-        # oder wir lesen es aus Sidebar Properties direkt im MainController und setzen es hier.
-        # Vereinfachung: Wir nutzen fail_rate aus Settings (falls gespeichert) oder Defaults.
-        # Da UI neu ist, hat MapManager evtl noch keine aktuellen Werte.
-        # Wir nutzen einfach Standardwerte oder 5% demo.
-        # BESSER: VisualController.settings dict update
-        
-        # Wir nutzen die Settings, die im Constructor übergeben wurden
-        # Sidebar schreibt in settings.json? Nein.
-        # Die Werte kommen live aus der UI. Wir brauchen eine Methode update_params.
-        pass # Hier müsste die Wahrscheinlichkeit geprüft werden
-        
-        # DEMO: 10% Chance
-        if random.random() < 0.10:
-            self._break_checkout(cid)
-
-    def _break_checkout(self, cid):
-        if cid in self.maintenance_queue: return
-        
-        print(f"Checkout {cid} BROKEN!")
-        
-        # Visuell kaputt markieren
-        # Wir müssen das Item im VisualController finden und set_broken(True) rufen.
-        # Da wir hier Model-seitig sind, setzen wir Flag in checkouts_data?
-        # MapManager data ist "source of truth".
-        c_data = next((x for x in self.map_mgr.checkouts_data if x["id"] == cid), None)
-        if c_data:
-            # Setze Flag im Item (über VisualController Loop oder Event)
-            # Hier Quick-Hack: Wir greifen auf visual items zu via map_mgr (nicht ideal MVC)
-            # Besser: Signal
-            pass
-            
-        # Add to Queue
-        self.maintenance_queue.append(cid)
-        
-        # Trigger Worker wenn IDLE
-        if self.worker and self.worker.state == "IDLE":
-            self._dispatch_worker(self.maintenance_queue.pop(0))
-
-    def _dispatch_worker(self, cid):
-        c_data = next((x for x in self.map_mgr.checkouts_data if x["id"] == cid), None)
-        if not c_data: return
-        
-        # Queue Pos 0 als Ziel
-        # Wir berechnen die Position vor der Kasse (wie Kunde 1)
-        # Reuse Logic from _set_queue_target but for worker
-        # Oder einfach: Worker läuft zur Kassen-Koordinate
-        target = QPointF(c_data["x"], c_data["y"])
-        
-        # Visuell blinken
-        self.log_message.emit(f"Arbeiter zu Kasse {cid} unterwegs.", "orange")
-        
-        # Job Start
-        self.worker.assign_job(cid, target, 20.0, 40.0) # Duration dummy values
-
-    def _repair_checkout(self, cid):
-        self.log_message.emit(f"Kasse {cid} repariert!", "green")
-        # Visual Reset Logic here
-        pass
-
-    def _is_checkout_broken(self, cid):
-        # Check if in queue or currently being worked on
-        if cid in self.maintenance_queue: return True
-        if self.worker and self.worker.target_checkout_id == cid: return True
-        return False
-
-    # ... (Restliche Methoden wie _attempt_spawn, _calc_next_spawn, _spawn_single_customer etc.)
     def _attempt_spawn(self, dt_game_seconds):
         self.spawn_timer_acc += dt_game_seconds
         if self.spawn_timer_acc >= self.next_spawn_interval:
@@ -360,9 +262,6 @@ class SimulationManager(QObject):
                 "items": (12, 4),
                 "scan": (0.5, 1.5),
                 "handheld": 0,
-                "cash_prob": 30,
-                "pay_cash": (5.0, 15.0),
-                "pay_card": (3.0, 8.0)
             }
 
         offset = self.settings.get("customer_path_offset", 10)
@@ -370,13 +269,15 @@ class SimulationManager(QObject):
         prob_handheld = params.get("handheld", 0.0) / 100.0
         uses_handheld = random.random() < prob_handheld
 
+        # --- ROUTEN AUSWAHL (NEU: ZUFÄLLIG) ---
         selected_route = []
         if self.map_mgr.shop_routes:
+            # Wähle zufällig eine der verfügbaren Routen aus
             all_routes = list(self.map_mgr.shop_routes.values())
             selected_route = random.choice(all_routes)
 
         model = CustomerModel(
-            selected_route, 
+            selected_route,  # Hier die zufällige Route übergeben
             self.map_mgr.all_shelves,
             self.map_mgr.start_area_rect,
             self.map_mgr.waiting_area_rect,
@@ -390,9 +291,6 @@ class SimulationManager(QObject):
             speed_roll_params=params["roll"],
             items_params=params["items"],
             scan_speed_range=params["scan"],
-            payment_prob_cash=params.get("cash_prob", 30),
-            payment_speed_cash=params.get("pay_cash", (5.0, 15.0)),
-            payment_speed_card=params.get("pay_card", (3.0, 8.0)),
         )
         total_seconds_today = self.open_time.secsTo(self.sim_time)
         model.entry_time_sec = total_seconds_today
@@ -412,10 +310,6 @@ class SimulationManager(QObject):
         for c_data in self.map_mgr.checkouts_data:
             if not c_data.get("open", True):
                 continue
-            # Don't assign broken checkouts
-            if self._is_checkout_broken(c_data["id"]):
-                continue
-                
             cid = c_data["id"]
             if len(self.checkout_queues.get(cid, [])) < c_data.get(
                 "max_queue", 5
@@ -435,7 +329,7 @@ class SimulationManager(QObject):
             return
         for idx, model in enumerate(self.checkout_queues[cid]):
             self._set_queue_target(model, cid, idx)
-            if model.state != "SCANNING" and model.state != "PAYING":
+            if model.state != "SCANNING":
                 model.state = "IN_QUEUE"
 
     def _set_queue_target(self, model, cid, q_index):

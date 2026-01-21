@@ -1,9 +1,9 @@
 """
 Main Controller.
 Refactored:
-- FIX: Initialization order changed (VisualController -> MapManager -> SimulationManager).
-- FIX: MapManager instantiated with required arguments (scene, visual_controller).
-- Robust UI parameter retrieval.
+- Calls showMaximized() explicitly on startup.
+- Robust UI parameter retrieval (Handles missing UI elements gracefully).
+- Now returns STAFF parameters for dynamic checkout speed.
 """
 
 from PyQt6.QtWidgets import (
@@ -46,18 +46,9 @@ class MainController:
         self.settings_file = SETTINGS_FILE
         self._load_settings()
 
-        # --- FIX: REIHENFOLGE GEÄNDERT ---
-        
-        # 1. VisualController (benötigt Scene & Settings)
-        self.visual_controller = VisualController(self.scene, self.settings)
-        
-        # 2. MapManager (benötigt Scene & VisualController)
-        self.map_manager = MapManager(self.scene, self.visual_controller)
-        
-        # 3. SimulationManager (benötigt MapManager & Settings)
+        self.map_manager = MapManager()
         self.sim_manager = SimulationManager(self.map_manager, self.settings)
-
-        # ---------------------------------
+        self.visual_controller = VisualController(self.scene, self.settings)
 
         self.interaction_controller = InteractionController(
             self.scene,
@@ -127,13 +118,6 @@ class MainController:
         self.sim_manager.sim_timer.timeout.connect(
             lambda: self.visual_controller.sync_customers(
                 self.sim_manager.customers_model
-            )
-        )
-        
-        # NEU: Worker Sync Loop
-        self.sim_manager.sim_timer.timeout.connect(
-            lambda: self.visual_controller.sync_workers(
-                [self.sim_manager.worker] if self.sim_manager.worker else []
             )
         )
 
@@ -213,16 +197,6 @@ class MainController:
         self.view.btn_move_map.clicked.connect(
             lambda: ic.set_tool("move_map", button_ref=self.view.btn_move_map)
         )
-        
-        # NEU: Worker Buttons Connect
-        if hasattr(self.view, "btn_worker_spawn"):
-            self.view.btn_worker_spawn.clicked.connect(
-                lambda: ic.set_tool("worker_spawn", button_ref=self.view.btn_worker_spawn)
-            )
-        if hasattr(self.view, "btn_worker_route"):
-            self.view.btn_worker_route.clicked.connect(
-                lambda: ic.set_tool("maintenance_route", button_ref=self.view.btn_worker_route)
-            )
 
         self.view.btn_save_admin.clicked.connect(ic.finish_route_drawing)
         self.view.btn_cancel_route.clicked.connect(ic.cancel_route_drawing)
@@ -287,7 +261,6 @@ class MainController:
     def reset_simulation(self):
         self.sim_manager.reset(self.view.time_open.time())
         self.visual_controller.sync_customers([])
-        self.visual_controller.sync_workers([]) # Reset Worker Visuals
         self.view.btn_play_pause.setChecked(False)
         self.view.btn_play_pause.setText("▶")
         self._disable_inputs(False)
@@ -406,9 +379,6 @@ class MainController:
             self.view.route_list_widget.addItem(r)
         for r in self.map_manager.exit_routes:
             self.view.route_list_widget.addItem(r)
-        # NEU: Maintenance Routes (Optional)
-        for r in self.map_manager.maintenance_routes:
-            self.view.route_list_widget.addItem(r)
 
         self.view.object_list_widget.clear()
 
@@ -447,9 +417,6 @@ class MainController:
             del self.map_manager.start_routes[name]
         elif name in self.map_manager.exit_routes:
             del self.map_manager.exit_routes[name]
-        elif name in self.map_manager.maintenance_routes:
-            del self.map_manager.maintenance_routes[name]
-            
         self.view.route_list_widget.takeItem(
             self.view.route_list_widget.row(item)
         )
@@ -525,7 +492,7 @@ class MainController:
                 )
             )
 
-            # NEU: Staff Params
+            # NEU: Staff Params für dynamische Kassen-Geschwindigkeit
             staff = {
                 "newbie": (
                     self.view.scan_speed_newbie_min.value(),
@@ -536,20 +503,6 @@ class MainController:
                     self.view.scan_speed_pro_max.value(),
                 ),
             }
-            
-            # NEU: Payment Params
-            # Sicherer Zugriff falls UI noch nicht fertig geladen
-            cash_prob = 30
-            if hasattr(self.view, "prob_cash"):
-                cash_prob = self.view.prob_cash.value()
-                
-            pay_cash = (5.0, 15.0)
-            if hasattr(self.view, "pay_duration_cash_min"):
-                pay_cash = (self.view.pay_duration_cash_min.value(), self.view.pay_duration_cash_max.value())
-            
-            pay_card = (3.0, 8.0)
-            if hasattr(self.view, "pay_duration_card_min"):
-                pay_card = (self.view.pay_duration_card_min.value(), self.view.pay_duration_card_max.value())
 
             return {
                 "walk": (
@@ -565,11 +518,8 @@ class MainController:
                     self.view.items_std.value(),
                 ),
                 "scan": scan,
-                "staff": staff,
+                "staff": staff,  # Hinzugefügt
                 "handheld": handheld_val,
-                "cash_prob": cash_prob,
-                "pay_cash": pay_cash,
-                "pay_card": pay_card
             }
         except Exception as e:
             print(f"UI Params Error: {e}")

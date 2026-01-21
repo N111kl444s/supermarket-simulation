@@ -4,7 +4,6 @@ Refactored:
 - Implements a State Machine for natural shopping behavior.
 - Adds 'trigger_scan_anim' for visual feedback.
 - UPDATED: Scan duration is now variable per item (Uniform Distribution) based on settings.
-- NEW: Added 'payment_method' (cash/card) and 'PAYING' state.
 """
 
 import math
@@ -31,9 +30,6 @@ class CustomerModel:
         speed_walk_params=(2.5, 0.5),
         speed_roll_params=(1.5, 0.3),
         items_params=(12, 4),
-        payment_prob_cash=30, # Prozent
-        payment_speed_cash=(5.0, 15.0), # (Min, Max)
-        payment_speed_card=(3.0, 8.0), # (Min, Max)
     ):
         self.shopping_route = shopping_route
         self.all_shelves = shelves
@@ -79,21 +75,9 @@ class CustomerModel:
         self.assigned_checkout_id = None
 
         # --- SCAN LOGIC (Variabel) ---
-        self.scan_speed_range = scan_speed_range # (min, max)
+        self.scan_speed_range = scan_speed_range  # (min, max)
         self.current_scan_duration = random.uniform(*self.scan_speed_range)
         self.scan_time_elapsed = 0.0
-
-        # --- PAYMENT LOGIC (NEU) ---
-        # Wähle Methode basierend auf Wahrscheinlichkeit
-        if random.uniform(0, 100) < payment_prob_cash:
-            self.payment_method = 'cash'
-            self.payment_speed_range = payment_speed_cash
-        else:
-            self.payment_method = 'card'
-            self.payment_speed_range = payment_speed_card
-        
-        self.payment_duration = 0.0 # Wird gesetzt wenn Bezahlung beginnt
-        self.payment_timer = 0.0
 
         # Animation Trigger
         self.trigger_scan_anim = False
@@ -231,8 +215,6 @@ class CustomerModel:
             self._move_to_target(dt)
         elif self.state == "SCANNING":
             self._update_scanning(dt)
-        elif self.state == "PAYING": # NEU: Bezahlstatus
-            self._update_paying(dt)
         elif self.state == "LEAVING":
             self._update_leaving(dt)
 
@@ -313,36 +295,29 @@ class CustomerModel:
         self.item_count += count
 
     def _update_scanning(self, dt):
+        # Scan-Dauer für aktuelles Item abwarten
         self.scan_time_elapsed += dt
 
         if self.scan_time_elapsed >= self.current_scan_duration:
             self.scan_time_elapsed = 0.0
+
+            # Animation triggern!
             self.trigger_scan_anim = True
+
+            # NÄCHSTE Dauer würfeln (Gleichverteilung)
             self.current_scan_duration = random.uniform(*self.scan_speed_range)
 
             if self.uses_handheld:
-                # Handheld: Direkt zum Bezahlen
-                self._start_payment()
+                # Handheld: Einmal scannen -> Fertig
+                self._finish_checkout()
             else:
+                # Normal: Ein Item abziehen
                 if self.item_count > 0:
                     self.item_count -= 1
 
+                # Wenn fertig -> Gehen
                 if self.item_count <= 0:
-                    # Fertig mit Scannen -> Bezahlen
-                    self._start_payment()
-    
-    def _start_payment(self):
-        """Wechselt in den Bezahlmodus."""
-        self.state = "PAYING"
-        self.payment_timer = 0.0
-        # Dauer auswürfeln (Gleichverteilung)
-        self.payment_duration = random.uniform(*self.payment_speed_range)
-
-    def _update_paying(self, dt):
-        """Wartet die Bezahldauer ab."""
-        self.payment_timer += dt
-        if self.payment_timer >= self.payment_duration:
-            self._finish_checkout()
+                    self._finish_checkout()
 
     def _update_leaving(self, dt):
         if self.target_pos:
