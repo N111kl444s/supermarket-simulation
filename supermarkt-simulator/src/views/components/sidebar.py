@@ -1,11 +1,10 @@
 """
 Sidebar Component.
 Refactored:
+- ADDED: Payment methods section (Cash/Card) with auto-balancing to 100%.
+- CHANGED: Scan section title in Customer tab to match Staff tab.
 - FIXED: Help icons are now visible (added fixed size and robust style loading).
 - Tooltips moved next to distribution labels using standard icons.
-- Added helper `_add_section_header` for consistent section titles with help icons.
-- Removed inline tooltips from input rows to reduce clutter.
-- Uses QStyle.StandardPixmap.SP_MessageBoxQuestion for scalable '?' icons.
 """
 
 from PyQt6.QtWidgets import (
@@ -192,7 +191,7 @@ class Sidebar(QWidget):
         f_shop.addRow("Handscanner:", self.hand_scanner_prob)
         l_gb_cust.addLayout(f_shop)
 
-        # Scannen
+        # Scannen (Updated Title)
         tooltip_scan = (
             "<b>Gleichverteilung</b><br>"
             "Jeder Artikel braucht eine zufällige Zeit zwischen Min und Max.<br>"
@@ -200,7 +199,7 @@ class Sidebar(QWidget):
         )
         self._add_section_header(
             l_gb_cust,
-            "Scannen (Dauer in Sek)",
+            "Scangeschwindigkeit (Sek/Artikel)",  # CHANGED TITLE
             "(Gleichverteilung)",
             tooltip_scan,
         )
@@ -213,6 +212,33 @@ class Sidebar(QWidget):
             self._create_range_row("Behindert:", 1.0, 3.0, f_scan)
         )
         l_gb_cust.addLayout(f_scan)
+
+        # --- NEU: Zahlungsmethoden ---
+        tooltip_payment = (
+            "<b>Zahlungsart</b><br>"
+            "Entscheidet, wie der Kunde bezahlt.<br>"
+            "Die Summe beider Werte ergibt immer 100%."
+        )
+        self._add_section_header(
+            l_gb_cust, "Zahlungsmethoden", "(Prozentual)", tooltip_payment
+        )
+
+        f_pay = QFormLayout()
+        self.payment_cash = self._create_double_spin(30.0, 0, 100, " %")
+        self.payment_card = self._create_double_spin(70.0, 0, 100, " %")
+
+        # Logik-Verknüpfung
+        self.payment_cash.valueChanged.connect(
+            lambda: self._balance_payment(self.payment_cash, self.payment_card)
+        )
+        self.payment_card.valueChanged.connect(
+            lambda: self._balance_payment(self.payment_card, self.payment_cash)
+        )
+
+        f_pay.addRow("Bargeld:", self.payment_cash)
+        f_pay.addRow("Karte:", self.payment_card)
+        l_gb_cust.addLayout(f_pay)
+        # -----------------------------
 
         scroll_cust.setWidget(content_cust)
         l_cust_cont.addWidget(scroll_cust)
@@ -431,7 +457,15 @@ class Sidebar(QWidget):
         layout.addWidget(self.list_tabs)
         self.control_tabs.addTab(widget, "Daten")
 
-    # Helpers
+    # --- HELPERS ---
+
+    def _balance_payment(self, source, target):
+        """Ensures that the sum of payment percentages remains 100%."""
+        val = source.value()
+        target.blockSignals(True)
+        target.setValue(100.0 - val)
+        target.blockSignals(False)
+
     def _create_time_edit(self, time_tuple):
         te = QTimeEdit()
         te.setDisplayFormat("HH:mm")
