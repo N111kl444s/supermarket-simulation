@@ -1,13 +1,8 @@
 """
 Visual Controller.
 Refactored:
-- FIX: Updated _draw_single_checkout to match new CheckoutItem signature.
-- Removed manual creation of Cashier/Lights (now handled by CheckoutItem).
-- NEW: Added sync_workers to render the maintenance worker.
-- Queue Logic:
-  - Left Checkout -> Queue direction = Angle.
-  - Right Checkout -> Queue direction = Angle + 180.
-- First Queue Dot is highlighted (Red & Larger).
+- FIX: Passes checkout dimensions and cashier size from settings to CheckoutItem.
+- This ensures checkouts are scaled correctly (e.g. 28x14) instead of using raw image size.
 """
 
 import math
@@ -29,8 +24,6 @@ from views.items import (
     StartAreaItem,
     ExitAreaItem,
 )
-# WorkerItem importieren wir lokal oder hier, falls vorhanden.
-# Da es eine neue Datei ist, importieren wir sie:
 from views.items.worker_item import WorkerItem
 
 
@@ -46,15 +39,13 @@ class VisualController:
 
         self.shelf_items = []
         self.checkout_items = []
-        # cashier_items und light_items werden nicht mehr separat benötigt,
-        # da CheckoutItem diese nun besitzt. Wir behalten die Listen für Cleanup.
-        self.cashier_items = [] 
+        self.cashier_items = []
         self.light_items = []
-        
+
         self.route_debug_items = []
         self.queue_debug_items = []
         self.customer_items = {}
-        self.worker_items = {} # NEU
+        self.worker_items = {}
 
         self.waiting_area_item = None
         self.start_area_item = None
@@ -127,7 +118,9 @@ class VisualController:
         self.scene.blockSignals(True)
         self._clear_dynamic_items()
 
+        # Pos vom MapManager übernehmen (FIX für "Verschoben")
         self.map_group.setPos(map_manager.map_pos_x, map_manager.map_pos_y)
+
         if (
             self.background_item
             and self.background_item.parentItem() != self.map_group
@@ -189,7 +182,6 @@ class VisualController:
                 if is_selected("shelf", idx):
                     s.setSelected(True)
 
-        show_c_nums = self.settings.get("show_checkout_numbers", True)
         show_queues = (
             self.settings.get("show_queues", False) or highlight_queues
         )
@@ -198,7 +190,6 @@ class VisualController:
                 "checkout", cd["id"]
             )
             if show:
-                # FIX: Hier übergeben wir jetzt map_manager korrekt
                 self._draw_single_checkout(
                     cd, map_manager, is_selected("checkout", cd["id"])
                 )
@@ -210,20 +201,23 @@ class VisualController:
         self.scene.blockSignals(False)
 
     def _draw_single_checkout(self, cd, map_manager, is_selected):
-        # FIX: Neuer Aufruf für CheckoutItem (data, map_manager)
-        ci = CheckoutItem(cd, map_manager)
-        
+        # FIX: Größe aus Settings holen
+        cw = self.settings.get("size_checkout_width", 100)
+        ch = self.settings.get("size_checkout_height", 100)
+        c_size = self.settings.get("size_cashier", 10)
+
+        ci = CheckoutItem(
+            cd, map_manager, width=cw, height=ch, cashier_size=c_size
+        )
+
         if self.on_checkout_clicked:
-            ci.clicked.connect(self.on_checkout_clicked)
-        
+            ci.set_callback(self.on_checkout_clicked)
+
         ci.setParentItem(self.map_group)
         self.checkout_items.append(ci)
-        
+
         if is_selected:
             ci.setSelected(True)
-
-        # HINWEIS: CashierItem und LightItem werden jetzt intern von CheckoutItem verwaltet.
-        # Der alte Code hier wurde entfernt.
 
     def _draw_queue_visuals(self, cd):
         cw = self.settings.get("size_checkout_width", 100)
@@ -291,7 +285,8 @@ class VisualController:
 
     def _draw_routes(self, map_manager):
         def draw(routes, col):
-            if not routes: return
+            if not routes:
+                return
             for pts in routes.values():
                 if len(pts) > 1:
                     pp = QPainterPath()
@@ -308,7 +303,6 @@ class VisualController:
         draw(map_manager.shop_routes, QColor(100, 100, 100, 100))
         draw(map_manager.start_routes, COLOR_BLUE)
         draw(map_manager.exit_routes, COLOR_RED)
-        # NEU: Wartungs-Routen anzeigen
         draw(map_manager.maintenance_routes, QColor("orange"))
 
     def sync_customers(self, models):
@@ -333,7 +327,6 @@ class VisualController:
                 self.customer_items[model].sync_visuals()
 
     def sync_workers(self, models):
-        """NEU: Synchronisiert die Arbeiter-Anzeige."""
         current_set = set(models)
         to_remove = []
         for model, item in self.worker_items.items():
@@ -344,7 +337,7 @@ class VisualController:
                 to_remove.append(model)
         for m in to_remove:
             del self.worker_items[m]
-            
+
         for model in models:
             if model not in self.worker_items:
                 item = WorkerItem(model, size=32)

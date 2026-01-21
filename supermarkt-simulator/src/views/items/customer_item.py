@@ -54,8 +54,8 @@ class CustomerItem(QGraphicsPixmapItem):
 
         # Animation State
         self._last_item_count = self.model.item_count
-        self.pulse_val = 0.0         # 1.0 -> 0.0 (Green Flash beim Aufheben)
-        self.clock_progress = 0.0    # 0.0 -> 1.0 (Scan Fortschritt)
+        self.pulse_val = 0.0  # 1.0 -> 0.0 (Green Flash beim Aufheben)
+        self.clock_progress = 0.0  # 0.0 -> 1.0 (Scan Fortschritt)
         self.is_clock_animating = False
 
         # Info Box erstellen
@@ -96,19 +96,19 @@ class CustomerItem(QGraphicsPixmapItem):
     def _load_icons(cls):
         if cls._scanner_icon is not None:
             return
-        
+
         # Scanner
         if ICON_SCANNER.exists():
             cls._scanner_icon = QPixmap(str(ICON_SCANNER))
         else:
             cls._scanner_icon = QPixmap()
-            
+
         # Cash
         if ICON_CASH.exists():
             cls._cash_icon = QPixmap(str(ICON_CASH))
         else:
-            cls._cash_icon = QPixmap() # Fallback empty
-            
+            cls._cash_icon = QPixmap()  # Fallback empty
+
         # Card
         if ICON_CARD.exists():
             cls._card_icon = QPixmap(str(ICON_CARD))
@@ -129,7 +129,7 @@ class CustomerItem(QGraphicsPixmapItem):
 
         # 1b. Scan/Pay Animation (Fill Overlay)
         self.scan_fill = QGraphicsPathItem()
-        self.scan_fill.setBrush(QBrush(QColor(144, 238, 144))) 
+        self.scan_fill.setBrush(QBrush(QColor(144, 238, 144)))
         self.scan_fill.setPen(QPen(Qt.PenStyle.NoPen))
         self.info_group.addToGroup(self.scan_fill)
 
@@ -187,30 +187,30 @@ class CustomerItem(QGraphicsPixmapItem):
 
         # --- LOGIC TRIGGER DETECTION ---
         current_count = self.model.item_count
-        
+
         # 1. Pulse (Regal): Wenn Item-Count steigt
         if current_count > self._last_item_count:
             self.pulse_val = 1.0
-        
+
         # 2. Scan Trigger (Kasse)
         if self.model.trigger_scan_anim:
             self.is_clock_animating = True
             self.clock_progress = 0.0
-        
+
         self._last_item_count = current_count
 
         # --- BOX INHALT & LAYOUT ---
-        is_paying = (self.model.state == "PAYING")
-        
+        is_paying = self.model.state == "PAYING"
+
         # Text update
         count_str = str(current_count)
         if self.text_item.text() != count_str:
             self.text_item.setText(count_str)
-        
+
         # Payment Icon bestimmen
-        use_card = (self.model.payment_method == 'card')
+        use_card = self.model.payment_method == "card"
         pay_pix = self._card_icon if use_card else self._cash_icon
-        
+
         # Handheld check
         has_handheld = (
             self.model.uses_handheld
@@ -219,10 +219,10 @@ class CustomerItem(QGraphicsPixmapItem):
         )
 
         # --- VISIBILITY & SCALING ---
-        
+
         # 1. Text Visibility: Nur sichtbar wenn NICHT bezahlt wird
         self.text_item.setVisible(not is_paying)
-        
+
         # 2. Payment Icon Setup
         if pay_pix and not pay_pix.isNull():
             self.payment_icon_item.setPixmap(pay_pix)
@@ -234,27 +234,27 @@ class CustomerItem(QGraphicsPixmapItem):
         self.handheld_icon_item.setVisible(has_handheld)
 
         # --- LAYOUT CALCULATION ---
-        
+
         padding = 2
         spacing = 1
-        
+
         # Base Text Dimensions
         txt_rect = self.text_item.boundingRect()
         txt_h = txt_rect.height()
-        
+
         # Icon Dimensions (Reference Height based on Text)
         ref_h = txt_h * 0.8
-        
+
         # Payment Icon Scale & Size
         pay_w, pay_h = 0, 0
         if self.payment_icon_item.isVisible():
             if is_paying:
                 # Big Icon (replaces text)
-                target_pay_h = txt_h * 1.5 
+                target_pay_h = txt_h * 1.5
             else:
                 # Small Icon (top)
                 target_pay_h = txt_h * 0.6
-                
+
             if pay_pix.height() > 0:
                 scale_pay = target_pay_h / pay_pix.height()
                 self.payment_icon_item.setScale(scale_pay)
@@ -271,13 +271,13 @@ class CustomerItem(QGraphicsPixmapItem):
 
         # Total Dimensions
         # Stack: [Payment] -> [Text OR BigPayment] -> [Handheld]
-        
-        row1_h = 0 # Small Payment (if not paying)
-        row2_h = 0 # Center (Text or Big Payment)
-        row3_h = 0 # Handheld
-        
+
+        row1_h = 0  # Small Payment (if not paying)
+        row2_h = 0  # Center (Text or Big Payment)
+        row3_h = 0  # Handheld
+
         max_w = 0
-        
+
         if is_paying:
             # Row 2 ist das große Icon
             row2_h = pay_h
@@ -287,29 +287,31 @@ class CustomerItem(QGraphicsPixmapItem):
             if self.payment_icon_item.isVisible():
                 row1_h = pay_h
                 max_w = max(max_w, pay_w)
-            
+
             # Row 2: Text
             row2_h = txt_h
             max_w = max(max_w, txt_rect.width())
-            
+
         if has_handheld:
             row3_h = hand_h
             max_w = max(max_w, hand_w)
-            
+
         total_h = row1_h + row2_h + row3_h + (padding * 2)
-        if row1_h > 0: total_h += spacing
-        if row3_h > 0: total_h += spacing
-        
-        total_w = max_w + (padding * 4) # Etwas breiter für Look
+        if row1_h > 0:
+            total_h += spacing
+        if row3_h > 0:
+            total_h += spacing
+
+        total_w = max_w + (padding * 4)  # Etwas breiter für Look
 
         # --- POSITIONING ---
         curr_y = padding
-        
+
         # 1. Row 1 (Small Payment)
         if not is_paying and row1_h > 0:
             self.payment_icon_item.setPos((total_w - pay_w) / 2, curr_y)
             curr_y += row1_h + spacing
-            
+
         # 2. Row 2 (Center Content)
         if is_paying:
             # Big Payment Icon
@@ -323,7 +325,7 @@ class CustomerItem(QGraphicsPixmapItem):
         # 3. Row 3 (Handheld)
         if has_handheld:
             self.handheld_icon_item.setPos((total_w - hand_w) / 2, curr_y)
-            
+
         # --- BACKGROUND & TRANSFORM ---
         base_path = QPainterPath()
         base_path.addRoundedRect(0, 0, total_w, total_h, 3, 3)
@@ -356,16 +358,18 @@ class CustomerItem(QGraphicsPixmapItem):
                 self.box_bg.setPen(self.default_pen)
 
         # 2. Fill Animation (Zustand: BEZAHLEN oder SCANNEN)
-        
+
         fill_progress = 0.0
         should_render_fill = False
 
         if is_paying and self.model.payment_duration > 0:
             # NEU: Langsame Füll-Animation während des Bezahlens
             # Berechne Fortschritt basierend auf Timer
-            fill_progress = min(1.0, self.model.payment_timer / self.model.payment_duration)
+            fill_progress = min(
+                1.0, self.model.payment_timer / self.model.payment_duration
+            )
             should_render_fill = True
-            
+
             # Falls noch eine alte Scan-Animation läuft, abbrechen
             self.is_clock_animating = False
 
@@ -377,7 +381,7 @@ class CustomerItem(QGraphicsPixmapItem):
                 self.is_clock_animating = False
                 # Hier nicht rendern, sondern resetten im 'else' Zweig beim nächsten Tick
                 # aber für diesen Frame zeichnen wir noch voll
-            
+
             fill_progress = self.clock_progress
             should_render_fill = True
 

@@ -5,6 +5,7 @@ Updated:
 - DYNAMICALLY sets scan speed based on checkout type (SB vs Normal) and Staff skill.
 - Payment Method parameters passed to CustomerModel.
 - NEW: Maintenance Logic (Breakdowns, Worker Queue, Dispatch).
+- FIX: Prevent Segmentation Fault by delaying Worker creation until Map is loaded.
 """
 
 import random
@@ -12,7 +13,7 @@ import math
 from PyQt6.QtCore import QTimer, QTime, QObject, pyqtSignal, QPointF
 from PyQt6.QtGui import QVector2D
 from models.customer import CustomerModel
-from models.worker import WorkerModel # NEU
+from models.worker import WorkerModel  # NEU
 from config import (
     DEFAULT_OPEN_TIME,
     DEFAULT_CLOSE_TIME,
@@ -44,10 +45,12 @@ class SimulationManager(QObject):
 
         self.customers_model = []
         self.checkout_queues = {}
-        
+
         # --- WORKER ---
-        self.worker = None # Single instance for now
-        self.maintenance_queue = [] # Queue of checkout IDs to fix
+        # FIX: Hier noch keinen Worker erstellen! Die Map ist noch nicht geladen.
+        # Zugriff auf self.map_mgr.worker_spawn_pos würde hier zum Crash führen.
+        self.worker = None
+        self.maintenance_queue = []
 
         self.total_customers_spawned = 0
         self.target_daily_customers = 50
@@ -85,16 +88,11 @@ class SimulationManager(QObject):
         self.sim_time = open_time_val
         self.open_time = open_time_val
         self.time_accumulator_sec = 0.0
-        
+
         # Reset Worker
         self.worker = None
         self.maintenance_queue.clear()
-        # Reset broken status on map checkouts
-        for c in self.map_mgr.checkouts_data:
-            # We don't have a direct 'broken' flag in data usually, 
-            # but visual controller items might need reset.
-            # Ideally map_manager reloads or visual controller clears.
-            pass
+        # Reset broken status on map checkouts is handled via visual controller reset usually
 
         self.time_updated.emit(self.sim_time.toString("HH:mm"))
         self.stats_updated.emit(0, 0, 0)
@@ -116,13 +114,17 @@ class SimulationManager(QObject):
         )
         self.spawn_timer_acc = 0.0
         self._calc_next_spawn()
-        
-        # Spawn Worker if spawn point exists
-        if self.map_mgr.worker_spawn_pos:
-            self.worker = WorkerModel(self.map_mgr.worker_spawn_pos, self.map_mgr.maintenance_routes)
+
+        # Spawn Worker now - Map is guaranteed to be loaded here
+        spawn_pos = self.map_mgr.worker_spawn_pos
+        routes = self.map_mgr.maintenance_routes
+
+        if spawn_pos:
+            self.worker = WorkerModel(spawn_pos, routes)
         else:
-            # Fallback spawn at 0,0 if not set
-            self.worker = WorkerModel(QPointF(0,0), self.map_mgr.maintenance_routes)
+            # Fallback spawn at 0,0 if not set, or create no worker?
+            # Creating one at 0,0 is safer to avoid NoneType errors later if code expects it
+            self.worker = WorkerModel(QPointF(0, 0), routes)
 
         self.is_initialized = True
         self.log_message.emit(
@@ -171,7 +173,7 @@ class SimulationManager(QObject):
                 # Reparatur fertig
                 cid = self.worker.target_checkout_id
                 self._repair_checkout(cid)
-                
+
             # Neuen Job zuweisen?
             if self.worker.state == "IDLE" and self.maintenance_queue:
                 next_cid = self.maintenance_queue.pop(0)
@@ -180,11 +182,12 @@ class SimulationManager(QObject):
         # Update Customers
         active_models = []
         waiting_cnt = 0
-        current_global_params = self.param_access_func(False) if self.param_access_func else None
+        current_global_params = (
+            self.param_access_func(False) if self.param_access_func else None
+        )
 
         for model in self.customers_model:
             model.tick(game_dt)
-            # ... (Checkout assign logic logic identical to before)
             if model.state == "WAITING_AREA":
                 waiting_cnt += 1
                 if model.assigned_checkout_id is None:
@@ -205,8 +208,9 @@ class SimulationManager(QObject):
                         dist = (model.pos - model.target_pos).manhattanLength()
                         if dist < 5.0:
                             model.state = "SCANNING"
-                            # Speed logic (skipped for brevity, same as before)
-                            self._apply_scan_speed(model, cid, current_global_params)
+                            self._apply_scan_speed(
+                                model, cid, current_global_params
+                            )
 
             elif (
                 model.state == "LEAVING"
@@ -221,13 +225,13 @@ class SimulationManager(QObject):
                     self.checkout_queues[cid].pop(0)
                     self._advance_queue(cid)
                     model.assigned_checkout_id = None
-                    
+
                     # --- FAILURE CHECK NACH KUNDE ---
                     self._check_for_failure(cid)
 
             if model.state != "GONE":
                 active_models.append(model)
-                
+
         self.customers_model = active_models
         self.stats_updated.emit(
             waiting_cnt,
@@ -237,7 +241,9 @@ class SimulationManager(QObject):
 
     def _apply_scan_speed(self, model, cid, current_global_params):
         min_s, max_s = 1.0, 2.0
-        c_data = next((x for x in self.map_mgr.checkouts_data if x["id"] == cid), None)
+        c_data = next(
+            (x for x in self.map_mgr.checkouts_data if x["id"] == cid), None
+        )
         if c_data:
             if c_data.get("type") == "SB":
                 if self.param_access_func:
@@ -257,83 +263,58 @@ class SimulationManager(QObject):
 
     def _check_for_failure(self, cid):
         """Prüft, ob Kasse kaputt geht."""
-        # 1. Hole Probability
-        fail_prob = 0
-        c_data = next((x for x in self.map_mgr.checkouts_data if x["id"] == cid), None)
-        if not c_data: return
-        
-        # Params sind in Sidebar/UI gespeichert, wir greifen über Accessor zu?
-        # SimulationManager liest Checkout Fail Rate am besten direkt aus den Settings
-        # oder wir nutzen die SpinBox Values (die wir hier aber nicht direkt haben).
-        # Workaround: Wir nutzen param_access_func für Global Configs (Laden)
-        
-        # Wir nehmen an param_access_func gibt uns ein Dict zurück das auch "shop" enthält
-        # oder wir lesen es aus Sidebar Properties direkt im MainController und setzen es hier.
-        # Vereinfachung: Wir nutzen fail_rate aus Settings (falls gespeichert) oder Defaults.
-        # Da UI neu ist, hat MapManager evtl noch keine aktuellen Werte.
-        # Wir nutzen einfach Standardwerte oder 5% demo.
-        # BESSER: VisualController.settings dict update
-        
-        # Wir nutzen die Settings, die im Constructor übergeben wurden
-        # Sidebar schreibt in settings.json? Nein.
-        # Die Werte kommen live aus der UI. Wir brauchen eine Methode update_params.
-        pass # Hier müsste die Wahrscheinlichkeit geprüft werden
-        
-        # DEMO: 10% Chance
+        c_data = next(
+            (x for x in self.map_mgr.checkouts_data if x["id"] == cid), None
+        )
+        if not c_data:
+            return
+
+        # Parameterabruf für Defekt-Wahrscheinlichkeit noch nicht implementiert (TODO)
+        # Aktuell hardcoded 10% Chance für Demo-Zwecke
         if random.random() < 0.10:
             self._break_checkout(cid)
 
     def _break_checkout(self, cid):
-        if cid in self.maintenance_queue: return
-        
+        if cid in self.maintenance_queue:
+            return
+
         print(f"Checkout {cid} BROKEN!")
-        
-        # Visuell kaputt markieren
-        # Wir müssen das Item im VisualController finden und set_broken(True) rufen.
-        # Da wir hier Model-seitig sind, setzen wir Flag in checkouts_data?
-        # MapManager data ist "source of truth".
-        c_data = next((x for x in self.map_mgr.checkouts_data if x["id"] == cid), None)
-        if c_data:
-            # Setze Flag im Item (über VisualController Loop oder Event)
-            # Hier Quick-Hack: Wir greifen auf visual items zu via map_mgr (nicht ideal MVC)
-            # Besser: Signal
-            pass
-            
+
+        # Visuell kaputt markieren via Log (Visual Update wäre TODO via Signal)
+        self.log_message.emit(f"ACHTUNG: Kasse {cid} defekt!", "red")
+
         # Add to Queue
         self.maintenance_queue.append(cid)
-        
+
         # Trigger Worker wenn IDLE
         if self.worker and self.worker.state == "IDLE":
             self._dispatch_worker(self.maintenance_queue.pop(0))
 
     def _dispatch_worker(self, cid):
-        c_data = next((x for x in self.map_mgr.checkouts_data if x["id"] == cid), None)
-        if not c_data: return
-        
-        # Queue Pos 0 als Ziel
-        # Wir berechnen die Position vor der Kasse (wie Kunde 1)
-        # Reuse Logic from _set_queue_target but for worker
-        # Oder einfach: Worker läuft zur Kassen-Koordinate
+        c_data = next(
+            (x for x in self.map_mgr.checkouts_data if x["id"] == cid), None
+        )
+        if not c_data:
+            return
+
         target = QPointF(c_data["x"], c_data["y"])
-        
-        # Visuell blinken
-        self.log_message.emit(f"Arbeiter zu Kasse {cid} unterwegs.", "orange")
-        
+        self.log_message.emit(f"Techniker zu Kasse {cid} unterwegs.", "orange")
+
         # Job Start
-        self.worker.assign_job(cid, target, 20.0, 40.0) # Duration dummy values
+        if self.worker:
+            self.worker.assign_job(cid, target, 20.0, 40.0)
 
     def _repair_checkout(self, cid):
-        self.log_message.emit(f"Kasse {cid} repariert!", "green")
-        # Visual Reset Logic here
-        pass
+        self.log_message.emit(f"Kasse {cid} erfolgreich repariert!", "green")
+        # Hier könnte man ein Signal senden, um den visuellen Status zurückzusetzen
 
     def _is_checkout_broken(self, cid):
-        # Check if in queue or currently being worked on
-        if cid in self.maintenance_queue: return True
-        if self.worker and self.worker.target_checkout_id == cid: return True
+        if cid in self.maintenance_queue:
+            return True
+        if self.worker and self.worker.target_checkout_id == cid:
+            return True
         return False
 
-    # ... (Restliche Methoden wie _attempt_spawn, _calc_next_spawn, _spawn_single_customer etc.)
     def _attempt_spawn(self, dt_game_seconds):
         self.spawn_timer_acc += dt_game_seconds
         if self.spawn_timer_acc >= self.next_spawn_interval:
@@ -362,7 +343,7 @@ class SimulationManager(QObject):
                 "handheld": 0,
                 "cash_prob": 30,
                 "pay_cash": (5.0, 15.0),
-                "pay_card": (3.0, 8.0)
+                "pay_card": (3.0, 8.0),
             }
 
         offset = self.settings.get("customer_path_offset", 10)
@@ -376,7 +357,7 @@ class SimulationManager(QObject):
             selected_route = random.choice(all_routes)
 
         model = CustomerModel(
-            selected_route, 
+            selected_route,
             self.map_mgr.all_shelves,
             self.map_mgr.start_area_rect,
             self.map_mgr.waiting_area_rect,
@@ -412,10 +393,9 @@ class SimulationManager(QObject):
         for c_data in self.map_mgr.checkouts_data:
             if not c_data.get("open", True):
                 continue
-            # Don't assign broken checkouts
             if self._is_checkout_broken(c_data["id"]):
                 continue
-                
+
             cid = c_data["id"]
             if len(self.checkout_queues.get(cid, [])) < c_data.get(
                 "max_queue", 5
