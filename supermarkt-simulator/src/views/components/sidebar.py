@@ -1,15 +1,11 @@
 """
 Sidebar Component.
 Refactored:
-- Added "(Normalverteilung)" label to Shopping section.
-- UPDATED: Added "(Gleichverteilung)" labels to Scan and Staff sections.
-- LAYOUT UPDATE: Split 'Eingabe' tab into 3 sub-tabs (Laden, Kunden, Personal).
-- NEW: Added hint text and spacing above sub-tabs.
-- NEW: Added tooltip icons with calculation formulas for distributions.
-- FIX: Removed invalid 'cursor' property from stylesheet (fixed console errors).
-- FIX: Transparent background for scroll areas to match modern UI theme.
-- FIX: Corrected cursor shape name (HelpCursor -> WhatsThisCursor).
-- FIX: Removed margins from nested layouts in FormLayouts to ensure consistent alignment.
+- FIXED: Help icons are now visible (added fixed size and robust style loading).
+- Tooltips moved next to distribution labels using standard icons.
+- Added helper `_add_section_header` for consistent section titles with help icons.
+- Removed inline tooltips from input rows to reduce clutter.
+- Uses QStyle.StandardPixmap.SP_MessageBoxQuestion for scalable '?' icons.
 """
 
 from PyQt6.QtWidgets import (
@@ -29,6 +25,8 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QSizePolicy,
     QButtonGroup,
+    QStyle,
+    QApplication,
 )
 from PyQt6.QtCore import Qt, QTime
 from PyQt6.QtGui import QBrush, QColor
@@ -37,6 +35,11 @@ from config import *
 
 
 class Sidebar(QWidget):
+    """
+    Side panel containing controls for simulation parameters,
+    live feed, statistics, and map editor tools.
+    """
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setup_ui()
@@ -121,102 +124,93 @@ class Sidebar(QWidget):
         l_gb_cust.setContentsMargins(5, 15, 5, 5)
 
         # Kundendichte
-        l_gb_cust.addWidget(self._header("Kundendichte & Generierung"))
-        l_gb_cust.addWidget(self._sublabel("(Exponentialverteilung)"))
+        tooltip_density = (
+            "<b>Exponentialverteilung (Simulation)</b><br>"
+            "Berechnet den Zeitabstand zwischen zwei Kunden.<br>"
+            "<i>Formel:</i> <code>Interval = (Zeit / Anzahl) * random.uniform(0.7, 1.3)</code>"
+        )
+        self._add_section_header(
+            l_gb_cust,
+            "Kundendichte & Generierung",
+            "(Exponentialverteilung)",
+            tooltip_density,
+        )
+
         f_gen = QFormLayout()
         self.actor_count_input = self._create_spin(50, 1, 10000, " / Tag")
         self.disabled_prob_input = self._create_double_spin(10, 0, 100, " %")
 
-        # Icon für Kundendichte
-        row_anzahl = QHBoxLayout()
-        # FIX: Margins auf 0 setzen, damit es bündig mit anderen Zeilen ist
-        row_anzahl.setContentsMargins(0, 0, 0, 0)
-        row_anzahl.addWidget(self.actor_count_input)
-        row_anzahl.addWidget(
-            self._create_help_label(
-                "<b>Exponentialverteilung (Simulation)</b><br>"
-                "Berechnet den Zeitabstand zwischen zwei Kunden.<br>"
-                "<i>Formel:</i> <code>Interval = (Zeit / Anzahl) * random.uniform(0.7, 1.3)</code>"
-            )
-        )
-        f_gen.addRow("Anzahl:", row_anzahl)
+        f_gen.addRow("Anzahl:", self.actor_count_input)
         f_gen.addRow("Behinderung:", self.disabled_prob_input)
         l_gb_cust.addLayout(f_gen)
 
         # Geschwindigkeit
-        l_gb_cust.addWidget(self._header("Bewegungsgeschwindigkeit (px/s)"))
+        tooltip_speed = (
+            "<b>Normalverteilung (Gauß)</b><br>"
+            "Geschwindigkeit zufällig um den Mittelwert gestreut.<br>"
+            "<i>Formel:</i> <code>v = random.normalvariate(Ø, σ)</code>"
+        )
+        self._add_section_header(
+            l_gb_cust,
+            "Bewegungsgeschwindigkeit (px/s)",
+            "(Normalverteilung)",
+            tooltip_speed,
+        )
+
         f_move = QFormLayout()
         self.speed_walk_mean, self.speed_walk_std = self._create_dist_row(
-            "Gehen:",
-            2.5,
-            0.5,
-            f_move,
-            tooltip="<b>Normalverteilung (Gauß)</b><br>"
-            "Geschwindigkeit zufällig um den Mittelwert gestreut.<br>"
-            "<i>Formel:</i> <code>v = random.normalvariate(Ø, σ)</code>",
+            "Gehen:", 2.5, 0.5, f_move
         )
         self.speed_roll_mean, self.speed_roll_std = self._create_dist_row(
-            "Rollen:",
-            1.5,
-            0.3,
-            f_move,
-            tooltip="<b>Normalverteilung (Gauß)</b><br>"
-            "Geschwindigkeit zufällig um den Mittelwert gestreut.<br>"
-            "<i>Formel:</i> <code>v = random.normalvariate(Ø, σ)</code>",
+            "Rollen:", 1.5, 0.3, f_move
         )
         l_gb_cust.addLayout(f_move)
 
         # Einkauf
-        l_gb_cust.addWidget(self._header("Einkauf"))
-        l_gb_cust.addWidget(self._sublabel("(Normalverteilung)"))
+        tooltip_shop = (
+            "<b>Normalverteilung</b><br>"
+            "Bestimmt die Anzahl der Artikel im Einkaufswagen.<br>"
+            "<i>Formel:</i> <code>items = int(random.normalvariate(Ø, σ))</code>"
+        )
+        self._add_section_header(
+            l_gb_cust, "Einkauf", "(Normalverteilung)", tooltip_shop
+        )
+
         f_shop = QFormLayout()
         self.items_mean = self._create_spin(12, 1, 100)
         self.items_std = self._create_double_spin(4.0, 0, 20)
-        row = QHBoxLayout()
-        # FIX: Margins auf 0 setzen
-        row.setContentsMargins(0, 0, 0, 0)
-        row.addWidget(QLabel("Ø:"))
-        row.addWidget(self.items_mean)
-        row.addWidget(QLabel("σ:"))
-        row.addWidget(self.items_std)
-        # Icon für Einkauf
-        row.addWidget(
-            self._create_help_label(
-                "<b>Normalverteilung</b><br>"
-                "Bestimmt die Anzahl der Artikel im Einkaufswagen.<br>"
-                "<i>Formel:</i> <code>items = int(random.normalvariate(Ø, σ))</code>"
-            )
-        )
-        f_shop.addRow("Artikelanzahl:", row)
+
+        row_items = QHBoxLayout()
+        row_items.setContentsMargins(0, 0, 0, 0)
+        row_items.addWidget(QLabel("Ø:"))
+        row_items.addWidget(self.items_mean)
+        row_items.addWidget(QLabel("σ:"))
+        row_items.addWidget(self.items_std)
+
+        f_shop.addRow("Artikelanzahl:", row_items)
         self.hand_scanner_prob = self._create_double_spin(5.0, 0, 100, " %")
         f_shop.addRow("Handscanner:", self.hand_scanner_prob)
         l_gb_cust.addLayout(f_shop)
 
         # Scannen
-        l_gb_cust.addWidget(self._header("Scannen (Dauer in Sek)"))
-        l_gb_cust.addWidget(self._sublabel("(Gleichverteilung)"))
+        tooltip_scan = (
+            "<b>Gleichverteilung</b><br>"
+            "Jeder Artikel braucht eine zufällige Zeit zwischen Min und Max.<br>"
+            "<i>Formel:</i> <code>t = random.uniform(Min, Max)</code>"
+        )
+        self._add_section_header(
+            l_gb_cust,
+            "Scannen (Dauer in Sek)",
+            "(Gleichverteilung)",
+            tooltip_scan,
+        )
+
         f_scan = QFormLayout()
         self.scan_speed_normal_min, self.scan_speed_normal_max = (
-            self._create_range_row(
-                "Normal:",
-                0.5,
-                1.5,
-                f_scan,
-                tooltip="<b>Gleichverteilung</b><br>"
-                "Jeder Artikel braucht eine zufällige Zeit zwischen Min und Max.<br>"
-                "<i>Formel:</i> <code>t = random.uniform(Min, Max)</code>",
-            )
+            self._create_range_row("Normal:", 0.5, 1.5, f_scan)
         )
         self.scan_speed_disabled_min, self.scan_speed_disabled_max = (
-            self._create_range_row(
-                "Behindert:",
-                1.0,
-                3.0,
-                f_scan,
-                tooltip="<b>Gleichverteilung</b><br>"
-                "Jeder Artikel braucht eine zufällige Zeit zwischen Min und Max.<br>"
-                "<i>Formel:</i> <code>t = random.uniform(Min, Max)</code>",
-            )
+            self._create_range_row("Behindert:", 1.0, 3.0, f_scan)
         )
         l_gb_cust.addLayout(f_scan)
 
@@ -230,30 +224,24 @@ class Sidebar(QWidget):
         l_staff.setAlignment(Qt.AlignmentFlag.AlignTop)
         l_staff.setContentsMargins(5, 15, 5, 5)
 
-        l_staff.addWidget(self._header("Scangeschwindigkeit (Sek/Artikel)"))
-        l_staff.addWidget(self._sublabel("(Gleichverteilung)"))
+        tooltip_staff = (
+            "<b>Gleichverteilung</b><br>"
+            "Scan-Dauer pro Artikel an bedienter Kasse.<br>"
+            "<i>Formel:</i> <code>t = random.uniform(Min, Max)</code>"
+        )
+        self._add_section_header(
+            l_staff,
+            "Scangeschwindigkeit (Sek/Artikel)",
+            "(Gleichverteilung)",
+            tooltip_staff,
+        )
+
         f_staff = QFormLayout()
         self.scan_speed_newbie_min, self.scan_speed_newbie_max = (
-            self._create_range_row(
-                "Azubi:",
-                1.5,
-                2.5,
-                f_staff,
-                tooltip="<b>Gleichverteilung</b><br>"
-                "Scan-Dauer pro Artikel an bedienter Kasse.<br>"
-                "<i>Formel:</i> <code>t = random.uniform(Min, Max)</code>",
-            )
+            self._create_range_row("Azubi:", 1.5, 2.5, f_staff)
         )
         self.scan_speed_pro_min, self.scan_speed_pro_max = (
-            self._create_range_row(
-                "Festangestellt:",
-                0.8,
-                1.2,
-                f_staff,
-                tooltip="<b>Gleichverteilung</b><br>"
-                "Scan-Dauer pro Artikel an bedienter Kasse.<br>"
-                "<i>Formel:</i> <code>t = random.uniform(Min, Max)</code>",
-            )
+            self._create_range_row("Festangestellt:", 0.8, 1.2, f_staff)
         )
         l_staff.addLayout(f_staff)
 
@@ -476,16 +464,41 @@ class Sidebar(QWidget):
         )
         return sb
 
-    def _create_help_label(self, tooltip):
-        l = QLabel("❓")
-        l.setStyleSheet("color: #3B82F6; font-weight: bold;")
-        # FIX: Richtige Konstante für den Cursor
-        l.setCursor(Qt.CursorShape.WhatsThisCursor)
-        l.setToolTip(tooltip)
-        l.setFixedWidth(20)
-        return l
+    def _create_help_icon(self, tooltip):
+        """Creates a standard icon label with a tooltip."""
+        lbl = QLabel()
+        # FIX: Use QApplication.style() to ensure robust loading
+        # FIX: Use SP_MessageBoxQuestion for '?' icon
+        icon = QApplication.style().standardIcon(
+            QStyle.StandardPixmap.SP_MessageBoxQuestion
+        )
+        lbl.setPixmap(icon.pixmap(16, 16))
+        lbl.setToolTip(tooltip)
+        lbl.setCursor(Qt.CursorShape.WhatsThisCursor)
+        # FIX: Fixed size ensures the label isn't crushed to 0 width by layout
+        lbl.setFixedSize(16, 16)
+        lbl.setScaledContents(True)
+        return lbl
 
-    def _create_dist_row(self, label, val_mean, val_std, layout, tooltip=None):
+    def _add_section_header(self, layout, title, dist_name, tooltip=None):
+        """Adds a bold header, a gray distribution sublabel, and an optional help icon side-by-side."""
+        layout.addWidget(self._header(title))
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(5)
+
+        lbl_dist = self._sublabel(dist_name)
+        row.addWidget(lbl_dist)
+
+        if tooltip:
+            icon = self._create_help_icon(tooltip)
+            row.addWidget(icon)
+
+        row.addStretch()
+        layout.addLayout(row)
+
+    def _create_dist_row(self, label, val_mean, val_std, layout):
         h = QHBoxLayout()
         # FIX: Margins entfernen für saubere Ausrichtung
         h.setContentsMargins(0, 0, 0, 0)
@@ -495,12 +508,10 @@ class Sidebar(QWidget):
         h.addWidget(sb_mean)
         h.addWidget(QLabel("σ:"))
         h.addWidget(sb_std)
-        if tooltip:
-            h.addWidget(self._create_help_label(tooltip))
         layout.addRow(label, h)
         return sb_mean, sb_std
 
-    def _create_range_row(self, label, val_min, val_max, layout, tooltip=None):
+    def _create_range_row(self, label, val_min, val_max, layout):
         h = QHBoxLayout()
         # FIX: Margins entfernen für saubere Ausrichtung
         h.setContentsMargins(0, 0, 0, 0)
@@ -510,8 +521,6 @@ class Sidebar(QWidget):
         h.addWidget(sb_min)
         h.addWidget(QLabel("Max:"))
         h.addWidget(sb_max)
-        if tooltip:
-            h.addWidget(self._create_help_label(tooltip))
         layout.addRow(label, h)
         return sb_min, sb_max
 
