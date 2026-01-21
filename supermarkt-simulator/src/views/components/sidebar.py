@@ -1,8 +1,9 @@
 """
 Sidebar Component.
 Refactored:
-- ADDED: Payment duration settings (Cash vs Card) in Customer tab.
-- Payment method percentages section kept.
+- ADDED: Payment method distribution (Customers tab).
+- ADDED: Payment duration settings (Staff tab).
+- Tooltips moved next to distribution labels using standard icons.
 """
 
 from PyQt6.QtWidgets import (
@@ -117,9 +118,8 @@ class Sidebar(QWidget):
 
         # Kundendichte
         tooltip_density = (
-            "<b>Exponentialverteilung (Simulation)</b><br>"
-            "Berechnet den Zeitabstand zwischen zwei Kunden.<br>"
-            "<i>Formel:</i> <code>Interval = (Zeit / Anzahl) * random.uniform(0.7, 1.3)</code>"
+            "<b>Exponentialverteilung</b><br>"
+            "Berechnet den Zeitabstand zwischen zwei Kunden."
         )
         self._add_section_header(
             l_gb_cust,
@@ -131,24 +131,17 @@ class Sidebar(QWidget):
         f_gen = QFormLayout()
         self.actor_count_input = self._create_spin(50, 1, 10000, " / Tag")
         self.disabled_prob_input = self._create_double_spin(10, 0, 100, " %")
-
         f_gen.addRow("Anzahl:", self.actor_count_input)
         f_gen.addRow("Behinderung:", self.disabled_prob_input)
         l_gb_cust.addLayout(f_gen)
 
         # Geschwindigkeit
-        tooltip_speed = (
-            "<b>Normalverteilung (Gauß)</b><br>"
-            "Geschwindigkeit zufällig um den Mittelwert gestreut.<br>"
-            "<i>Formel:</i> <code>v = random.normalvariate(Ø, σ)</code>"
-        )
         self._add_section_header(
             l_gb_cust,
             "Bewegungsgeschwindigkeit (px/s)",
             "(Normalverteilung)",
-            tooltip_speed,
+            "<b>Normalverteilung</b><br>Geschwindigkeit zufällig gestreut.",
         )
-
         f_move = QFormLayout()
         self.speed_walk_mean, self.speed_walk_std = self._create_dist_row(
             "Gehen:", 2.5, 0.5, f_move
@@ -159,44 +152,30 @@ class Sidebar(QWidget):
         l_gb_cust.addLayout(f_move)
 
         # Einkauf
-        tooltip_shop = (
-            "<b>Normalverteilung</b><br>"
-            "Bestimmt die Anzahl der Artikel im Einkaufswagen.<br>"
-            "<i>Formel:</i> <code>items = int(random.normalvariate(Ø, σ))</code>"
-        )
         self._add_section_header(
-            l_gb_cust, "Einkauf", "(Normalverteilung)", tooltip_shop
+            l_gb_cust, "Einkauf", "(Normalverteilung)", "<b>Normalverteilung</b><br>Anzahl Artikel."
         )
-
         f_shop = QFormLayout()
         self.items_mean = self._create_spin(12, 1, 100)
         self.items_std = self._create_double_spin(4.0, 0, 20)
-
         row_items = QHBoxLayout()
         row_items.setContentsMargins(0, 0, 0, 0)
         row_items.addWidget(QLabel("Ø:"))
         row_items.addWidget(self.items_mean)
         row_items.addWidget(QLabel("σ:"))
         row_items.addWidget(self.items_std)
-
         f_shop.addRow("Artikelanzahl:", row_items)
         self.hand_scanner_prob = self._create_double_spin(5.0, 0, 100, " %")
         f_shop.addRow("Handscanner:", self.hand_scanner_prob)
         l_gb_cust.addLayout(f_shop)
 
-        # Scannen
-        tooltip_scan = (
-            "<b>Gleichverteilung</b><br>"
-            "Dauer pro Artikel beim Scannen.<br>"
-            "<i>Formel:</i> <code>t = random.uniform(Min, Max)</code>"
-        )
+        # Scannen (Kunden-Seite)
         self._add_section_header(
             l_gb_cust,
-            "Scangeschwindigkeit (Sek/Artikel)",
+            "Scannen (Dauer in Sek)",
             "(Gleichverteilung)",
-            tooltip_scan,
+            "<b>Gleichverteilung</b><br>Zeit pro Artikel.",
         )
-
         f_scan = QFormLayout()
         self.scan_speed_normal_min, self.scan_speed_normal_max = (
             self._create_range_row("Normal:", 0.5, 1.5, f_scan)
@@ -206,22 +185,23 @@ class Sidebar(QWidget):
         )
         l_gb_cust.addLayout(f_scan)
 
-        # --- NEU: Zahlungsmethoden ---
+        # --- NEU: Zahlungsmethoden (Verteilung) ---
         tooltip_payment = (
-            "<b>Zahlungsart & Dauer</b><br>"
-            "Verteilung der Bezahlmethoden und Dauer des Bezahlvorgangs.<br>"
-            "Summe der Anteile ergibt immer 100%."
+            "<b>Zahlungsart</b><br>"
+            "Wahrscheinlichkeit für Bargeld oder Karte.<br>"
+            "Werte ergänzen sich automatisch auf 100%."
         )
         self._add_section_header(
-            l_gb_cust, "Zahlungsmethoden", "(Prozent & Dauer)", tooltip_payment
+            l_gb_cust,
+            "Zahlungsmethoden",
+            "(Verteilung in %)",
+            tooltip_payment
         )
 
         f_pay = QFormLayout()
-
-        # 1. Prozentuale Verteilung
         self.payment_cash = self._create_double_spin(30.0, 0, 100, " %")
         self.payment_card = self._create_double_spin(70.0, 0, 100, " %")
-
+        
         self.payment_cash.valueChanged.connect(
             lambda: self._balance_payment(self.payment_cash, self.payment_card)
         )
@@ -229,18 +209,8 @@ class Sidebar(QWidget):
             lambda: self._balance_payment(self.payment_card, self.payment_cash)
         )
 
-        f_pay.addRow("Anteil Bargeld:", self.payment_cash)
-        f_pay.addRow("Anteil Karte:", self.payment_card)
-
-        # 2. Dauer
-        f_pay.addRow(QLabel("<b>Bezahldauer (Sek):</b>"))
-        self.pay_duration_cash_min, self.pay_duration_cash_max = (
-            self._create_range_row("Bargeld:", 3.0, 8.0, f_pay)
-        )
-        self.pay_duration_card_min, self.pay_duration_card_max = (
-            self._create_range_row("Karte:", 1.0, 4.0, f_pay)
-        )
-
+        f_pay.addRow("Bargeld:", self.payment_cash)
+        f_pay.addRow("Karte:", self.payment_card)
         l_gb_cust.addLayout(f_pay)
         # -----------------------------
 
@@ -254,18 +224,13 @@ class Sidebar(QWidget):
         l_staff.setAlignment(Qt.AlignmentFlag.AlignTop)
         l_staff.setContentsMargins(5, 15, 5, 5)
 
-        tooltip_staff = (
-            "<b>Gleichverteilung</b><br>"
-            "Scan-Dauer pro Artikel an bedienter Kasse.<br>"
-            "<i>Formel:</i> <code>t = random.uniform(Min, Max)</code>"
-        )
+        # Scangeschwindigkeit
         self._add_section_header(
             l_staff,
             "Scangeschwindigkeit (Sek/Artikel)",
             "(Gleichverteilung)",
-            tooltip_staff,
+            "<b>Gleichverteilung</b><br>Scan-Dauer pro Artikel an der Kasse.",
         )
-
         f_staff = QFormLayout()
         self.scan_speed_newbie_min, self.scan_speed_newbie_max = (
             self._create_range_row("Azubi:", 1.5, 2.5, f_staff)
@@ -274,6 +239,28 @@ class Sidebar(QWidget):
             self._create_range_row("Festangestellt:", 0.8, 1.2, f_staff)
         )
         l_staff.addLayout(f_staff)
+
+        # --- NEU: Bezahldauer (Hierher verschoben) ---
+        tooltip_pay_dur = (
+            "<b>Bezahldauer</b><br>"
+            "Zeitdauer für den Bezahlvorgang (nach dem Scannen).<br>"
+            "Abhängig von der gewählten Methode."
+        )
+        self._add_section_header(
+            l_staff,
+            "Bezahldauer (Sek)",
+            "(Gleichverteilung)",
+            tooltip_pay_dur
+        )
+        f_pay_dur = QFormLayout()
+        self.pay_duration_cash_min, self.pay_duration_cash_max = (
+            self._create_range_row("Bargeld:", 3.0, 8.0, f_pay_dur)
+        )
+        self.pay_duration_card_min, self.pay_duration_card_max = (
+            self._create_range_row("Karte:", 1.0, 4.0, f_pay_dur)
+        )
+        l_staff.addLayout(f_pay_dur)
+        # ---------------------------------------------
 
         input_tabs.addTab(tab_staff, "Personal")
 
@@ -462,7 +449,7 @@ class Sidebar(QWidget):
         self.control_tabs.addTab(widget, "Daten")
 
     # --- HELPERS ---
-
+    
     def _balance_payment(self, source, target):
         """Ensures that the sum of payment percentages remains 100%."""
         val = source.value()

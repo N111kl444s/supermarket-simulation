@@ -2,9 +2,8 @@
 Customer agent logic.
 Refactored:
 - Implements a State Machine for natural shopping behavior.
-- Adds 'trigger_scan_anim' for visual feedback.
-- UPDATED: Handles Payment Method (Cash/Card) and PAYING state.
-- UPDATED: Scan duration is now variable per item (Uniform Distribution) based on settings.
+- ADDED: Payment Method (Cash/Card) and PAYING state.
+- ADDED: Payment Duration Logic.
 """
 
 import math
@@ -27,9 +26,9 @@ class CustomerModel:
         max_offset=10,
         is_disabled=False,
         uses_handheld=False,
-        payment_method="card",  # "cash" oder "card"
+        payment_method="card",  # NEU
+        payment_speed_range=(1.0, 4.0), # NEU
         scan_speed_range=(0.5, 1.5),
-        payment_speed_range=(1.0, 4.0),
         speed_walk_params=(2.5, 0.5),
         speed_roll_params=(1.5, 0.3),
         items_params=(12, 4),
@@ -46,14 +45,14 @@ class CustomerModel:
         self.max_offset = max_offset
         self.is_disabled = is_disabled
         self.uses_handheld = uses_handheld
-        self.payment_method = payment_method  # Neu: Bezahlmethode
+        self.payment_method = payment_method
+        self.payment_speed_range = payment_speed_range
 
         self.pos = QPointF(0, 0)
         self.angle = 0.0
 
         self.state = "SPAWNING"
 
-        # --- PATHING VARIABLES ---
         self.main_route_points = []
         self.current_route_idx = 0
         self.shelf_assignments = {}
@@ -78,21 +77,16 @@ class CustomerModel:
 
         self.assigned_checkout_id = None
 
-        # --- SCAN LOGIC (Variabel) ---
-        self.scan_speed_range = scan_speed_range  # (min, max)
+        # --- SCAN LOGIC ---
+        self.scan_speed_range = scan_speed_range
         self.current_scan_duration = random.uniform(*self.scan_speed_range)
         self.scan_time_elapsed = 0.0
-
-        # --- PAYMENT LOGIC ---
-        self.payment_speed_range = payment_speed_range
-        self.current_payment_duration = random.uniform(
-            *self.payment_speed_range
-        )
+        
+        # --- PAYMENT LOGIC (NEU) ---
+        self.current_payment_duration = random.uniform(*self.payment_speed_range)
         self.payment_time_elapsed = 0.0
 
-        # Animation Trigger
         self.trigger_scan_anim = False
-
         self.picking_timer = 0.0
         self.is_picking = False
 
@@ -100,9 +94,7 @@ class CustomerModel:
         self._plan_shopping_trip()
 
     def set_scan_speed_range(self, min_s, max_s):
-        """Aktualisiert die Scan-Geschwindigkeit (z.B. wenn an Kasse mit Personal)."""
         self.scan_speed_range = (min_s, max_s)
-        # Sofort neue Dauer würfeln für das erste Item
         self.current_scan_duration = random.uniform(min_s, max_s)
 
     def _get_shelf_pos(self, shelf_data):
@@ -128,10 +120,7 @@ class CustomerModel:
 
     def _plan_shopping_trip(self):
         self.main_route_points = []
-
-        start_route = self._get_nearest_route(
-            self.pos, self.available_start_routes
-        )
+        start_route = self._get_nearest_route(self.pos, self.available_start_routes)
         if start_route:
             for p in start_route:
                 pt = p if isinstance(p, QPointF) else QPointF(p[0], p[1])
@@ -146,9 +135,7 @@ class CustomerModel:
                 self.main_route_points.append(pt + QPointF(ox, oy))
 
         avg_items_per_visit = 1.6
-        target_visits = max(
-            1, int(self.target_item_count / avg_items_per_visit)
-        )
+        target_visits = max(1, int(self.target_item_count / avg_items_per_visit))
 
         chosen_shelves = []
         if self.all_shelves:
@@ -158,16 +145,10 @@ class CustomerModel:
                 min_dist = float("inf")
                 if self.shopping_route:
                     for rp in self.shopping_route:
-                        pt = (
-                            rp
-                            if isinstance(rp, QPointF)
-                            else QPointF(rp[0], rp[1])
-                        )
+                        pt = rp if isinstance(rp, QPointF) else QPointF(rp[0], rp[1])
                         d = QVector2D(s_pos - pt).length()
-                        if d < min_dist:
-                            min_dist = d
+                        if d < min_dist: min_dist = d
                 candidates.append((min_dist, s))
-
             candidates.sort(key=lambda x: x[0])
             count = min(len(candidates), target_visits)
             chosen_shelves = [c[1] for c in candidates[:count]]
@@ -186,7 +167,6 @@ class CustomerModel:
                         if dist < min_dist:
                             min_dist = dist
                             best_idx = real_idx
-
                 if best_idx != -1:
                     if best_idx not in self.shelf_assignments:
                         self.shelf_assignments[best_idx] = []
@@ -200,7 +180,6 @@ class CustomerModel:
             self._goto_waiting_area()
 
     def tick(self, dt):
-        # Reset trigger
         self.trigger_scan_anim = False
 
         if self.state == "FOLLOWING_ROUTE":
@@ -226,7 +205,7 @@ class CustomerModel:
             self._move_to_target(dt)
         elif self.state == "SCANNING":
             self._update_scanning(dt)
-        elif self.state == "PAYING":  # NEU
+        elif self.state == "PAYING": # NEU
             self._update_paying(dt)
         elif self.state == "LEAVING":
             self._update_leaving(dt)
@@ -238,9 +217,7 @@ class CustomerModel:
                 return
             self.current_route_idx += 1
             if self.current_route_idx < len(self.main_route_points):
-                self.target_pos = self.main_route_points[
-                    self.current_route_idx
-                ]
+                self.target_pos = self.main_route_points[self.current_route_idx]
             else:
                 self._goto_waiting_area()
 
@@ -250,43 +227,32 @@ class CustomerModel:
             if shelves:
                 next_shelf = shelves.pop(0)
                 s_pos = self._get_shelf_pos(next_shelf)
-                self.return_pos = self.main_route_points[
-                    self.current_route_idx
-                ]
-
+                self.return_pos = self.main_route_points[self.current_route_idx]
                 vec_to_shelf = QVector2D(s_pos - self.pos)
                 length = vec_to_shelf.length()
                 stop_dist = (SHELF_SIZE / 2) + 20
-
                 if length > stop_dist:
                     offset = vec_to_shelf.normalized() * (length - stop_dist)
                     self.target_pos = self.pos + offset.toPointF()
                 else:
                     self.target_pos = s_pos
-
                 self.state = "GOING_TO_SHELF"
                 return True
-
             if not shelves:
                 del self.shelf_assignments[self.current_route_idx]
                 if self.state == "RETURNING_TO_ROUTE":
                     self.state = "FOLLOWING_ROUTE"
                     self.current_route_idx += 1
                     if self.current_route_idx < len(self.main_route_points):
-                        self.target_pos = self.main_route_points[
-                            self.current_route_idx
-                        ]
+                        self.target_pos = self.main_route_points[self.current_route_idx]
                     else:
                         self._goto_waiting_area()
                     return True
-
         if self.state == "RETURNING_TO_ROUTE":
             self.state = "FOLLOWING_ROUTE"
             self.current_route_idx += 1
             if self.current_route_idx < len(self.main_route_points):
-                self.target_pos = self.main_route_points[
-                    self.current_route_idx
-                ]
+                self.target_pos = self.main_route_points[self.current_route_idx]
             else:
                 self._goto_waiting_area()
         return False
@@ -299,49 +265,36 @@ class CustomerModel:
 
     def _collect_items(self):
         r = random.random()
-        if r < 0.50:
-            count = 1
-        elif r < 0.90:
-            count = 2
-        else:
-            count = 3
+        if r < 0.50: count = 1
+        elif r < 0.90: count = 2
+        else: count = 3
         self.item_count += count
 
     def _update_scanning(self, dt):
-        # Scan-Dauer für aktuelles Item abwarten
         self.scan_time_elapsed += dt
-
         if self.scan_time_elapsed >= self.current_scan_duration:
             self.scan_time_elapsed = 0.0
-
-            # Animation triggern!
             self.trigger_scan_anim = True
-
-            # NÄCHSTE Dauer würfeln (Gleichverteilung)
             self.current_scan_duration = random.uniform(*self.scan_speed_range)
 
             if self.uses_handheld:
-                # Handheld: Einmal scannen -> Bezahlen
+                # Handheld direkt zum Bezahlen
                 self.state = "PAYING"
                 self.payment_time_elapsed = 0.0
             else:
-                # Normal: Ein Item abziehen
                 if self.item_count > 0:
                     self.item_count -= 1
-
-                # Wenn fertig -> Bezahlen
                 if self.item_count <= 0:
                     self.state = "PAYING"
                     self.payment_time_elapsed = 0.0
 
     def _update_paying(self, dt):
-        # Wartezeit für Bezahlvorgang
         self.payment_time_elapsed += dt
-
-        # Nur einmal am Anfang Animation triggern (optional, hier lassen wir es blinken/faden bis fertig)
+        
+        # Visuelles Feedback (grüner Flash) auch beim Bezahlen
         if self.payment_time_elapsed < dt * 1.5:
-            self.trigger_scan_anim = True
-
+             self.trigger_scan_anim = True
+             
         if self.payment_time_elapsed >= self.current_payment_duration:
             self._finish_checkout()
 
@@ -351,92 +304,59 @@ class CustomerModel:
             if dist < 5.0:
                 if hasattr(self, "exit_path") and self.exit_path:
                     self.target_pos = self.exit_path.pop(0)
-
         if self.exit_area and self.exit_area.contains(self.pos):
             self.state = "GONE"
-        elif (
-            not self.exit_area
-            and not hasattr(self, "exit_path")
-            and not self.target_pos
-        ):
+        elif not self.exit_area and not hasattr(self, "exit_path") and not self.target_pos:
             self.state = "GONE"
 
     def _goto_waiting_area(self):
         if self.waiting_area:
-            rx = random.uniform(
-                self.waiting_area.x(),
-                self.waiting_area.x() + self.waiting_area.width(),
-            )
-            ry = random.uniform(
-                self.waiting_area.y(),
-                self.waiting_area.y() + self.waiting_area.height(),
-            )
+            rx = random.uniform(self.waiting_area.x(), self.waiting_area.x() + self.waiting_area.width())
+            ry = random.uniform(self.waiting_area.y(), self.waiting_area.y() + self.waiting_area.height())
             self.target_pos = QPointF(rx, ry)
             self.state = "WALKING_TO_WAITING"
         else:
             self.state = "WAITING_AREA"
 
     def _move_to_target(self, dt):
-        if not self.target_pos:
-            return 0.0
-        vec = QPointF(
-            self.target_pos.x() - self.pos.x(),
-            self.target_pos.y() - self.pos.y(),
-        )
+        if not self.target_pos: return 0.0
+        vec = QPointF(self.target_pos.x() - self.pos.x(), self.target_pos.y() - self.pos.y())
         dist = math.sqrt(vec.x() ** 2 + vec.y() ** 2)
         if dist > 0:
-            dx = vec.x() / dist
-            dy = vec.y() / dist
+            dx = vec.x() / dist; dy = vec.y() / dist
             self.angle = math.degrees(math.atan2(dy, dx))
             move_dist = self.speed * dt
             if move_dist >= dist:
                 self.pos = self.target_pos
                 return 0.0
             else:
-                self.pos = QPointF(
-                    self.pos.x() + dx * move_dist,
-                    self.pos.y() + dy * move_dist,
-                )
+                self.pos = QPointF(self.pos.x() + dx * move_dist, self.pos.y() + dy * move_dist)
                 return dist - move_dist
         return 0.0
 
     def go_to_queue(self, target_pos, checkout_id, global_exit_dir):
-        self.target_pos = target_pos
-        self.assigned_checkout_id = checkout_id
-        self.state = "IN_QUEUE"
+        self.target_pos = target_pos; self.assigned_checkout_id = checkout_id; self.state = "IN_QUEUE"
 
     def _finish_checkout(self):
-        self.state = "LEAVING"
-        self.scan_time_elapsed = 0.0
-        selected_exit_route = self._get_nearest_route(
-            self.pos, self.available_exit_routes
-        )
+        self.state = "LEAVING"; self.scan_time_elapsed = 0.0
+        selected_exit_route = self._get_nearest_route(self.pos, self.available_exit_routes)
         self.exit_path = []
         if selected_exit_route:
             for p in selected_exit_route:
                 pt = p if isinstance(p, QPointF) else QPointF(p[0], p[1])
                 self.exit_path.append(pt)
-            if self.exit_path:
-                self.target_pos = self.exit_path.pop(0)
+            if self.exit_path: self.target_pos = self.exit_path.pop(0)
         else:
             self.target_pos = self.pos + QPointF(200, 0)
 
     def _get_nearest_route(self, current_pos, routes_dict):
-        if not routes_dict:
-            return []
-        best_route = []
-        min_dist = float("inf")
+        if not routes_dict: return []
+        best_route = []; min_dist = float("inf")
         for name, points in routes_dict.items():
-            if not points:
-                continue
-            start_node = (
-                points[0]
-                if isinstance(points[0], QPointF)
-                else QPointF(points[0][0], points[0][1])
-            )
+            if not points: continue
+            start_node = points[0] if isinstance(points[0], QPointF) else QPointF(points[0][0], points[0][1])
             vec = QVector2D(start_node - current_pos)
             dist = vec.length()
             if dist < min_dist:
-                min_dist = dist
-                best_route = points
+                min_dist = dist; best_route = points
         return best_route

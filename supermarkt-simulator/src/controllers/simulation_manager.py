@@ -1,11 +1,8 @@
 """
 Simulation Manager Module.
 Updated:
-- Handles Handheld generation reliably.
-- DYNAMICALLY sets scan speed based on checkout type (SB vs Normal) and Staff skill.
-- Refactored to fetch LIVE params for scan speed at the checkout (Uniform Distribution).
-- FIXED: Customers now choose a RANDOM shopping route from all available routes instead of just 'ShopRoute_1'.
-- NEW: Passes payment method and speed settings to new customers.
+- PASSES Payment Method & Duration to Customers.
+- Fetches params from Sidebar (via param_access_func).
 """
 
 import random
@@ -144,8 +141,6 @@ class SimulationManager(QObject):
         active_models = []
         waiting_cnt = 0
 
-        # UI Params einmal abholen (für Personal-Speed Check)
-        # Wir brauchen die "allgemeinen" Params (z.B. für Staff)
         current_global_params = (
             self.param_access_func(False) if self.param_access_func else None
         )
@@ -165,11 +160,8 @@ class SimulationManager(QObject):
                 if q and q[0] == model:
                     dist = (model.pos - model.target_pos).manhattanLength()
                     if dist < 5.0:
-                        # --- ANKUNFT AN DER KASSE -> SCANNING STARTEN ---
                         model.state = "SCANNING"
-
-                        # HIER setzen wir die Scan-Geschwindigkeit dynamisch basierend auf Kasse
-                        min_s, max_s = 1.0, 2.0  # Fallback
+                        min_s, max_s = 1.0, 2.0 
 
                         c_data = next(
                             (
@@ -180,9 +172,7 @@ class SimulationManager(QObject):
                             None,
                         )
                         if c_data:
-                            # 1. Fall: SB Kasse (Kunde scannt selbst)
                             if c_data.get("type") == "SB":
-                                # Wir holen die aktuellen Params für diesen Kundentyp (behindert/nicht) live
                                 if self.param_access_func:
                                     cust_params = self.param_access_func(
                                         model.is_disabled
@@ -190,16 +180,10 @@ class SimulationManager(QObject):
                                     if cust_params and "scan" in cust_params:
                                         min_s, max_s = cust_params["scan"]
                                     else:
-                                        # Fallback auf Model-Werte
                                         min_s, max_s = model.scan_speed_range
-
-                            # 2. Fall: Bediente Kasse (Personal scannt)
                             else:
-                                # Skilllevel der Kasse bestimmen
                                 skill = c_data.get("skill", "Azubi")
-                                # Mapping auf Parameter-Keys
                                 key = "newbie" if skill == "Azubi" else "pro"
-
                                 if (
                                     current_global_params
                                     and "staff" in current_global_params
@@ -210,7 +194,6 @@ class SimulationManager(QObject):
                                     if staff_rng:
                                         min_s, max_s = staff_rng
 
-                        # Neue Range ins Model pushen (und sofort erste Dauer würfeln)
                         model.set_scan_speed_range(min_s, max_s)
 
             elif (
@@ -263,7 +246,7 @@ class SimulationManager(QObject):
                 "items": (12, 4),
                 "scan": (0.5, 1.5),
                 "handheld": 0,
-                "pay_ratio": (30, 70),  # default Cash 30, Card 70
+                "pay_ratio": (30, 70),
                 "pay_cash_speed": (3.0, 8.0),
                 "pay_card_speed": (1.0, 4.0),
             }
@@ -272,10 +255,9 @@ class SimulationManager(QObject):
 
         prob_handheld = params.get("handheld", 0.0) / 100.0
         uses_handheld = random.random() < prob_handheld
-
+        
         # --- Bezahlmethode bestimmen ---
-        ratio = params.get("pay_ratio", (30, 70))  # (Cash%, Card%)
-        # Wir würfeln: 0..100
+        ratio = params.get("pay_ratio", (30, 70)) # (Cash%, Card%)
         roll = random.uniform(0, 100)
         if roll < ratio[0]:
             pay_method = "cash"
@@ -284,15 +266,14 @@ class SimulationManager(QObject):
             pay_method = "card"
             pay_speed = params.get("pay_card_speed", (1.0, 4.0))
 
-        # --- ROUTEN AUSWAHL (NEU: ZUFÄLLIG) ---
+        # --- ROUTEN AUSWAHL ---
         selected_route = []
         if self.map_mgr.shop_routes:
-            # Wähle zufällig eine der verfügbaren Routen aus
             all_routes = list(self.map_mgr.shop_routes.values())
             selected_route = random.choice(all_routes)
 
         model = CustomerModel(
-            selected_route,  # Hier die zufällige Route übergeben
+            selected_route,
             self.map_mgr.all_shelves,
             self.map_mgr.start_area_rect,
             self.map_mgr.waiting_area_rect,
