@@ -1,13 +1,12 @@
 """
 Visual Controller.
 Refactored:
-- SCREEN UPDATED: Uses COLOR_SCREEN_OPEN/CLOSED (less bright).
-- SCREEN TEXT ADDED: Displays 'Geöffnet'/'Geschlossen' scaled to fit.
-- Z-Order kept: Cashier > Screen > Checkout.
-- Uses FLOAT precision.
+- ADDED: update_checkout_status() for dynamic blinking/text updates.
+- MODIFIED: Stores Checkout ID in screen items for quick access.
 """
 
 import math
+import time
 from PyQt6.QtGui import QColor, QPen, QBrush, QPixmap, QPainterPath, QFont
 from PyQt6.QtWidgets import (
     QGraphicsPixmapItem,
@@ -213,6 +212,7 @@ class VisualController:
         c_type = cd["type"]
         is_sb = c_type == "SB"
         is_open = cd.get("open", True)
+        is_malfunction = cd.get("malfunction", False)
 
         # 1. Offsets holen (Float supported)
         suffix = "left" if ori == "Left" else "right"
@@ -326,17 +326,30 @@ class VisualController:
                 -sw / 2, -sh / 2, sw, sh  # Local coordinates centered at 0,0
             )
 
-            # Color Logic (New Constants)
-            col = COLOR_SCREEN_OPEN if is_open else COLOR_SCREEN_CLOSED
+            # WICHTIG: Checkout ID speichern für spätere Updates
+            screen_item.setData(0, cd.get("id"))
+
+            # Color Logic (Updated for Malfunction)
+            if is_malfunction:
+                col = QColor("yellow")
+            else:
+                col = COLOR_SCREEN_OPEN if is_open else COLOR_SCREEN_CLOSED
+
             screen_item.setBrush(QBrush(col))
             screen_item.setPen(QPen(Qt.PenStyle.NoPen))
 
             # 2. Screen Text
-            status_text = "Geöffnet" if is_open else "Geschlossen"
+            if is_malfunction:
+                status_text = "STÖRUNG"
+                text_col = QColor("red")
+            else:
+                status_text = "Geöffnet" if is_open else "Geschlossen"
+                text_col = COLOR_SCREEN_TEXT
+
             text_item = QGraphicsSimpleTextItem(
                 status_text, parent=screen_item
             )
-            text_item.setBrush(QBrush(COLOR_SCREEN_TEXT))
+            text_item.setBrush(QBrush(text_col))
 
             # Setup Font
             font = QFont("Segoe UI", 10, QFont.Weight.Bold)
@@ -361,10 +374,6 @@ class VisualController:
                 tx_scaled = brect.width() * scale
                 ty_scaled = brect.height() * scale
                 text_item.setPos(-tx_scaled / 2, -ty_scaled / 2)
-
-                # Optional: Wenn Text extrem klein würde (Screen winzig),
-                # könnte man ihn ausblenden oder min-size machen.
-                # Hier lassen wir ihn einfach skalieren.
 
             # Position & Rotation
             screen_item.setPos(screen_x, screen_y)
@@ -480,6 +489,57 @@ class VisualController:
                 self.customer_items[model] = item
             else:
                 self.customer_items[model].sync_visuals()
+
+    def update_checkout_status(self, checkouts_data):
+        """
+        Aktualisiert den visuellen Status (Farbe, Text) aller Kassenbildschirme.
+        Wird zyklisch aufgerufen, um z.B. Störungen blinken zu lassen.
+        """
+        # Globales Blinken für alle Störungen synchron (ca. 2 Hz)
+        blink_state = int(time.time() * 2) % 2 == 0
+
+        # Mapping für schnellen Zugriff: ID -> Data
+        data_map = {cd["id"]: cd for cd in checkouts_data}
+
+        for item in self.screen_items:
+            # ID aus Item holen (in _draw_single_checkout gesetzt)
+            cid = item.data(0)
+
+            if cid is not None and cid in data_map:
+                cd = data_map[cid]
+                is_malfunction = cd.get("malfunction", False)
+                is_open = cd.get("open", True)
+
+                # Text-Child finden
+                text_item = None
+                for child in item.childItems():
+                    if isinstance(child, QGraphicsSimpleTextItem):
+                        text_item = child
+                        break
+
+                if is_malfunction:
+                    # Blinken: Gelb <-> Rot
+                    col = QColor("yellow") if blink_state else QColor("red")
+                    item.setBrush(QBrush(col))
+
+                    if text_item:
+                        text_item.setText("STÖRUNG")
+                        text_col = (
+                            QColor("black") if blink_state else QColor("white")
+                        )
+                        text_item.setBrush(QBrush(text_col))
+                        # Hinweis: Wir skalieren hier nicht neu, da "STÖRUNG" oft reinpasst.
+                        # Falls Textlänge sehr unterschiedlich, müsste man setScale neu berechnen.
+                else:
+                    # Normaler Status
+                    col = COLOR_SCREEN_OPEN if is_open else COLOR_SCREEN_CLOSED
+                    item.setBrush(QBrush(col))
+
+                    if text_item:
+                        text_item.setText(
+                            "Geöffnet" if is_open else "Geschlossen"
+                        )
+                        text_item.setBrush(QBrush(COLOR_SCREEN_TEXT))
 
     def _clear_dynamic_items(self):
         for i in (

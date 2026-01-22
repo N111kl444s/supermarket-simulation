@@ -1,9 +1,9 @@
 """
 Main Controller.
 Refactored:
-- Calls showMaximized() explicitly on startup.
-- Robust UI parameter retrieval (Handles missing UI elements gracefully).
-- Now returns STAFF parameters for dynamic checkout speed.
+- FIX: Restored original Start/Pause button behavior (Icons ▶/⏸ and Check-State).
+- FIX: 'save_current_map' feedback preserved.
+- FIX: Checkout Malfunction logic preserved.
 """
 
 from PyQt6.QtWidgets import (
@@ -22,86 +22,77 @@ from config import (
     IMAGE_DIR,
     FACTOR_1X,
     FACTOR_2X,
-    FACTOR_6X,
-    CASHIER_SIZE,
+    FACTOR_4X,
+    FACTOR_8X,
+    FACTOR_16X,
+    FACTOR_32X,
 )
-from views.main_window import MainWindow
-
 from controllers.map_manager import MapManager
 from controllers.simulation_manager import SimulationManager
 from controllers.visual_controller import VisualController
 from controllers.interaction_controller import InteractionController
-
-from views.dialogs import VisibilityDialog, OffsetDialog
+from views.main_window import MainWindow
 from views.size_config_dialog import SizeConfigDialog
+from views.dialogs import VisibilityDialog, OffsetDialog
 
 
 class MainController:
     def __init__(self):
-        self.view = MainWindow()
-        self.view.set_controller(self)
-        self.scene = self.view.sim_scene
-
         self.settings = DEFAULT_SETTINGS.copy()
         self.settings_file = SETTINGS_FILE
         self._load_settings()
 
-        self.map_manager = MapManager()
+        self.view = MainWindow()
+        self.view.set_controller(self)
+
+        self.map_manager = MapManager(self.settings)
         self.sim_manager = SimulationManager(self.map_manager, self.settings)
-        self.visual_controller = VisualController(self.scene, self.settings)
+        self.visual_controller = VisualController(
+            self.view.sim_scene, self.settings
+        )
 
         self.interaction_controller = InteractionController(
-            self.scene,
-            self.map_manager,
-            self.visual_controller,
-            self.view,
-            self.sim_manager,
+            self.view.sim_scene,  # scene
+            self.map_manager,  # map_manager
+            self.visual_controller,  # visual_controller
+            self.view,  # view
+            self.sim_manager,  # sim_manager
         )
 
-        self.selected_object_spec = None
+        self._setup_connections()
+        self._init_ui_state()
 
-        self._connect_ui_signals()
+        # Initial Map Load - Versuche Standard zu laden
+        self.load_map("Standard (Einfach).json")
 
-        self._refresh_map_list()
-        self.on_mode_changed("Simulation")
-        self.sim_manager.time_updated.emit(
-            self.sim_manager.sim_time.toString("HH:mm")
-        )
-        self.sim_manager.set_param_accessor(self._get_sim_params_from_ui)
-
-    def show(self):
+        # Start Maximized
         self.view.showMaximized()
 
-    def _load_settings(self):
-        if self.settings_file.exists():
-            import json
-
-            with open(self.settings_file, "r") as f:
-                self.settings.update(json.load(f))
-        if self.settings.get("size_cashier", 22) < 40:
-            self.settings["size_cashier"] = CASHIER_SIZE
-
-    def _connect_ui_signals(self):
-        self.interaction_controller.map_data_changed.connect(
-            self.update_object_list
-        )
-
-        self.view.btn_play_pause.clicked.connect(self.toggle_play_pause)
+    def _setup_connections(self):
+        # --- TOOLBAR ---
+        self.view.mode_combo.currentTextChanged.connect(self.on_mode_changed)
+        self.view.btn_play_pause.clicked.connect(self.toggle_simulation)
         self.view.btn_reset.clicked.connect(self.reset_simulation)
-        self.view.btn_skip.clicked.connect(self.sim_manager.skip_day)
+        self.view.btn_skip.clicked.connect(self.skip_day)
 
+        # Speed Buttons
         self.view.btn_speed_1.clicked.connect(
-            lambda: self.sim_manager.set_time_factor(FACTOR_1X)
+            lambda: self.set_speed(FACTOR_1X)
         )
         self.view.btn_speed_2.clicked.connect(
-            lambda: self.sim_manager.set_time_factor(FACTOR_2X)
+            lambda: self.set_speed(FACTOR_4X)
         )
         self.view.btn_speed_3.clicked.connect(
-            lambda: self.sim_manager.set_time_factor(FACTOR_6X)
+            lambda: self.set_speed(FACTOR_16X)
         )
 
-        self.view.btn_reset_zoom.clicked.connect(self._reset_zoom_on_map)
+        self.view.btn_reset_zoom.clicked.connect(
+            lambda: self.view.reset_sim_zoom(
+                self.visual_controller.get_map_center()
+            )
+        )
 
+        # --- SIMULATION SIGNALS ---
         self.sim_manager.time_updated.connect(self.view.lbl_clock.setText)
         self.sim_manager.stats_updated.connect(
             lambda w, c, t: (
@@ -111,16 +102,12 @@ class MainController:
             )
         )
         self.sim_manager.log_message.connect(self.view.add_log_entry)
-        self.sim_manager.day_finished.connect(
-            lambda: QMessageBox.information(self.view, "Info", "Tag beendet.")
-        )
+        self.sim_manager.day_finished.connect(self._on_day_finished)
 
-        self.sim_manager.sim_timer.timeout.connect(
-            lambda: self.visual_controller.sync_customers(
-                self.sim_manager.customers_model
-            )
-        )
+        # Timer Update Loop (WICHTIG für Störungen)
+        self.sim_manager.sim_timer.timeout.connect(self._on_sim_tick)
 
+        # --- MAP MANAGEMENT (Sidebar) ---
         self.view.map_combo.currentTextChanged.connect(self.load_map)
         self.view.btn_new_map.clicked.connect(self.create_new_map)
         self.view.btn_save_map.clicked.connect(self.save_current_map)
@@ -131,18 +118,31 @@ class MainController:
         self.view.btn_remove_background.clicked.connect(
             self.remove_map_background
         )
+        self.view.spin_bg_scale.valueChanged.connect(self.update_bg_scale)
 
-        self.view.spin_bg_scale.valueChanged.connect(self._on_bg_scale_changed)
+        # --- SETTINGS & DIALOGS (Sidebar) ---
+        self.view.btn_config_sizes.clicked.connect(self.open_size_config)
+        self.view.btn_offsets.clicked.connect(self.open_offsets_dialog)
+        self.view.btn_visibility.clicked.connect(self.open_visibility_dialog)
 
-        self.view.mode_combo.currentTextChanged.connect(self.on_mode_changed)
-
-        ic = self.interaction_controller
-        self.view.new_route_button.clicked.connect(
-            lambda: ic.set_tool("route", button_ref=self.view.new_route_button)
+        # --- INTERACTION / EDITOR TOOLS (Sidebar) ---
+        self.interaction_controller.map_data_changed.connect(
+            self.on_map_data_changed
         )
-        self.view.place_shelves_button.clicked.connect(
+
+        # Visual Callbacks (Clicks auf Items)
+        self.visual_controller.set_checkout_click_callback(
+            self.on_checkout_clicked
+        )
+        self.visual_controller.set_shelf_click_callback(self.on_shelf_clicked)
+
+        # Tool Buttons -> InteractionController
+        ic = self.interaction_controller
+
+        # Areas
+        self.view.start_area_button.clicked.connect(
             lambda: ic.set_tool(
-                "shelf", button_ref=self.view.place_shelves_button
+                "start_area", button_ref=self.view.start_area_button
             )
         )
         self.view.waiting_area_button.clicked.connect(
@@ -150,11 +150,13 @@ class MainController:
                 "waiting_area", button_ref=self.view.waiting_area_button
             )
         )
-        self.view.start_area_button.clicked.connect(
+        self.view.btn_exit_area.clicked.connect(
             lambda: ic.set_tool(
-                "start_area", button_ref=self.view.start_area_button
+                "exit_area", button_ref=self.view.btn_exit_area
             )
         )
+
+        # Routes
         self.view.btn_start_route.clicked.connect(
             lambda: ic.set_tool(
                 "start_route", button_ref=self.view.btn_start_route
@@ -165,12 +167,18 @@ class MainController:
                 "exit_route", button_ref=self.view.btn_exit_route
             )
         )
-        self.view.btn_exit_area.clicked.connect(
+        self.view.new_route_button.clicked.connect(
+            lambda: ic.set_tool("route", button_ref=self.view.new_route_button)
+        )
+
+        # Shelves
+        self.view.place_shelves_button.clicked.connect(
             lambda: ic.set_tool(
-                "exit_area", button_ref=self.view.btn_exit_area
+                "shelf", button_ref=self.view.place_shelves_button
             )
         )
 
+        # Checkouts (Normal/SB + Left/Right)
         self.view.btn_kl.clicked.connect(
             lambda: ic.set_tool(
                 "checkout", {"type": "Normal", "ori": "Left"}, self.view.btn_kl
@@ -194,249 +202,70 @@ class MainController:
             )
         )
 
+        # Map Mover
         self.view.btn_move_map.clicked.connect(
             lambda: ic.set_tool("move_map", button_ref=self.view.btn_move_map)
         )
 
+        # Admin Toolbar (Speichern/Abbrechen beim Zeichnen)
         self.view.btn_save_admin.clicked.connect(ic.finish_route_drawing)
         self.view.btn_cancel_route.clicked.connect(ic.cancel_route_drawing)
 
-        self.view.object_list_widget.itemClicked.connect(
-            self.on_object_list_clicked
-        )
+        # Lists & Object Management
         self.view.btn_del_route.clicked.connect(self.delete_selected_route)
-        self.view.btn_edit_obj.clicked.connect(
-            lambda: ic.edit_object_position(self.selected_object_spec)
-        )
+        self.view.route_list_widget.itemClicked.connect(self.on_route_selected)
         self.view.btn_del_obj.clicked.connect(self.delete_selected_object)
-
-        self.view.btn_visibility.clicked.connect(self.open_visibility_dialog)
-        self.view.btn_offsets.clicked.connect(self.open_offsets_dialog)
-        self.view.btn_config_sizes.clicked.connect(
-            self.open_size_config_dialog
+        self.view.btn_edit_obj.clicked.connect(self.edit_selected_object)
+        self.view.object_list_widget.itemClicked.connect(
+            self.on_object_selected
         )
 
-    def _on_bg_scale_changed(self, value):
-        self.map_manager.background_scale = value
-        self.visual_controller.update_bg_scale(value)
+    def _on_sim_tick(self):
+        """
+        Zentraler Update-Loop für UI-Synchronisation.
+        """
+        self.visual_controller.sync_customers(self.sim_manager.customers_model)
+        # Kassen-Status (Störung blinken lassen etc.) updaten
+        self.visual_controller.update_checkout_status(
+            self.map_manager.checkouts_data
+        )
 
-    def _reset_zoom_on_map(self):
-        center = self.visual_controller.get_map_center()
-        self.view.reset_sim_zoom(center)
-
-    def toggle_play_pause(self):
-        if self.sim_manager.is_running:
-            self.sim_manager.pause()
-            self.view.btn_play_pause.setChecked(False)
-            self.view.btn_play_pause.setText("▶")
-        else:
-            self.start_simulation()
-
-    def start_simulation(self):
-        if not self.map_manager.shop_routes:
-            QMessageBox.warning(self.view, "Warnung", "Keine Shop-Routen!")
-            self.view.btn_play_pause.setChecked(False)
-            return
-        if self.view.is_admin_mode:
-            QMessageBox.warning(
-                self.view,
-                "Modus",
-                "Bitte wechseln Sie in den Simulations-Modus.",
-            )
-            self.view.btn_play_pause.setChecked(False)
-            return
-        if not self.sim_manager.is_initialized:
-            self.sim_manager.init_day(
-                self.view.actor_count_input.value(),
-                self.view.disabled_prob_input.value(),
-                self.view.time_open.time(),
-                self.view.time_close.time(),
-            )
-            self.visual_controller.draw_map_elements(self.map_manager)
-        self.sim_manager.start()
-        self.view.btn_play_pause.setChecked(True)
-        self.view.btn_play_pause.setText("⏸")
-        self._disable_inputs(True)
-
-    def reset_simulation(self):
-        self.sim_manager.reset(self.view.time_open.time())
-        self.visual_controller.sync_customers([])
+    def _on_day_finished(self):
+        QMessageBox.information(self.view, "Info", "Tag beendet.")
         self.view.btn_play_pause.setChecked(False)
         self.view.btn_play_pause.setText("▶")
-        self._disable_inputs(False)
-        self.view.list_log.clear()
-        self._reset_zoom_on_map()
 
-    def _disable_inputs(self, disabled):
-        self.view.time_open.setEnabled(not disabled)
-        self.view.time_close.setEnabled(not disabled)
-        self.view.actor_count_input.setEnabled(not disabled)
-        self.view.disabled_prob_input.setEnabled(not disabled)
-
-    def on_mode_changed(self, mode_text):
-        self.view.update_sidebar_mode(mode_text)
-        self.view.is_admin_mode = mode_text == "Editor"
-        if mode_text == "Editor" and self.sim_manager.is_running:
-            self.toggle_play_pause()
-        elif mode_text != "Editor":
-            self.interaction_controller.set_tool(None)
-        self.visual_controller.draw_map_elements(
-            self.map_manager, self.selected_object_spec
+    def _init_ui_state(self):
+        self._refresh_map_list()
+        self.on_mode_changed("Simulation")
+        self.sim_manager.time_updated.emit(
+            self.sim_manager.sim_time.toString("HH:mm")
         )
+        self.sim_manager.set_param_accessor(self._get_sim_params_from_ui)
 
-    def load_map(self, map_name):
-        if not map_name:
-            return
-        if not map_name.lower().endswith(".json"):
-            map_name += ".json"
-        success, exit_dir = self.map_manager.load_map(map_name)
-        if success:
-            self.view.combo_global_exit.setCurrentText(exit_dir)
-            self.view.spin_bg_scale.blockSignals(True)
-            self.view.spin_bg_scale.setValue(self.map_manager.background_scale)
-            self.view.spin_bg_scale.blockSignals(False)
-            self.visual_controller.update_background(
-                self.map_manager.background_image_path,
-                self.map_manager.background_scale,
-                MAPS_DIR,
-            )
-            self.update_object_list()
+    def show(self):
+        self.view.showMaximized()
+
+    def _load_settings(self):
+        if self.settings_file.exists():
+            import json
+
+            with open(self.settings_file, "r") as f:
+                self.settings.update(json.load(f))
+
+    def _save_settings(self):
+        import json
+
+        with open(self.settings_file, "w") as f:
+            json.dump(self.settings, f, indent=4)
+
+    # --- DIALOG METHODS ---
+    def open_size_config(self):
+        dlg = SizeConfigDialog(self.settings, self.view)
+        if dlg.exec():
+            self.settings.update(dlg.get_values())
+            self._save_settings()
             self.visual_controller.draw_map_elements(self.map_manager)
-            self._reset_zoom_on_map()
-
-    def save_current_map(self):
-        if self.map_manager.save_map(
-            self.view.combo_global_exit.currentText()
-        ):
-            QMessageBox.information(self.view, "Info", "Gespeichert.")
-
-    def create_new_map(self):
-        name, ok = QInputDialog.getText(
-            self.view, "Neue Map", "Name (ohne .json):"
-        )
-        if ok and name:
-            new_name = self.map_manager.create_new_map(name)
-            if new_name:
-                self._refresh_map_list()
-                display_name = new_name.replace(".json", "")
-                self.view.map_combo.setCurrentText(display_name)
-
-    def delete_current_map(self):
-        if (
-            QMessageBox.question(
-                self.view,
-                "Löschen",
-                "Wirklich löschen?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            )
-            == QMessageBox.StandardButton.Yes
-        ):
-            if self.map_manager.delete_current_map():
-                self._refresh_map_list()
-
-    def select_map_background(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self.view,
-            "Hintergrundbild",
-            str(IMAGE_DIR),
-            "Bilder (*.png *.jpg *.jpeg)",
-        )
-        if file_path:
-            if self.map_manager.set_background(file_path):
-                self.save_current_map()
-                self.load_map(self.map_manager.current_map_file.name)
-
-    def remove_map_background(self):
-        self.map_manager.background_image_path = None
-        self.visual_controller.update_background(None, 1.0, MAPS_DIR)
-        self.save_current_map()
-
-    def _refresh_map_list(self):
-        self.view.map_combo.blockSignals(True)
-        self.view.map_combo.clear()
-        maps = self.map_manager.get_available_maps()
-        preferred_map = "Standard (Einfach).json"
-        current = self.map_manager.current_map_file
-        target_file = current.name if current else preferred_map
-        for m in maps:
-            display_name = m.replace(".json", "")
-            self.view.map_combo.addItem(display_name, m)
-        target_display = target_file.replace(".json", "")
-        index = self.view.map_combo.findText(target_display)
-        if index != -1:
-            self.view.map_combo.setCurrentIndex(index)
-        elif self.view.map_combo.count() > 0:
-            self.view.map_combo.setCurrentIndex(0)
-        self.view.map_combo.blockSignals(False)
-        if not self.map_manager.current_map_file:
-            self.load_map(self.view.map_combo.currentText())
-
-    def update_object_list(self):
-        self.view.route_list_widget.clear()
-        for r in self.map_manager.shop_routes:
-            self.view.route_list_widget.addItem(r)
-        for r in self.map_manager.start_routes:
-            self.view.route_list_widget.addItem(r)
-        for r in self.map_manager.exit_routes:
-            self.view.route_list_widget.addItem(r)
-
-        self.view.object_list_widget.clear()
-
-        for c in self.map_manager.checkouts_data:
-            cx, cy = int(c["x"]), int(c["y"])
-            text = f"Kasse #{c['id']} ({c['type']})  [{cx}, {cy}]"
-            item = QListWidgetItem(text)
-            item.setData(
-                Qt.ItemDataRole.UserRole, {"type": "checkout", "id": c["id"]}
-            )
-            self.view.object_list_widget.addItem(item)
-
-        for idx, p in enumerate(self.map_manager.all_shelves):
-            sx, sy = int(p["x"]), int(p["y"])
-            text = f"Regal #{idx+1}  [{sx}, {sy}]"
-            item = QListWidgetItem(text)
-            item.setData(
-                Qt.ItemDataRole.UserRole, {"type": "shelf", "index": idx}
-            )
-            self.view.object_list_widget.addItem(item)
-
-    def on_object_list_clicked(self, item):
-        self.selected_object_spec = item.data(Qt.ItemDataRole.UserRole)
-        self.visual_controller.draw_map_elements(
-            self.map_manager, self.selected_object_spec
-        )
-
-    def delete_selected_route(self):
-        item = self.view.route_list_widget.currentItem()
-        if not item:
-            return
-        name = item.text()
-        if name in self.map_manager.shop_routes:
-            del self.map_manager.shop_routes[name]
-        elif name in self.map_manager.start_routes:
-            del self.map_manager.start_routes[name]
-        elif name in self.map_manager.exit_routes:
-            del self.map_manager.exit_routes[name]
-        self.view.route_list_widget.takeItem(
-            self.view.route_list_widget.row(item)
-        )
-        self.visual_controller.draw_map_elements(self.map_manager)
-
-    def delete_selected_object(self):
-        self.interaction_controller.delete_object(self.selected_object_spec)
-        self.selected_object_spec = None
-        self.update_object_list()
-
-    def open_visibility_dialog(self):
-        dlg = VisibilityDialog(self.settings, self.view)
-        dlg.settings_changed.connect(
-            lambda ns: (
-                self.settings.update(ns),
-                self.visual_controller.draw_map_elements(self.map_manager),
-            )
-        )
-        dlg.exec()
-        self._save_settings()
 
     def open_offsets_dialog(self):
         self.visual_controller.draw_map_elements(
@@ -457,8 +286,8 @@ class MainController:
             self.map_manager, highlight_queues=False
         )
 
-    def open_size_config_dialog(self):
-        dlg = SizeConfigDialog(self.settings, self.view)
+    def open_visibility_dialog(self):
+        dlg = VisibilityDialog(self.settings, self.view)
         dlg.settings_changed.connect(
             lambda ns: (
                 self.settings.update(ns),
@@ -468,11 +297,206 @@ class MainController:
         dlg.exec()
         self._save_settings()
 
-    def _save_settings(self):
-        import json
+    # --- MAP METHODS ---
+    def _refresh_map_list(self):
+        self.view.map_combo.blockSignals(True)
+        self.view.map_combo.clear()
 
-        with open(self.settings_file, "w") as f:
-            json.dump(self.settings, f, indent=4)
+        maps = self.map_manager.get_available_maps()
+        self.view.map_combo.addItems(maps)
+
+        preferred_map = "Standard (Einfach).json"
+        target = None
+        if self.map_manager.current_map_file:
+            target = self.map_manager.current_map_file.name
+
+        if not target and preferred_map in maps:
+            target = preferred_map
+
+        if target:
+            index = self.view.map_combo.findText(target)
+            if index != -1:
+                self.view.map_combo.setCurrentIndex(index)
+            else:
+                self.view.map_combo.setCurrentIndex(0)
+        elif self.view.map_combo.count() > 0:
+            self.view.map_combo.setCurrentIndex(0)
+
+        self.view.map_combo.blockSignals(False)
+
+    def on_mode_changed(self, mode_text):
+        self.view.update_sidebar_mode(mode_text)
+        self.view.is_admin_mode = mode_text == "Editor"
+
+        if mode_text == "Simulation":
+            self.interaction_controller.set_tool(None)
+            self.view.canvas_component.set_drawing_cursor(False)
+            self.view.btn_reset.setEnabled(True)
+            # Button State prüfen beim Wechsel
+            if self.sim_manager.is_running:
+                self.view.btn_play_pause.setChecked(True)
+                self.view.btn_play_pause.setText("⏸")
+            else:
+                self.view.btn_play_pause.setChecked(False)
+                self.view.btn_play_pause.setText("▶")
+        else:
+            self.sim_manager.pause()
+            self.view.btn_play_pause.setChecked(False)
+            self.view.btn_play_pause.setText("▶")
+            self.view.canvas_component.set_drawing_cursor(True)
+
+        self.visual_controller.draw_map_elements(self.map_manager)
+
+    def on_map_data_changed(self):
+        self._refresh_route_list()
+        self._refresh_object_list()
+
+    def create_new_map(self):
+        name, ok = QInputDialog.getText(
+            self.view, "Neue Karte", "Name der Karte (ohne .json):"
+        )
+        if ok and name:
+            if not name.endswith(".json"):
+                name += ".json"
+            self.map_manager.reset_map()
+            self.map_manager.create_new_map(name)
+            self.map_manager.current_map_file = MAPS_DIR / name
+            self.map_manager.save_map()
+
+            self._refresh_map_list()
+            self.view.map_combo.setCurrentText(name)
+            self.visual_controller.draw_map_elements(self.map_manager)
+            self.view.add_log_entry(f"Karte '{name}' erstellt.", "green")
+
+    def load_map(self, filename):
+        if not filename:
+            return
+        if self.map_manager.load_map(filename):
+            self.visual_controller.update_background(
+                self.map_manager.background_image_path,
+                self.map_manager.background_scale,
+                MAPS_DIR,
+            )
+            self.view.spin_bg_scale.setValue(self.map_manager.background_scale)
+            self.visual_controller.draw_map_elements(self.map_manager)
+            self._refresh_object_list()
+            self._refresh_route_list()
+            center = self.visual_controller.get_map_center()
+            self.view.reset_sim_zoom(center)
+
+    def save_current_map(self):
+        if self.map_manager.save_map(
+            self.view.combo_global_exit.currentText()
+        ):
+            self.view.add_log_entry(f"Karte gespeichert.", "green")
+            QMessageBox.information(
+                self.view, "Info", "Karte erfolgreich gespeichert."
+            )
+        else:
+            QMessageBox.warning(
+                self.view, "Fehler", "Speichern fehlgeschlagen."
+            )
+
+    def delete_current_map(self):
+        res = QMessageBox.question(
+            self.view,
+            "Löschen",
+            "Karte wirklich löschen?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if res == QMessageBox.StandardButton.Yes:
+            if self.map_manager.delete_current_map():
+                self.view.add_log_entry("Karte gelöscht.", "red")
+                self._refresh_map_list()
+                if self.view.map_combo.count() > 0:
+                    self.load_map(self.view.map_combo.itemText(0))
+                else:
+                    self.visual_controller.draw_map_elements(self.map_manager)
+            else:
+                QMessageBox.warning(
+                    self.view, "Fehler", "Konnte Karte nicht löschen."
+                )
+
+    def select_map_background(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self.view,
+            "Hintergrund wählen",
+            str(MAPS_DIR),
+            "Images (*.png *.jpg)",
+        )
+        if path:
+            self.map_manager.set_background(path)
+            self.map_manager.save_map()
+            self.visual_controller.update_background(
+                self.map_manager.background_image_path,
+                self.map_manager.background_scale,
+                MAPS_DIR,
+            )
+
+    def remove_map_background(self):
+        self.map_manager.background_image_path = None
+        self.map_manager.save_map()
+        self.visual_controller.update_background(None, 1.0, MAPS_DIR)
+
+    def update_bg_scale(self, val):
+        self.map_manager.background_scale = val
+        self.visual_controller.update_bg_scale(val)
+
+    # --- SIMULATION CONTROL ---
+    def toggle_simulation(self):
+        """
+        Startet oder Pausiert die Simulation.
+        """
+        if self.sim_manager.is_running:
+            # Wenn läuft -> Pausieren
+            self.sim_manager.pause()
+            # Button Status ändern
+            self.view.btn_play_pause.setChecked(False)  # Nicht mehr "gedrückt"
+            self.view.btn_play_pause.setText("▶")  # Zeige Play-Symbol
+        else:
+            # Wenn pausiert -> Starten
+            if not self.sim_manager.is_initialized:
+                try:
+                    count = self.view.actor_count_input.value()
+                    prob = self.view.disabled_prob_input.value()
+                    ot = self.view.time_open.time()
+                    ct = self.view.time_close.time()
+                    self.sim_manager.init_day(count, prob, ot, ct)
+                except Exception as e:
+                    QMessageBox.warning(
+                        self.view, "Fehler", f"Ungültige Parameter: {e}"
+                    )
+                    self.view.btn_play_pause.setChecked(False)
+                    return
+
+            self.sim_manager.start()
+            # Button Status ändern
+            self.view.btn_play_pause.setChecked(
+                True
+            )  # Button wirkt "eingedrückt"
+            self.view.btn_play_pause.setText("⏸")  # Zeige Pause-Symbol
+
+    def reset_simulation(self):
+        ot = self.view.time_open.time()
+        self.sim_manager.reset(ot)
+
+        # Button zurücksetzen
+        self.view.btn_play_pause.setChecked(False)
+        self.view.btn_play_pause.setText("▶")
+
+        self.visual_controller.sync_customers([])
+        self.visual_controller.draw_map_elements(self.map_manager)
+
+    def skip_day(self):
+        if self.sim_manager.is_initialized:
+            self.sim_manager.skip_day()
+
+            # Button zurücksetzen
+            self.view.btn_play_pause.setChecked(False)
+            self.view.btn_play_pause.setText("▶")
+
+    def set_speed(self, factor):
+        self.sim_manager.set_time_factor(factor)
 
     def _get_sim_params_from_ui(self, is_disabled):
         try:
@@ -492,7 +516,6 @@ class MainController:
                 )
             )
 
-            # NEU: Staff Params für dynamische Kassen-Geschwindigkeit
             staff = {
                 "newbie": (
                     self.view.scan_speed_newbie_min.value(),
@@ -503,6 +526,14 @@ class MainController:
                     self.view.scan_speed_pro_max.value(),
                 ),
             }
+
+            fail_rate_normal = 0.0
+            if hasattr(self.view, "checkout_fail_rate_normal"):
+                fail_rate_normal = self.view.checkout_fail_rate_normal.value()
+
+            fail_rate_sb = 0.0
+            if hasattr(self.view, "checkout_fail_rate_sb"):
+                fail_rate_sb = self.view.checkout_fail_rate_sb.value()
 
             return {
                 "walk": (
@@ -518,9 +549,80 @@ class MainController:
                     self.view.items_std.value(),
                 ),
                 "scan": scan,
-                "staff": staff,  # Hinzugefügt
+                "staff": staff,
                 "handheld": handheld_val,
+                "checkout_fail_rate_normal": fail_rate_normal,
+                "checkout_fail_rate_sb": fail_rate_sb,
             }
         except Exception as e:
             print(f"UI Params Error: {e}")
             return None
+
+    # --- Interaction / Selection Proxies ---
+    def on_checkout_clicked(self, cid):
+        self.interaction_controller.handle_checkout_click(cid)
+        self._highlight_list_item(self.view.object_list_widget, cid)
+
+    def on_shelf_clicked(self, idx):
+        self.interaction_controller.handle_shelf_click(idx)
+        self._highlight_list_item(self.view.object_list_widget, idx)
+
+    def on_route_selected(self, item):
+        name = item.text().split(" ")[0]
+        # self.interaction_controller.select_route(name)
+
+    def on_object_selected(self, item):
+        spec = item.data(Qt.ItemDataRole.UserRole)
+        self.interaction_controller.edit_object_position(spec)
+
+    def delete_selected_route(self):
+        self._refresh_route_list()
+
+    def delete_selected_object(self):
+        item = self.view.object_list_widget.currentItem()
+        if item:
+            self.interaction_controller.delete_object(
+                item.data(Qt.ItemDataRole.UserRole)
+            )
+            self.visual_controller.draw_map_elements(self.map_manager)
+            self._refresh_object_list()
+
+    def edit_selected_object(self):
+        item = self.view.object_list_widget.currentItem()
+        if item:
+            spec = item.data(Qt.ItemDataRole.UserRole)
+            self.interaction_controller.edit_object_position(spec)
+        self.visual_controller.draw_map_elements(self.map_manager)
+
+    def _refresh_route_list(self):
+        self.view.route_list_widget.clear()
+        for name, pts in self.map_manager.shop_routes.items():
+            self.view.route_list_widget.addItem(f"{name} ({len(pts)} Pkt)")
+        for name, pts in self.map_manager.start_routes.items():
+            self.view.route_list_widget.addItem(f"{name} (Start)")
+        for name, pts in self.map_manager.exit_routes.items():
+            self.view.route_list_widget.addItem(f"{name} (Exit)")
+
+    def _refresh_object_list(self):
+        self.view.object_list_widget.clear()
+        for i, s in enumerate(self.map_manager.all_shelves):
+            item = QListWidgetItem(f"Regal #{i} ({s.get('variant',0)})")
+            item.setData(
+                Qt.ItemDataRole.UserRole, {"type": "shelf", "index": i}
+            )
+            self.view.object_list_widget.addItem(item)
+
+        for c in self.map_manager.checkouts_data:
+            item = QListWidgetItem(f"Kasse #{c['id']} ({c['type']})")
+            item.setData(
+                Qt.ItemDataRole.UserRole, {"type": "checkout", "id": c["id"]}
+            )
+            self.view.object_list_widget.addItem(item)
+
+    def _highlight_list_item(self, list_widget, ID_val):
+        for i in range(list_widget.count()):
+            it = list_widget.item(i)
+            if f"#{ID_val}" in it.text():
+                it.setSelected(True)
+                list_widget.scrollToItem(it)
+                break

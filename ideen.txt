@@ -1,6 +1,13 @@
-Störung für Kasse + Mitarbeiter der Kasse repariert
+Störung für Kasse + Mitarbeiter der Kasse repariert (Anzahl der Mitarbeiter einstellbar)
 
 Smart-Buttons bei Simulations-Reiter:
 - Störung auslösen
 - Kassen öffnen & schließen (Zufall oder Selektion)
 - Ereignisse wie Ansturm (erhöhtes Kundenaufkommen)
+
+Smart-Buttons für Überwachungskameras:
+- Kameraperspektiven über Buttons einstellbar
+
+An der SB-Kasse wird die geschlossene Kasse benutzt
+
+Kunden smüssen über Cashier stehen

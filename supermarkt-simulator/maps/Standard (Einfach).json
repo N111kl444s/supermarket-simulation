@@ -816,7 +816,7 @@
     "checkouts": [
         {
             "id": 1,
-            "x": 195.0,
+            "x": 192.0,
             "y": 25.0,
             "type": "Normal",
             "orientation": "Right",
@@ -824,18 +824,20 @@
             "skill": "Azubi",
             "max_queue": 5,
             "angle": 0,
-            "cashier_skill": "Azubi"
+            "cashier_skill": "Azubi",
+            "malfunction": false
         },
         {
             "id": 2,
-            "x": 195.0,
+            "x": 196.00000000000006,
             "y": 40.0,
             "type": "Normal",
             "orientation": "Right",
             "open": true,
             "skill": "Azubi",
             "max_queue": 5,
-            "angle": 0
+            "angle": 0,
+            "malfunction": false
         },
         {
             "id": 3,
@@ -846,7 +848,8 @@
             "open": true,
             "skill": "Azubi",
             "max_queue": 5,
-            "angle": 0
+            "angle": 0,
+            "malfunction": false
         },
         {
             "id": 4,
@@ -854,10 +857,12 @@
             "y": 80.0,
             "type": "SB",
             "orientation": "Right",
-            "open": true,
+            "open": false,
             "skill": "Azubi",
             "max_queue": 5,
-            "angle": 0
+            "angle": 0,
+            "malfunction": false,
+            "cashier_skill": "Azubi"
         },
         {
             "id": 5,
@@ -868,7 +873,8 @@
             "open": true,
             "skill": "Azubi",
             "max_queue": 5,
-            "angle": 180
+            "angle": 180,
+            "malfunction": false
         },
         {
             "id": 6,
@@ -879,11 +885,12 @@
             "open": true,
             "skill": "Azubi",
             "max_queue": 5,
-            "angle": 180
+            "angle": 180,
+            "malfunction": false
         },
         {
             "id": 7,
-            "x": 195.0,
+            "x": 192.00000000000006,
             "y": 55.0,
             "type": "Normal",
             "orientation": "Right",
@@ -891,18 +898,20 @@
             "skill": "Azubi",
             "max_queue": 5,
             "angle": 0,
-            "cashier_skill": "Azubi"
+            "cashier_skill": "Azubi",
+            "malfunction": false
         },
         {
             "id": 8,
-            "x": 195.0,
+            "x": 196.00000000000006,
             "y": 70.0,
             "type": "Normal",
             "orientation": "Right",
             "open": true,
             "skill": "Azubi",
             "max_queue": 5,
-            "angle": 0
+            "angle": 0,
+            "malfunction": false
         }
     ],
     "waiting_area": [
@@ -912,10 +921,10 @@
         78.44811771804757
     ],
     "start_area": [
-        18.27425088686539,
-        133.50498310637164,
-        213.40537835336033,
-        68.13830262280237
+        17.753753482261686,
+        133.90719045491028,
+        215.48738300810567,
+        63.666726797849435
     ],
     "exit_area": [
         254.20724292556656,
@@ -923,7 +932,7 @@
         54.724603196574435,
         61.71947728936982
     ],
-    "global_exit_direction": "Unten",
+    "global_exit_direction": "Rechts",
     "background_image": "bg_Standard (Einfach).png",
     "background_scale": 0.09,
     "map_pos_x": 769.1016905321846,

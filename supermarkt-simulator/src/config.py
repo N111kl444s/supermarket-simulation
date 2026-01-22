@@ -1,6 +1,7 @@
 """
 Central configuration module.
 Refactored:
+- ADDED: Missing Speed Factors (FACTOR_4X, FACTOR_8X, FACTOR_16X, FACTOR_32X) to match Controller imports.
 - ADDED: Specific screen colors (COLOR_SCREEN_OPEN, COLOR_SCREEN_CLOSED) - softer/modern.
 - ADDED: COLOR_SCREEN_TEXT.
 """
@@ -115,7 +116,12 @@ CHECKOUT_HEIGHT = 100
 ANIMATION_TICK_MS = 33
 FACTOR_1X = 60.0
 FACTOR_2X = 120.0
+FACTOR_4X = 240.0
 FACTOR_6X = 360.0
+FACTOR_8X = 480.0
+FACTOR_16X = 960.0
+FACTOR_32X = 1920.0
+
 WALK_SPEED_PPS = 100.0
 WALK_SPEED_DISABLED_FACTOR = 0.6
 DEFAULT_OPEN_TIME = (8, 0)

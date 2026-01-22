@@ -1,8 +1,9 @@
 """
 Simulation Manager Module.
 Updated:
-- PASSES Payment Method & Duration to Customers.
-- Fetches params from Sidebar (via param_access_func).
+- ADDED: Logic for Checkout Malfunctions (Störungen).
+- Störungs-Check: Checks per tick based on sidebar probability.
+- Pauses customer tick if checkout has malfunction.
 """
 
 import random
@@ -75,6 +76,11 @@ class SimulationManager(QObject):
         self.checkout_queues = {}
         self.total_customers_spawned = 0
         self.store_is_closed_trigger = False
+
+        # Reset Malfunctions
+        for c_data in self.map_mgr.checkouts_data:
+            c_data["malfunction"] = False
+
         self.sim_time = open_time_val
         self.open_time = open_time_val
         self.time_accumulator_sec = 0.0
@@ -98,6 +104,11 @@ class SimulationManager(QObject):
         )
         self.spawn_timer_acc = 0.0
         self._calc_next_spawn()
+
+        # Reset Malfunctions at start of day
+        for c_data in self.map_mgr.checkouts_data:
+            c_data["malfunction"] = False
+
         self.is_initialized = True
         self.log_message.emit(
             f"Laden geöffnet. Erwarte ca. {self.target_daily_customers} Kunden.",
@@ -146,7 +157,29 @@ class SimulationManager(QObject):
         )
 
         for model in self.customers_model:
-            model.tick(game_dt)
+            # --- STÖRUNGSLOGIK & PAUSIEREN ---
+            # Prüfen, ob der Kunde an einer Kasse mit Störung ist
+            is_stuck_due_to_malfunction = False
+            if (
+                model.state in ("SCANNING", "PAYING")
+                and model.assigned_checkout_id is not None
+            ):
+                c_data = next(
+                    (
+                        x
+                        for x in self.map_mgr.checkouts_data
+                        if x["id"] == model.assigned_checkout_id
+                    ),
+                    None,
+                )
+                if c_data and c_data.get("malfunction", False):
+                    is_stuck_due_to_malfunction = True
+
+            # Nur ticken, wenn NICHT durch Störung blockiert
+            if not is_stuck_due_to_malfunction:
+                model.tick(game_dt)
+            # ---------------------------------
+
             if model.state == "WAITING_AREA":
                 waiting_cnt += 1
                 if model.assigned_checkout_id is None:
@@ -161,7 +194,7 @@ class SimulationManager(QObject):
                     dist = (model.pos - model.target_pos).manhattanLength()
                     if dist < 5.0:
                         model.state = "SCANNING"
-                        min_s, max_s = 1.0, 2.0 
+                        min_s, max_s = 1.0, 2.0
 
                         c_data = next(
                             (
@@ -195,6 +228,50 @@ class SimulationManager(QObject):
                                         min_s, max_s = staff_rng
 
                         model.set_scan_speed_range(min_s, max_s)
+
+            # --- STÖRUNG AUSLÖSEN ---
+            # Wenn der Kunde aktiv scannt oder bezahlt (und nicht blockiert ist), kann eine Störung auftreten.
+            if (
+                model.state == "SCANNING" or model.state == "PAYING"
+            ) and not is_stuck_due_to_malfunction:
+                if current_global_params:
+                    cid = model.assigned_checkout_id
+                    c_data = next(
+                        (
+                            x
+                            for x in self.map_mgr.checkouts_data
+                            if x["id"] == cid
+                        ),
+                        None,
+                    )
+
+                    if c_data:
+                        # Wahrscheinlichkeit holen
+                        if c_data.get("type") == "SB":
+                            fail_rate = current_global_params.get(
+                                "checkout_fail_rate_sb", 100.0
+                            )
+                        else:
+                            fail_rate = current_global_params.get(
+                                "checkout_fail_rate_normal", 100.0
+                            )
+                        print(
+                            "Debug: Störungswahrscheinlichkeit =",
+                            fail_rate,
+                            "bei Kasse",
+                            c_data["type"],
+                        )
+                        # Würfeln: fail_rate ist z.B. Prozent pro Sekunde
+                        # Wir skalieren mit game_dt
+                        # 5.0 bedeutet 5% pro "Einheit". Wir nehmen an, der Input ist % Wahrscheinlichkeit pro Sekunde.
+                        chance = (fail_rate / 100.0) * game_dt
+
+                        if random.random() < chance:
+                            c_data["malfunction"] = True
+                            self.log_message.emit(
+                                f"⚠️ STÖRUNG an Kasse {cid}!", "red"
+                            )
+            # ------------------------
 
             elif (
                 model.state == "LEAVING"
@@ -255,9 +332,9 @@ class SimulationManager(QObject):
 
         prob_handheld = params.get("handheld", 0.0) / 100.0
         uses_handheld = random.random() < prob_handheld
-        
+
         # --- Bezahlmethode bestimmen ---
-        ratio = params.get("pay_ratio", (30, 70)) # (Cash%, Card%)
+        ratio = params.get("pay_ratio", (30, 70))  # (Cash%, Card%)
         roll = random.uniform(0, 100)
         if roll < ratio[0]:
             pay_method = "cash"

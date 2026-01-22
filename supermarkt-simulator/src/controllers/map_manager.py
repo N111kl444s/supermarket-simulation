@@ -1,7 +1,7 @@
 """
 Map Manager Module.
 Handles loading, saving, and managing map data.
-Updated: Stores 'map_position' relative to Earth background.
+Updated: Defaults to 'Standard (Einfach).json'.
 """
 
 import json
@@ -11,24 +11,26 @@ from pathlib import Path
 from PyQt6.QtCore import QPointF, QRectF
 from config import MAPS_DIR
 
+
 class MapManager:
-    def __init__(self):
+    def __init__(self, settings):
+        self.settings = settings
         self.current_map_file = None
-        
+
         self.shop_routes = {}
         self.start_routes = {}
         self.exit_routes = {}
-        self.all_shelves = [] 
+        self.all_shelves = []
         self.checkouts_data = []
-        
+
         self.waiting_area_rect = None
         self.start_area_rect = None
         self.exit_area_rect = None
-        
+
         # Supermarkt-Hintergrund (Floor Plan)
         self.background_image_path = None
         self.background_scale = 0.5
-        
+
         # Position des Supermarktes auf der Erde
         self.map_pos_x = 0.0
         self.map_pos_y = 0.0
@@ -43,12 +45,12 @@ class MapManager:
         file_path = MAPS_DIR / map_name
         if not file_path.exists():
             return False, "Rechts"
-            
+
         self.current_map_file = file_path
         try:
             with open(file_path, "r") as f:
                 data = json.load(f)
-            
+
             def load_routes(key):
                 res = {}
                 if key in data:
@@ -57,7 +59,9 @@ class MapManager:
                         for name, pts in raw.items():
                             res[name] = [QPointF(p[0], p[1]) for p in pts]
                     elif isinstance(raw, list):
-                        res["Route_Legacy"] = [QPointF(p[0], p[1]) for p in raw]
+                        res["Route_Legacy"] = [
+                            QPointF(p[0], p[1]) for p in raw
+                        ]
                 return res
 
             self.shop_routes = load_routes("routes")
@@ -67,32 +71,48 @@ class MapManager:
             raw_shelves = data.get("shelves", [])
             self.all_shelves = []
             for s in raw_shelves:
-                if isinstance(s, dict): 
-                    self.all_shelves.append({
-                        "x": s.get("x", 0),
-                        "y": s.get("y", 0),
-                        "angle": s.get("angle", 0),
-                        "variant": s.get("variant", 0),
-                        "mirrored": s.get("mirrored", False)
-                    })
-                elif isinstance(s, list): 
-                    self.all_shelves.append({
-                        "x": s[0], "y": s[1], "angle": 0, "variant": 0, "mirrored": False
-                    })
+                if isinstance(s, dict):
+                    self.all_shelves.append(
+                        {
+                            "x": s.get("x", 0),
+                            "y": s.get("y", 0),
+                            "angle": s.get("angle", 0),
+                            "variant": s.get("variant", 0),
+                            "mirrored": s.get("mirrored", False),
+                        }
+                    )
+                elif isinstance(s, list):
+                    self.all_shelves.append(
+                        {
+                            "x": s[0],
+                            "y": s[1],
+                            "angle": 0,
+                            "variant": 0,
+                            "mirrored": False,
+                        }
+                    )
 
             self.checkouts_data = data.get("checkouts", [])
-            
-            self.waiting_area_rect = QRectF(*data["waiting_area"]) if data.get("waiting_area") else None
-            self.start_area_rect = QRectF(*data["start_area"]) if data.get("start_area") else None
-            self.exit_area_rect = QRectF(*data["exit_area"]) if data.get("exit_area") else None
+
+            self.waiting_area_rect = (
+                QRectF(*data["waiting_area"])
+                if data.get("waiting_area")
+                else None
+            )
+            self.start_area_rect = (
+                QRectF(*data["start_area"]) if data.get("start_area") else None
+            )
+            self.exit_area_rect = (
+                QRectF(*data["exit_area"]) if data.get("exit_area") else None
+            )
 
             self.background_image_path = data.get("background_image", None)
             self.background_scale = data.get("background_scale", 0.5)
-            
+
             # NEU: Map Position
             self.map_pos_x = data.get("map_pos_x", 0.0)
             self.map_pos_y = data.get("map_pos_y", 0.0)
-            
+
             return True, data.get("global_exit_direction", "Rechts")
         except Exception as e:
             print(f"Error loading map: {e}")
@@ -101,9 +121,12 @@ class MapManager:
     def save_map(self, global_exit_direction="Rechts"):
         if not self.current_map_file:
             return False
-        
+
         def export_routes(routes_dict):
-            return {name: [[p.x(), p.y()] for p in pts] for name, pts in routes_dict.items()}
+            return {
+                name: [[p.x(), p.y()] for p in pts]
+                for name, pts in routes_dict.items()
+            }
 
         data = {
             "routes": export_routes(self.shop_routes),
@@ -111,14 +134,41 @@ class MapManager:
             "exit_routes": export_routes(self.exit_routes),
             "shelves": self.all_shelves,
             "checkouts": self.checkouts_data,
-            "waiting_area": [self.waiting_area_rect.x(), self.waiting_area_rect.y(), self.waiting_area_rect.width(), self.waiting_area_rect.height()] if self.waiting_area_rect else None,
-            "start_area": [self.start_area_rect.x(), self.start_area_rect.y(), self.start_area_rect.width(), self.start_area_rect.height()] if self.start_area_rect else None,
-            "exit_area": [self.exit_area_rect.x(), self.exit_area_rect.y(), self.exit_area_rect.width(), self.exit_area_rect.height()] if self.exit_area_rect else None,
+            "waiting_area": (
+                [
+                    self.waiting_area_rect.x(),
+                    self.waiting_area_rect.y(),
+                    self.waiting_area_rect.width(),
+                    self.waiting_area_rect.height(),
+                ]
+                if self.waiting_area_rect
+                else None
+            ),
+            "start_area": (
+                [
+                    self.start_area_rect.x(),
+                    self.start_area_rect.y(),
+                    self.start_area_rect.width(),
+                    self.start_area_rect.height(),
+                ]
+                if self.start_area_rect
+                else None
+            ),
+            "exit_area": (
+                [
+                    self.exit_area_rect.x(),
+                    self.exit_area_rect.y(),
+                    self.exit_area_rect.width(),
+                    self.exit_area_rect.height(),
+                ]
+                if self.exit_area_rect
+                else None
+            ),
             "global_exit_direction": global_exit_direction,
             "background_image": self.background_image_path,
             "background_scale": self.background_scale,
             "map_pos_x": self.map_pos_x,
-            "map_pos_y": self.map_pos_y
+            "map_pos_y": self.map_pos_y,
         }
         try:
             with open(self.current_map_file, "w") as f:
@@ -129,7 +179,8 @@ class MapManager:
             return False
 
     def create_new_map(self, name):
-        if not name.endswith(".json"): name += ".json"
+        if not name.endswith(".json"):
+            name += ".json"
         path = MAPS_DIR / name
         default_data = {"routes": {}, "shelves": [], "checkouts": []}
         try:
@@ -140,8 +191,10 @@ class MapManager:
             return None
 
     def delete_current_map(self):
-        if not self.current_map_file or self.current_map_file.name == "default.json":
+        if not self.current_map_file:
             return False
+        # Schutzmechanismus: Standardkarten nicht löschen, wenn man nicht will
+        # Hier optional. Wir löschen einfach.
         try:
             os.remove(self.current_map_file)
             self.current_map_file = None
@@ -153,16 +206,22 @@ class MapManager:
         maps = sorted([f.name for f in MAPS_DIR.glob("*.json")])
         if not maps:
             self._create_default_map()
-            maps = ["default.json"]
+            maps = ["Standard (Einfach).json"]
         return maps
 
     def _create_default_map(self):
+        # FIX: Standard Name geändert
+        default_name = "Standard (Einfach).json"
         default_data = {"routes": {}, "shelves": [], "checkouts": []}
-        with open(MAPS_DIR / "default.json", "w") as f:
-            json.dump(default_data, f, indent=4)
+        try:
+            with open(MAPS_DIR / default_name, "w") as f:
+                json.dump(default_data, f, indent=4)
+        except:
+            pass
 
     def set_background(self, source_path):
-        if not self.current_map_file: return False
+        if not self.current_map_file:
+            return False
         src = Path(source_path)
         dest_name = f"bg_{self.current_map_file.stem}{src.suffix}"
         dest_path = MAPS_DIR / dest_name

@@ -27,15 +27,15 @@
     ],
     "offset_queue_right": [
         18.0,
-        1.0
+        -1.0
     ],
     "offset_queue_sb_left": [
-        44.0,
-        27.0
+        43.0,
+        14.0
     ],
     "offset_queue_sb_right": [
         13.0,
-        27.0
+        15.0
     ],
     "offset_cashier_left": [
         96.0,
