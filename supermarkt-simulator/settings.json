@@ -1,14 +1,15 @@
 {
-    "show_routes": false,
+    "show_routes": true,
     "show_shelves": true,
     "show_shelf_numbers": false,
     "show_checkouts": true,
     "show_checkout_numbers": false,
     "show_cashiers": true,
     "show_queues": false,
-    "show_waiting_area": false,
-    "show_start_area": false,
-    "show_exit_area": false,
+    "show_waiting_area": true,
+    "show_start_area": true,
+    "show_exit_area": true,
+    "show_worker_area": true,
     "size_shelf": 26,
     "size_cashier": 10,
     "size_customer": 10,
@@ -27,7 +28,7 @@
     ],
     "offset_queue_right": [
         18.0,
-        -1.0
+        -1.5
     ],
     "offset_queue_sb_left": [
         43.0,

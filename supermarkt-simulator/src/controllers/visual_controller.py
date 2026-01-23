@@ -1,8 +1,8 @@
 """
 Visual Controller.
 Refactored:
-- ADDED: update_checkout_status() for dynamic blinking/text updates.
-- MODIFIED: Stores Checkout ID in screen items for quick access.
+- ADDED: Logic to draw and sync Worker items.
+- ADDED: Worker Area visualization.
 """
 
 import math
@@ -24,6 +24,7 @@ from config import (
     COLOR_SCREEN_OPEN,
     COLOR_SCREEN_CLOSED,
     COLOR_SCREEN_TEXT,
+    COLOR_WORKER_SPAWN,
 )
 from views.items import (
     CheckoutItem,
@@ -33,6 +34,7 @@ from views.items import (
     WaitingAreaItem,
     StartAreaItem,
     ExitAreaItem,
+    WorkerItem,  # NEU
 )
 
 
@@ -52,11 +54,13 @@ class VisualController:
         self.route_debug_items = []
         self.queue_debug_items = []
         self.customer_items = {}
+        self.worker_items = {}  # NEU
         self.screen_items = []
 
         self.waiting_area_item = None
         self.start_area_item = None
         self.exit_area_item = None
+        self.worker_area_item = None  # NEU
         self.background_item = None
 
         self.on_checkout_clicked = None
@@ -143,6 +147,7 @@ class VisualController:
                 return selected_spec["id"] == idx_or_id
             return False
 
+        # AREAS
         if map_manager.waiting_area_rect and self.settings.get(
             "show_waiting_area", True
         ):
@@ -163,6 +168,23 @@ class VisualController:
             self.exit_area_item = ExitAreaItem(map_manager.exit_area_rect)
             self.exit_area_item.setParentItem(self.map_group)
             self.exit_area_item.setZValue(1)
+
+        # NEU: Worker Area
+        if map_manager.worker_spawn_rect and self.settings.get(
+            "show_worker_area", True
+        ):
+            # Wir nutzen WaitingAreaItem als Basis, nur mit anderer Farbe
+            w_item = QGraphicsRectItem(map_manager.worker_spawn_rect)
+            w_item.setBrush(QBrush(COLOR_WORKER_SPAWN))
+            w_item.setPen(QPen(Qt.PenStyle.DashLine))
+            w_item.setParentItem(self.map_group)
+            w_item.setZValue(1)
+
+            t = QGraphicsSimpleTextItem("Techniker", w_item)
+            t.setBrush(QBrush(Qt.GlobalColor.black))
+            t.setPos(map_manager.worker_spawn_rect.topLeft() + QPointF(5, 5))
+
+            self.worker_area_item = w_item
 
         show_s_nums = self.settings.get("show_shelf_numbers", True)
         for idx, s_data in enumerate(map_manager.all_shelves):
@@ -207,6 +229,11 @@ class VisualController:
         self.scene.blockSignals(False)
 
     def _draw_single_checkout(self, cd, is_selected, show_id=True):
+        # ... (Identischer Code wie zuvor) ...
+        # Damit der Code kompakt bleibt, hier nur Referenz.
+        # Der bestehende Code von _draw_single_checkout und _draw_queue_visuals wird hier wiederverwendet.
+        # Da ich dir die Datei komplett geben soll, kopiere ich den Inhalt der vorherigen Version hier hinein.
+
         ori = cd.get("orientation", "Right")
         angle = cd.get("angle", 0)
         c_type = cd["type"]
@@ -214,7 +241,6 @@ class VisualController:
         is_open = cd.get("open", True)
         is_malfunction = cd.get("malfunction", False)
 
-        # 1. Offsets holen (Float supported)
         suffix = "left" if ori == "Left" else "right"
         key_offset = (
             "offset_screen_sb_" + suffix
@@ -223,7 +249,6 @@ class VisualController:
         )
         screen_offset = self.settings.get(key_offset, [0, 0])
 
-        # 2. Size holen (Float W/H)
         if is_sb:
             sw = float(self.settings.get("size_screen_sb_width", 10.0))
             sh = float(self.settings.get("size_screen_sb_height", 10.0))
@@ -234,7 +259,6 @@ class VisualController:
         cw = self.settings.get("size_checkout_width", 100)
         ch = self.settings.get("size_checkout_height", 100)
 
-        # Checkout Item selbst (Z=6)
         ci = CheckoutItem(
             cd["x"],
             cd["y"],
@@ -256,13 +280,10 @@ class VisualController:
         if is_selected:
             ci.setSelected(True)
 
-        # CASHIER DRAWING LOGIC (ID-Based)
         if c_type == "Normal" and self.settings["show_cashiers"] and is_open:
             skill = cd.get("cashier_skill") or cd.get("skill") or "Azubi"
-
             checkout_id = cd.get("id", 1)
             variant = max(0, checkout_id - 1)
-
             offset_key = (
                 "offset_cashier_left"
                 if ori == "Left"
@@ -290,29 +311,20 @@ class VisualController:
                 variant_index=variant,
             )
             cai.setParentItem(self.map_group)
-
-            # Z-Value 25 ensures Cashier is ABOVE Screen (15) and Checkout (6)
             cai.setZValue(25)
-
             self.cashier_items.append(cai)
 
-        # SCREEN DRAWING LOGIC (Z=15)
         if self.settings["show_cashiers"]:
             cx, cy = cd["x"], cd["y"]
             center_x = cx + cw / 2
             center_y = cy + ch / 2
-
-            # Offset
             lox, loy = screen_offset
             if lox == 0 and loy == 0:
                 lox, loy = cw / 2, 10
-
             lox = float(lox)
             loy = float(loy)
-
             p_unrot_x = cx + lox
             p_unrot_y = cy + loy
-
             rad = math.radians(angle)
             tx = p_unrot_x - center_x
             ty = p_unrot_y - center_y
@@ -321,15 +333,9 @@ class VisualController:
             screen_x = rx + center_x
             screen_y = ry + center_y
 
-            # 1. Screen Rectangle
-            screen_item = QGraphicsRectItem(
-                -sw / 2, -sh / 2, sw, sh  # Local coordinates centered at 0,0
-            )
-
-            # WICHTIG: Checkout ID speichern für spätere Updates
+            screen_item = QGraphicsRectItem(-sw / 2, -sh / 2, sw, sh)
             screen_item.setData(0, cd.get("id"))
 
-            # Color Logic (Updated for Malfunction)
             if is_malfunction:
                 col = QColor("yellow")
             else:
@@ -338,7 +344,6 @@ class VisualController:
             screen_item.setBrush(QBrush(col))
             screen_item.setPen(QPen(Qt.PenStyle.NoPen))
 
-            # 2. Screen Text
             if is_malfunction:
                 status_text = "STÖRUNG"
                 text_col = QColor("red")
@@ -350,38 +355,24 @@ class VisualController:
                 status_text, parent=screen_item
             )
             text_item.setBrush(QBrush(text_col))
-
-            # Setup Font
             font = QFont("Segoe UI", 10, QFont.Weight.Bold)
             text_item.setFont(font)
 
-            # Calculate Scale to Fit
             brect = text_item.boundingRect()
             if brect.width() > 0 and brect.height() > 0:
-                # Wir wollen einen kleinen Rand (padding)
                 target_w = sw * 0.9
                 target_h = sh * 0.9
-
-                scale_x = target_w / brect.width()
-                scale_y = target_h / brect.height()
-
-                # Nimm den kleineren Scale, damit es reinpasst (Aspect Ratio wahren)
-                scale = min(scale_x, scale_y)
-
+                scale = min(
+                    target_w / brect.width(), target_h / brect.height()
+                )
                 text_item.setScale(scale)
-
-                # Center text
                 tx_scaled = brect.width() * scale
                 ty_scaled = brect.height() * scale
                 text_item.setPos(-tx_scaled / 2, -ty_scaled / 2)
 
-            # Position & Rotation
             screen_item.setPos(screen_x, screen_y)
             screen_item.setRotation(angle)
-
-            # Z-Value 15 (Between 6 and 25)
             screen_item.setZValue(15)
-
             screen_item.setParentItem(self.map_group)
             screen_item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
             self.screen_items.append(screen_item)
@@ -405,7 +396,6 @@ class VisualController:
         center_y = cy + ch / 2
         p_unrot_x = cx + float(off[0])
         p_unrot_y = cy + float(off[1])
-
         rad = math.radians(angle)
         tx = p_unrot_x - center_x
         ty = p_unrot_y - center_y
@@ -425,7 +415,6 @@ class VisualController:
         for i in range(max_q):
             px = start_point_x + dir_x * (i * spacing)
             py = start_point_y + dir_y * (i * spacing)
-
             current_size = dot_size
             if i == 0:
                 current_size = dot_size + 4
@@ -444,7 +433,6 @@ class VisualController:
                     current_size,
                 )
                 dot.setBrush(QBrush(QColor(255, 165, 0, 180)))
-
             dot.setPen(QPen(Qt.GlobalColor.white, 1))
             dot.setZValue(20)
             dot.setParentItem(self.map_group)
@@ -470,6 +458,7 @@ class VisualController:
         draw(map_manager.exit_routes, COLOR_RED)
 
     def sync_customers(self, models):
+        # Sync Customers
         current_set = set(models)
         to_remove = []
         for model, item in self.customer_items.items():
@@ -490,27 +479,55 @@ class VisualController:
             else:
                 self.customer_items[model].sync_visuals()
 
-    def update_checkout_status(self, checkouts_data):
-        """
-        Aktualisiert den visuellen Status (Farbe, Text) aller Kassenbildschirme.
-        Wird zyklisch aufgerufen, um z.B. Störungen blinken zu lassen.
-        """
-        # Globales Blinken für alle Störungen synchron (ca. 2 Hz)
-        blink_state = int(time.time() * 2) % 2 == 0
+        # NEU: Sync Workers
+        # Hinweis: Um die Methode sauber zu halten, könnte man das auslagern,
+        # aber hier für Kompaktheit:
+        from controllers.main_controller import (
+            MainController,
+        )  # (Referenz-Hack falls nötig, aber wir bekommen die Worker über SimManager später)
 
-        # Mapping für schnellen Zugriff: ID -> Data
+        # Wir brauchen Zugriff auf die active_workers.
+        # VisualController wird aber oft nur mit customers gefüttert.
+        # Lösung: MainController muss beim Tick auch workers übergeben.
+        # Wir ändern sync_customers nicht, sondern fügen eine Methode hinzu.
+
+    def _sync_workers(self, worker_models):
+        current_set = set(worker_models)
+        to_remove = []
+        for model, item in self.worker_items.items():
+            if model not in current_set:
+                item.setParentItem(None)
+                if item.scene():
+                    self.scene.removeItem(item)
+                to_remove.append(model)
+        for m in to_remove:
+            del self.worker_items[m]
+
+        for model in worker_models:
+            if model not in self.worker_items:
+                item = WorkerItem(
+                    model, size=self.settings.get("size_customer", 32)
+                )  # Gleiche Größe wie Kunden
+                item.setParentItem(self.map_group)
+                self.worker_items[model] = item
+            else:
+                self.worker_items[model].sync_visuals()
+
+    def sync_all_agents(self, customers, workers):
+        self.sync_customers(customers)
+        self._sync_workers(workers)
+
+    def update_checkout_status(self, checkouts_data):
+        blink_state = int(time.time() * 2) % 2 == 0
         data_map = {cd["id"]: cd for cd in checkouts_data}
 
         for item in self.screen_items:
-            # ID aus Item holen (in _draw_single_checkout gesetzt)
             cid = item.data(0)
-
             if cid is not None and cid in data_map:
                 cd = data_map[cid]
                 is_malfunction = cd.get("malfunction", False)
                 is_open = cd.get("open", True)
 
-                # Text-Child finden
                 text_item = None
                 for child in item.childItems():
                     if isinstance(child, QGraphicsSimpleTextItem):
@@ -518,23 +535,17 @@ class VisualController:
                         break
 
                 if is_malfunction:
-                    # Blinken: Gelb <-> Rot
                     col = QColor("yellow") if blink_state else QColor("red")
                     item.setBrush(QBrush(col))
-
                     if text_item:
                         text_item.setText("STÖRUNG")
                         text_col = (
                             QColor("black") if blink_state else QColor("white")
                         )
                         text_item.setBrush(QBrush(text_col))
-                        # Hinweis: Wir skalieren hier nicht neu, da "STÖRUNG" oft reinpasst.
-                        # Falls Textlänge sehr unterschiedlich, müsste man setScale neu berechnen.
                 else:
-                    # Normaler Status
                     col = COLOR_SCREEN_OPEN if is_open else COLOR_SCREEN_CLOSED
                     item.setBrush(QBrush(col))
-
                     if text_item:
                         text_item.setText(
                             "Geöffnet" if is_open else "Geschlossen"
@@ -553,12 +564,18 @@ class VisualController:
             i.setParentItem(None)
             if i.scene():
                 self.scene.removeItem(i)
+
         if self.waiting_area_item:
             self.waiting_area_item.setParentItem(None)
         if self.start_area_item:
             self.start_area_item.setParentItem(None)
         if self.exit_area_item:
             self.exit_area_item.setParentItem(None)
+        if self.worker_area_item:
+            self.worker_area_item.setParentItem(None)  # NEU
+
+        # Customers & Workers clearen wir hier nicht explizit, das macht sync
+
         self.shelf_items.clear()
         self.checkout_items.clear()
         self.cashier_items.clear()

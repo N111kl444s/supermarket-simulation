@@ -1,9 +1,8 @@
 """
 Central configuration module.
 Refactored:
-- ADDED: Missing Speed Factors (FACTOR_4X, FACTOR_8X, FACTOR_16X, FACTOR_32X) to match Controller imports.
-- ADDED: Specific screen colors (COLOR_SCREEN_OPEN, COLOR_SCREEN_CLOSED) - softer/modern.
-- ADDED: COLOR_SCREEN_TEXT.
+- ADDED: Worker and Tool image definitions.
+- ADDED: Color for Worker Spawn Area.
 """
 
 import sys
@@ -30,6 +29,7 @@ INTERNAL_BASE, EXTERNAL_BASE = get_paths()
 
 ASSETS_DIR = INTERNAL_BASE / "assets"
 IMAGE_DIR = ASSETS_DIR / "images"
+ICON_DIR = ASSETS_DIR / "icons"  # Falls tool.png ein Icon ist
 MAPS_DIR = EXTERNAL_BASE / "maps"
 SETTINGS_FILE = EXTERNAL_BASE / "settings.json"
 
@@ -48,7 +48,6 @@ def get_image_files(prefix):
     """
     if not IMAGE_DIR.exists():
         return []
-    # FIX: Sorted ensures that file order is OS-independent
     files = sorted(list(IMAGE_DIR.glob(f"{prefix}*.png")))
     if not files:
         generic = IMAGE_DIR / f"{prefix}.png"
@@ -84,6 +83,7 @@ COLOR_CHECKOUT = QColor("#3B82F6")
 COLOR_WAITING_AREA = QColor(59, 130, 246, 60)
 COLOR_START_AREA = QColor(16, 185, 129, 60)
 COLOR_EXIT_AREA = QColor(239, 68, 68, 60)
+COLOR_WORKER_SPAWN = QColor(245, 158, 11, 60)  # Orange transparent
 COLOR_SELECTION = QColor("#EF4444")
 COLOR_QUEUE_HIGHLIGHT = QColor("#8B5CF6")
 COLOR_SCAN_PROGRESS = QColor("#10B981")
@@ -99,11 +99,9 @@ COLOR_LIGHT_BG = COLOR_BG_MAIN
 COLOR_WHITE_BG = COLOR_BG_PANEL
 
 # --- SCREEN COLORS (NEW) ---
-COLOR_SCREEN_OPEN = QColor(
-    "#059669"
-)  # Emerald 600 (etwas dunkler für guten Kontrast mit weißer Schrift)
-COLOR_SCREEN_CLOSED = QColor("#DC2626")  # Red 600
-COLOR_SCREEN_TEXT = QColor("#FFFFFF")  # White
+COLOR_SCREEN_OPEN = QColor("#059669")
+COLOR_SCREEN_CLOSED = QColor("#DC2626")
+COLOR_SCREEN_TEXT = QColor("#FFFFFF")
 
 # --- Constants ---
 SHELF_SIZE = 50.0
@@ -130,35 +128,28 @@ SCAN_TIME_PER_ITEM_MS = 1000
 
 # --- DYNAMIC IMAGE LISTS ---
 
-# 1. Normal Customers
 IMG_CUSTOMERS_NORMAL = get_image_files("kunde")
 if not IMG_CUSTOMERS_NORMAL:
     IMG_CUSTOMERS_NORMAL = ["customer.png"]
 
-# 2. Disabled Customers
 IMG_CUSTOMERS_DISABLED = get_image_files("behindert")
 if not IMG_CUSTOMERS_DISABLED:
     IMG_CUSTOMERS_DISABLED = ["customer_disabled.png"]
 
-# 3. Handheld Customers (Normal)
 IMG_CUSTOMERS_HANDHELD = get_image_files("handheld_kunde")
 if not IMG_CUSTOMERS_HANDHELD:
     IMG_CUSTOMERS_HANDHELD = IMG_CUSTOMERS_NORMAL
 
-# 4. Handheld Customers (Disabled)
 IMG_CUSTOMERS_HANDHELD_DISABLED = get_image_files("handheld_behindert")
 if not IMG_CUSTOMERS_HANDHELD_DISABLED:
     IMG_CUSTOMERS_HANDHELD_DISABLED = IMG_CUSTOMERS_DISABLED
 
-# 5. Shelves
 IMG_SHELVES = get_image_files("regal")
 if not IMG_SHELVES:
     IMG_SHELVES = ["regal.png"]
 
-# 6. Checkouts
 IMG_CHECKOUTS = ["kasse.png", "sb.png"]
 
-# 7. Cashiers
 IMG_CASHIERS_AZUBI = get_image_files("azubi")
 if not IMG_CASHIERS_AZUBI:
     IMG_CASHIERS_AZUBI = ["azubi.png"]
@@ -166,6 +157,10 @@ if not IMG_CASHIERS_AZUBI:
 IMG_CASHIERS_PRO = get_image_files("festangestellter")
 if not IMG_CASHIERS_PRO:
     IMG_CASHIERS_PRO = ["festangestellter.png"]
+
+# NEU: Worker & Tool
+IMG_WORKER = ["worker.png"]  # Erwartet worker.png in assets/images/
+IMG_TOOL = "tool.png"  # Erwartet tool.png in assets/images/ oder assets/icons/
 
 # --- DEFAULT SETTINGS DICT ---
 DEFAULT_SETTINGS = {
@@ -179,6 +174,7 @@ DEFAULT_SETTINGS = {
     "show_waiting_area": True,
     "show_start_area": True,
     "show_exit_area": True,
+    "show_worker_area": True,  # NEU
     "size_shelf": SHELF_SIZE,
     "size_cashier": CASHIER_SIZE,
     "size_customer": CUSTOMER_SIZE,

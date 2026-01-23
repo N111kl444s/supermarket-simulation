@@ -1,8 +1,7 @@
 """
 Interaction Controller.
 Refactored:
-- Prevents selecting objects while using tools.
-- REMOVED: Random cashier variant logic (now ID based).
+- ADDED: 'worker_area' tool logic.
 """
 
 from PyQt6.QtWidgets import (
@@ -83,6 +82,9 @@ class InteractionController(QObject):
                 self.view.is_drawing_waiting_area = tool_name == "waiting_area"
                 self.view.is_drawing_start_area = tool_name == "start_area"
                 self.view.is_drawing_exit_area = tool_name == "exit_area"
+                self.view.is_drawing_worker_area = (
+                    tool_name == "worker_area"
+                )  # NEU
             elif tool_name == "shelf":
                 self.view.is_placing_shelves = True
             elif tool_name == "checkout":
@@ -110,6 +112,7 @@ class InteractionController(QObject):
         self.view.is_drawing_waiting_area = False
         self.view.is_drawing_start_area = False
         self.view.is_drawing_exit_area = False
+        self.view.is_drawing_worker_area = False  # NEU
         self.view.is_placing_checkout = False
         self.view.admin_toolbar.hide()
         self._clear_temp_drawing()
@@ -134,6 +137,7 @@ class InteractionController(QObject):
             self.view.place_shelves_button,
             self.view.waiting_area_button,
             self.view.start_area_button,
+            self.view.btn_worker_area,  # NEU
             self.view.btn_start_route,
             self.view.btn_exit_route,
             self.view.btn_exit_area,
@@ -233,7 +237,6 @@ class InteractionController(QObject):
                 "skill": "Azubi",
                 "max_queue": 5,
                 "angle": self.current_angle,
-                # Kein cashier_variant mehr nötig, da ID verwendet wird
             }
             self.map_manager.checkouts_data.append(new_checkout)
             self.map_data_changed.emit()
@@ -250,12 +253,16 @@ class InteractionController(QObject):
     def handle_area_created(self, rect):
         tl = self.visual_controller.map_group.mapFromScene(rect.topLeft())
         local_rect = QRectF(tl.x(), tl.y(), rect.width(), rect.height())
+
         if self.active_tool == "waiting_area":
             self.map_manager.waiting_area_rect = local_rect
         elif self.active_tool == "start_area":
             self.map_manager.start_area_rect = local_rect
         elif self.active_tool == "exit_area":
             self.map_manager.exit_area_rect = local_rect
+        elif self.active_tool == "worker_area":  # NEU
+            self.map_manager.worker_spawn_rect = local_rect
+
         self.visual_controller.draw_map_elements(self.map_manager)
         self.set_tool(None)
         self._reset_ui_buttons(None)
@@ -395,7 +402,6 @@ class InteractionController(QObject):
         )
 
     def handle_checkout_click(self, checkout_id):
-        # FIX: Wenn ein Zeichen-Tool aktiv ist, Klick ignorieren
         if self.active_tool:
             return
 

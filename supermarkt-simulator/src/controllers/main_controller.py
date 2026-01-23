@@ -1,9 +1,7 @@
 """
 Main Controller.
 Refactored:
-- FIX: Restored original Start/Pause button behavior (Icons ▶/⏸ and Check-State).
-- FIX: 'save_current_map' feedback preserved.
-- FIX: Checkout Malfunction logic preserved.
+- UPDATE: Handles ProgressClock (Progress calculation & Overtime check).
 """
 
 from PyQt6.QtWidgets import (
@@ -62,10 +60,9 @@ class MainController:
         self._setup_connections()
         self._init_ui_state()
 
-        # Initial Map Load - Versuche Standard zu laden
+        # Initial Map Load
         self.load_map("Standard (Einfach).json")
 
-        # Start Maximized
         self.view.showMaximized()
 
     def _setup_connections(self):
@@ -75,7 +72,7 @@ class MainController:
         self.view.btn_reset.clicked.connect(self.reset_simulation)
         self.view.btn_skip.clicked.connect(self.skip_day)
 
-        # Speed Buttons
+        # Speed
         self.view.btn_speed_1.clicked.connect(
             lambda: self.set_speed(FACTOR_1X)
         )
@@ -92,22 +89,25 @@ class MainController:
             )
         )
 
-        # --- SIMULATION SIGNALS ---
-        self.sim_manager.time_updated.connect(self.view.lbl_clock.setText)
+        # --- SIMULATION SIGNALS (CLOCK UPDATE) ---
+        # Update Clock Text AND Progress
+        self.sim_manager.time_updated.connect(self._update_clock_ui)
+
         self.sim_manager.stats_updated.connect(
             lambda w, c, t: (
                 self.view.lbl_queue_count.setText(str(w)),
                 self.view.lbl_customers_in_store.setText(str(c)),
                 self.view.lbl_total_customers.setText(str(t)),
+                # Check for Overtime on stats update (as 'c' changes)
+                self._check_overtime(c),
             )
         )
         self.sim_manager.log_message.connect(self.view.add_log_entry)
         self.sim_manager.day_finished.connect(self._on_day_finished)
 
-        # Timer Update Loop (WICHTIG für Störungen)
         self.sim_manager.sim_timer.timeout.connect(self._on_sim_tick)
 
-        # --- MAP MANAGEMENT (Sidebar) ---
+        # --- MAP MANAGEMENT ---
         self.view.map_combo.currentTextChanged.connect(self.load_map)
         self.view.btn_new_map.clicked.connect(self.create_new_map)
         self.view.btn_save_map.clicked.connect(self.save_current_map)
@@ -120,26 +120,24 @@ class MainController:
         )
         self.view.spin_bg_scale.valueChanged.connect(self.update_bg_scale)
 
-        # --- SETTINGS & DIALOGS (Sidebar) ---
+        # --- SETTINGS & DIALOGS ---
         self.view.btn_config_sizes.clicked.connect(self.open_size_config)
         self.view.btn_offsets.clicked.connect(self.open_offsets_dialog)
         self.view.btn_visibility.clicked.connect(self.open_visibility_dialog)
 
-        # --- INTERACTION / EDITOR TOOLS (Sidebar) ---
+        # --- INTERACTION ---
         self.interaction_controller.map_data_changed.connect(
             self.on_map_data_changed
         )
 
-        # Visual Callbacks (Clicks auf Items)
         self.visual_controller.set_checkout_click_callback(
             self.on_checkout_clicked
         )
         self.visual_controller.set_shelf_click_callback(self.on_shelf_clicked)
 
-        # Tool Buttons -> InteractionController
+        # Sidebar Buttons
         ic = self.interaction_controller
 
-        # Areas
         self.view.start_area_button.clicked.connect(
             lambda: ic.set_tool(
                 "start_area", button_ref=self.view.start_area_button
@@ -155,8 +153,12 @@ class MainController:
                 "exit_area", button_ref=self.view.btn_exit_area
             )
         )
+        self.view.btn_worker_area.clicked.connect(
+            lambda: ic.set_tool(
+                "worker_area", button_ref=self.view.btn_worker_area
+            )
+        )
 
-        # Routes
         self.view.btn_start_route.clicked.connect(
             lambda: ic.set_tool(
                 "start_route", button_ref=self.view.btn_start_route
@@ -171,14 +173,12 @@ class MainController:
             lambda: ic.set_tool("route", button_ref=self.view.new_route_button)
         )
 
-        # Shelves
         self.view.place_shelves_button.clicked.connect(
             lambda: ic.set_tool(
                 "shelf", button_ref=self.view.place_shelves_button
             )
         )
 
-        # Checkouts (Normal/SB + Left/Right)
         self.view.btn_kl.clicked.connect(
             lambda: ic.set_tool(
                 "checkout", {"type": "Normal", "ori": "Left"}, self.view.btn_kl
@@ -202,16 +202,13 @@ class MainController:
             )
         )
 
-        # Map Mover
         self.view.btn_move_map.clicked.connect(
             lambda: ic.set_tool("move_map", button_ref=self.view.btn_move_map)
         )
 
-        # Admin Toolbar (Speichern/Abbrechen beim Zeichnen)
         self.view.btn_save_admin.clicked.connect(ic.finish_route_drawing)
         self.view.btn_cancel_route.clicked.connect(ic.cancel_route_drawing)
 
-        # Lists & Object Management
         self.view.btn_del_route.clicked.connect(self.delete_selected_route)
         self.view.route_list_widget.itemClicked.connect(self.on_route_selected)
         self.view.btn_del_obj.clicked.connect(self.delete_selected_object)
@@ -220,12 +217,42 @@ class MainController:
             self.on_object_selected
         )
 
+    def _update_clock_ui(self, time_str):
+        # 1. Update Text
+        self.view.clock_widget.setText(time_str)
+
+        # 2. Update Progress
+        # Berechne Sekunden seit Öffnung / Gesamtsekunden
+        current = self.sim_manager.sim_time
+        open_t = self.sim_manager.open_time
+        close_t = self.sim_manager.close_time
+
+        total_secs = open_t.secsTo(close_t)
+        elapsed = open_t.secsTo(current)
+
+        if total_secs > 0:
+            progress = elapsed / total_secs
+            self.view.clock_widget.set_progress(progress)
+
+        # Check Overtime (falls Zeit-basiert)
+        is_past_closing = elapsed >= total_secs
+        # Wir brauchen die Kundenzahl, um das Blinken zu steuern
+        # Das machen wir in _check_overtime, aber hier setzen wir das Flag "Zeit abgelaufen"
+        if not is_past_closing:
+            self.view.clock_widget.set_overtime(False)
+
+    def _check_overtime(self, customers_in_store):
+        current = self.sim_manager.sim_time
+        close_t = self.sim_manager.close_time
+        if current >= close_t and customers_in_store > 0:
+            self.view.clock_widget.set_overtime(True)
+        else:
+            self.view.clock_widget.set_overtime(False)
+
     def _on_sim_tick(self):
-        """
-        Zentraler Update-Loop für UI-Synchronisation.
-        """
-        self.visual_controller.sync_customers(self.sim_manager.customers_model)
-        # Kassen-Status (Störung blinken lassen etc.) updaten
+        self.visual_controller.sync_all_agents(
+            self.sim_manager.customers_model, self.sim_manager.active_workers
+        )
         self.visual_controller.update_checkout_status(
             self.map_manager.checkouts_data
         )
@@ -234,6 +261,8 @@ class MainController:
         QMessageBox.information(self.view, "Info", "Tag beendet.")
         self.view.btn_play_pause.setChecked(False)
         self.view.btn_play_pause.setText("▶")
+        # Clock reset visual
+        self.view.clock_widget.set_overtime(False)
 
     def _init_ui_state(self):
         self._refresh_map_list()
@@ -259,7 +288,7 @@ class MainController:
         with open(self.settings_file, "w") as f:
             json.dump(self.settings, f, indent=4)
 
-    # --- DIALOG METHODS ---
+    # --- DIALOGS ---
     def open_size_config(self):
         dlg = SizeConfigDialog(self.settings, self.view)
         if dlg.exec():
@@ -297,7 +326,7 @@ class MainController:
         dlg.exec()
         self._save_settings()
 
-    # --- MAP METHODS ---
+    # --- MAP ---
     def _refresh_map_list(self):
         self.view.map_combo.blockSignals(True)
         self.view.map_combo.clear()
@@ -332,7 +361,6 @@ class MainController:
             self.interaction_controller.set_tool(None)
             self.view.canvas_component.set_drawing_cursor(False)
             self.view.btn_reset.setEnabled(True)
-            # Button State prüfen beim Wechsel
             if self.sim_manager.is_running:
                 self.view.btn_play_pause.setChecked(True)
                 self.view.btn_play_pause.setText("⏸")
@@ -442,19 +470,12 @@ class MainController:
         self.map_manager.background_scale = val
         self.visual_controller.update_bg_scale(val)
 
-    # --- SIMULATION CONTROL ---
     def toggle_simulation(self):
-        """
-        Startet oder Pausiert die Simulation.
-        """
         if self.sim_manager.is_running:
-            # Wenn läuft -> Pausieren
             self.sim_manager.pause()
-            # Button Status ändern
-            self.view.btn_play_pause.setChecked(False)  # Nicht mehr "gedrückt"
-            self.view.btn_play_pause.setText("▶")  # Zeige Play-Symbol
+            self.view.btn_play_pause.setChecked(False)
+            self.view.btn_play_pause.setText("▶")
         else:
-            # Wenn pausiert -> Starten
             if not self.sim_manager.is_initialized:
                 try:
                     count = self.view.actor_count_input.value()
@@ -470,28 +491,22 @@ class MainController:
                     return
 
             self.sim_manager.start()
-            # Button Status ändern
-            self.view.btn_play_pause.setChecked(
-                True
-            )  # Button wirkt "eingedrückt"
-            self.view.btn_play_pause.setText("⏸")  # Zeige Pause-Symbol
+            self.view.btn_play_pause.setChecked(True)
+            self.view.btn_play_pause.setText("⏸")
 
     def reset_simulation(self):
         ot = self.view.time_open.time()
         self.sim_manager.reset(ot)
-
-        # Button zurücksetzen
         self.view.btn_play_pause.setChecked(False)
         self.view.btn_play_pause.setText("▶")
-
+        self.view.clock_widget.set_progress(0)
+        self.view.clock_widget.set_overtime(False)
         self.visual_controller.sync_customers([])
         self.visual_controller.draw_map_elements(self.map_manager)
 
     def skip_day(self):
         if self.sim_manager.is_initialized:
             self.sim_manager.skip_day()
-
-            # Button zurücksetzen
             self.view.btn_play_pause.setChecked(False)
             self.view.btn_play_pause.setText("▶")
 
@@ -500,6 +515,7 @@ class MainController:
 
     def _get_sim_params_from_ui(self, is_disabled):
         try:
+            # Same implementation as before (omitted for brevity, copy from previous response if needed or keep existing)
             handheld_val = 0
             if hasattr(self.view, "hand_scanner_prob"):
                 handheld_val = self.view.hand_scanner_prob.value()
@@ -530,10 +546,16 @@ class MainController:
             fail_rate_normal = 0.0
             if hasattr(self.view, "checkout_fail_rate_normal"):
                 fail_rate_normal = self.view.checkout_fail_rate_normal.value()
-
             fail_rate_sb = 0.0
             if hasattr(self.view, "checkout_fail_rate_sb"):
                 fail_rate_sb = self.view.checkout_fail_rate_sb.value()
+
+            repair_min = 5.0
+            repair_max = 15.0
+            if hasattr(self.view, "worker_repair_min"):
+                repair_min = self.view.worker_repair_min.value()
+            if hasattr(self.view, "worker_repair_max"):
+                repair_max = self.view.worker_repair_max.value()
 
             return {
                 "walk": (
@@ -553,12 +575,14 @@ class MainController:
                 "handheld": handheld_val,
                 "checkout_fail_rate_normal": fail_rate_normal,
                 "checkout_fail_rate_sb": fail_rate_sb,
+                "worker_repair_min": repair_min,
+                "worker_repair_max": repair_max,
             }
         except Exception as e:
             print(f"UI Params Error: {e}")
             return None
 
-    # --- Interaction / Selection Proxies ---
+    # --- Interaction Proxies (Keep same as before) ---
     def on_checkout_clicked(self, cid):
         self.interaction_controller.handle_checkout_click(cid)
         self._highlight_list_item(self.view.object_list_widget, cid)
@@ -569,7 +593,6 @@ class MainController:
 
     def on_route_selected(self, item):
         name = item.text().split(" ")[0]
-        # self.interaction_controller.select_route(name)
 
     def on_object_selected(self, item):
         spec = item.data(Qt.ItemDataRole.UserRole)
@@ -611,7 +634,6 @@ class MainController:
                 Qt.ItemDataRole.UserRole, {"type": "shelf", "index": i}
             )
             self.view.object_list_widget.addItem(item)
-
         for c in self.map_manager.checkouts_data:
             item = QListWidgetItem(f"Kasse #{c['id']} ({c['type']})")
             item.setData(

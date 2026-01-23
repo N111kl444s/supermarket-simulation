@@ -1,9 +1,8 @@
 """
 Simulation Manager Module.
 Updated:
-- ADDED: Logic for Checkout Malfunctions (Störungen).
-- Störungs-Check: Checks per tick based on sidebar probability.
-- Pauses customer tick if checkout has malfunction.
+- ADDED: Worker Logic (Spawning, Repairing, Despawning).
+- Worker spawns if checkout broken and no worker assigned.
 """
 
 import random
@@ -11,6 +10,7 @@ import math
 from PyQt6.QtCore import QTimer, QTime, QObject, pyqtSignal, QPointF
 from PyQt6.QtGui import QVector2D
 from models.customer import CustomerModel
+from models.worker import WorkerModel
 from config import (
     DEFAULT_OPEN_TIME,
     DEFAULT_CLOSE_TIME,
@@ -41,7 +41,11 @@ class SimulationManager(QObject):
         self.store_is_closed_trigger = False
 
         self.customers_model = []
+        self.active_workers = []  # NEU: Liste der Arbeiter
         self.checkout_queues = {}
+
+        # Mapping: Checkout-ID -> WorkerModel (um Doppelzuweisungen zu verhindern)
+        self.assigned_maintenance = {}
 
         self.total_customers_spawned = 0
         self.target_daily_customers = 50
@@ -73,7 +77,9 @@ class SimulationManager(QObject):
         self.pause()
         self.is_initialized = False
         self.customers_model.clear()
+        self.active_workers.clear()
         self.checkout_queues = {}
+        self.assigned_maintenance = {}
         self.total_customers_spawned = 0
         self.store_is_closed_trigger = False
 
@@ -105,9 +111,12 @@ class SimulationManager(QObject):
         self.spawn_timer_acc = 0.0
         self._calc_next_spawn()
 
-        # Reset Malfunctions at start of day
+        # Reset Malfunctions
         for c_data in self.map_mgr.checkouts_data:
             c_data["malfunction"] = False
+
+        self.active_workers.clear()
+        self.assigned_maintenance = {}
 
         self.is_initialized = True
         self.log_message.emit(
@@ -131,6 +140,10 @@ class SimulationManager(QObject):
             self.time_accumulator_sec -= 60.0
             self.time_updated.emit(self.sim_time.toString("HH:mm"))
 
+        # 1. Maintenance Logic
+        self._check_maintenance()
+        self._handle_workers(game_dt)
+
         is_closing_time = self.sim_time >= self.close_time
         if is_closing_time:
             if not self.store_is_closed_trigger:
@@ -138,7 +151,7 @@ class SimulationManager(QObject):
                     "Ladenschluss! Eingang geschlossen...", "orange"
                 )
                 self.store_is_closed_trigger = True
-            if not self.customers_model:
+            if not self.customers_model and not self.active_workers:
                 self.pause()
                 self.time_updated.emit(self.sim_time.toString("HH:mm"))
                 self.log_message.emit(
@@ -149,16 +162,15 @@ class SimulationManager(QObject):
         else:
             self._attempt_spawn(game_dt)
 
+        # 2. Customers Logic
         active_models = []
         waiting_cnt = 0
-
         current_global_params = (
             self.param_access_func(False) if self.param_access_func else None
         )
 
         for model in self.customers_model:
-            # --- STÖRUNGSLOGIK & PAUSIEREN ---
-            # Prüfen, ob der Kunde an einer Kasse mit Störung ist
+            # Störungs-Check für Pausieren
             is_stuck_due_to_malfunction = False
             if (
                 model.state in ("SCANNING", "PAYING")
@@ -175,10 +187,8 @@ class SimulationManager(QObject):
                 if c_data and c_data.get("malfunction", False):
                     is_stuck_due_to_malfunction = True
 
-            # Nur ticken, wenn NICHT durch Störung blockiert
             if not is_stuck_due_to_malfunction:
                 model.tick(game_dt)
-            # ---------------------------------
 
             if model.state == "WAITING_AREA":
                 waiting_cnt += 1
@@ -195,7 +205,6 @@ class SimulationManager(QObject):
                     if dist < 5.0:
                         model.state = "SCANNING"
                         min_s, max_s = 1.0, 2.0
-
                         c_data = next(
                             (
                                 x
@@ -212,8 +221,6 @@ class SimulationManager(QObject):
                                     )
                                     if cust_params and "scan" in cust_params:
                                         min_s, max_s = cust_params["scan"]
-                                    else:
-                                        min_s, max_s = model.scan_speed_range
                             else:
                                 skill = c_data.get("skill", "Azubi")
                                 key = "newbie" if skill == "Azubi" else "pro"
@@ -226,11 +233,9 @@ class SimulationManager(QObject):
                                     ].get(key)
                                     if staff_rng:
                                         min_s, max_s = staff_rng
-
                         model.set_scan_speed_range(min_s, max_s)
 
-            # --- STÖRUNG AUSLÖSEN ---
-            # Wenn der Kunde aktiv scannt oder bezahlt (und nicht blockiert ist), kann eine Störung auftreten.
+            # Zufällige Störung
             if (
                 model.state == "SCANNING" or model.state == "PAYING"
             ) and not is_stuck_due_to_malfunction:
@@ -244,34 +249,22 @@ class SimulationManager(QObject):
                         ),
                         None,
                     )
-
                     if c_data:
-                        # Wahrscheinlichkeit holen
                         if c_data.get("type") == "SB":
                             fail_rate = current_global_params.get(
-                                "checkout_fail_rate_sb", 100.0
+                                "checkout_fail_rate_sb", 0.0
                             )
                         else:
                             fail_rate = current_global_params.get(
-                                "checkout_fail_rate_normal", 100.0
+                                "checkout_fail_rate_normal", 0.0
                             )
-                        print(
-                            "Debug: Störungswahrscheinlichkeit =",
-                            fail_rate,
-                            "bei Kasse",
-                            c_data["type"],
-                        )
-                        # Würfeln: fail_rate ist z.B. Prozent pro Sekunde
-                        # Wir skalieren mit game_dt
-                        # 5.0 bedeutet 5% pro "Einheit". Wir nehmen an, der Input ist % Wahrscheinlichkeit pro Sekunde.
-                        chance = (fail_rate / 100.0) * game_dt
 
+                        chance = (fail_rate / 100.0) * game_dt
                         if random.random() < chance:
                             c_data["malfunction"] = True
                             self.log_message.emit(
                                 f"⚠️ STÖRUNG an Kasse {cid}!", "red"
                             )
-            # ------------------------
 
             elif (
                 model.state == "LEAVING"
@@ -297,6 +290,69 @@ class SimulationManager(QObject):
             self.total_customers_spawned,
         )
 
+    # --- WORKER LOGIC ---
+    def _check_maintenance(self):
+        """Prüft kaputte Kassen und entsendet Arbeiter."""
+        # Parameter holen
+        params = (
+            self.param_access_func(False) if self.param_access_func else {}
+        )
+        repair_min = params.get("worker_repair_min", 5.0)
+        repair_max = params.get("worker_repair_max", 15.0)
+
+        spawn_rect = self.map_mgr.worker_spawn_rect
+        if not spawn_rect:
+            # Falls kein Bereich definiert ist, kann kein Arbeiter kommen.
+            # Alternativ: Start Area nutzen oder Fehler loggen.
+            return
+
+        for c_data in self.map_mgr.checkouts_data:
+            if c_data.get("malfunction", False):
+                cid = c_data["id"]
+                # Ist schon jemand unterwegs?
+                if cid not in self.assigned_maintenance:
+                    # Spawn Worker
+                    worker = WorkerModel(
+                        spawn_rect,
+                        c_data,
+                        self.map_mgr.exit_area_rect,
+                        (repair_min, repair_max),
+                    )
+                    self.active_workers.append(worker)
+                    self.assigned_maintenance[cid] = worker
+                    self.log_message.emit(
+                        f"🔧 Techniker zu Kasse {cid} unterwegs.", "blue"
+                    )
+
+    def _handle_workers(self, dt):
+        alive = []
+        for w in self.active_workers:
+            # Merke Status VOR Tick
+            was_repairing = w.state == "REPAIRING"
+
+            w.tick(dt)
+
+            # Prüfe ob Reparatur fertig wurde in diesem Tick
+            if was_repairing and w.state == "LEAVING":
+                # Kasse reparieren
+                cid = w.target_checkout_id
+                c_data = next(
+                    (x for x in self.map_mgr.checkouts_data if x["id"] == cid),
+                    None,
+                )
+                if c_data:
+                    c_data["malfunction"] = False
+                    self.log_message.emit(
+                        f"✅ Kasse {cid} repariert.", "green"
+                    )
+                # Aus Mapping entfernen
+                if cid in self.assigned_maintenance:
+                    del self.assigned_maintenance[cid]
+
+            if w.state != "GONE":
+                alive.append(w)
+        self.active_workers = alive
+
     def _attempt_spawn(self, dt_game_seconds):
         self.spawn_timer_acc += dt_game_seconds
         if self.spawn_timer_acc >= self.next_spawn_interval:
@@ -316,7 +372,6 @@ class SimulationManager(QObject):
             params = None
 
         if params is None:
-            # Fallback
             params = {
                 "walk": (2.5, 0.5),
                 "roll": (1.5, 0.3),
@@ -333,8 +388,7 @@ class SimulationManager(QObject):
         prob_handheld = params.get("handheld", 0.0) / 100.0
         uses_handheld = random.random() < prob_handheld
 
-        # --- Bezahlmethode bestimmen ---
-        ratio = params.get("pay_ratio", (30, 70))  # (Cash%, Card%)
+        ratio = params.get("pay_ratio", (30, 70))
         roll = random.uniform(0, 100)
         if roll < ratio[0]:
             pay_method = "cash"
@@ -343,7 +397,6 @@ class SimulationManager(QObject):
             pay_method = "card"
             pay_speed = params.get("pay_card_speed", (1.0, 4.0))
 
-        # --- ROUTEN AUSWAHL ---
         selected_route = []
         if self.map_mgr.shop_routes:
             all_routes = list(self.map_mgr.shop_routes.values())

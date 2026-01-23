@@ -1,7 +1,7 @@
 """
 Map Manager Module.
 Handles loading, saving, and managing map data.
-Updated: Defaults to 'Standard (Einfach).json'.
+Updated: Defaults to 'Standard (Einfach).json'. Added worker_spawn_rect.
 """
 
 import json
@@ -26,12 +26,11 @@ class MapManager:
         self.waiting_area_rect = None
         self.start_area_rect = None
         self.exit_area_rect = None
+        self.worker_spawn_rect = None  # NEU: Spawn-Bereich für Arbeiter
 
-        # Supermarkt-Hintergrund (Floor Plan)
         self.background_image_path = None
         self.background_scale = 0.5
 
-        # Position des Supermarktes auf der Erde
         self.map_pos_x = 0.0
         self.map_pos_y = 0.0
 
@@ -94,6 +93,7 @@ class MapManager:
 
             self.checkouts_data = data.get("checkouts", [])
 
+            # Areas
             self.waiting_area_rect = (
                 QRectF(*data["waiting_area"])
                 if data.get("waiting_area")
@@ -105,11 +105,16 @@ class MapManager:
             self.exit_area_rect = (
                 QRectF(*data["exit_area"]) if data.get("exit_area") else None
             )
+            # NEU: Worker Area laden
+            self.worker_spawn_rect = (
+                QRectF(*data["worker_area"])
+                if data.get("worker_area")
+                else None
+            )
 
             self.background_image_path = data.get("background_image", None)
             self.background_scale = data.get("background_scale", 0.5)
 
-            # NEU: Map Position
             self.map_pos_x = data.get("map_pos_x", 0.0)
             self.map_pos_y = data.get("map_pos_y", 0.0)
 
@@ -128,42 +133,19 @@ class MapManager:
                 for name, pts in routes_dict.items()
             }
 
+        def rect_to_list(r):
+            return [r.x(), r.y(), r.width(), r.height()] if r else None
+
         data = {
             "routes": export_routes(self.shop_routes),
             "start_routes": export_routes(self.start_routes),
             "exit_routes": export_routes(self.exit_routes),
             "shelves": self.all_shelves,
             "checkouts": self.checkouts_data,
-            "waiting_area": (
-                [
-                    self.waiting_area_rect.x(),
-                    self.waiting_area_rect.y(),
-                    self.waiting_area_rect.width(),
-                    self.waiting_area_rect.height(),
-                ]
-                if self.waiting_area_rect
-                else None
-            ),
-            "start_area": (
-                [
-                    self.start_area_rect.x(),
-                    self.start_area_rect.y(),
-                    self.start_area_rect.width(),
-                    self.start_area_rect.height(),
-                ]
-                if self.start_area_rect
-                else None
-            ),
-            "exit_area": (
-                [
-                    self.exit_area_rect.x(),
-                    self.exit_area_rect.y(),
-                    self.exit_area_rect.width(),
-                    self.exit_area_rect.height(),
-                ]
-                if self.exit_area_rect
-                else None
-            ),
+            "waiting_area": rect_to_list(self.waiting_area_rect),
+            "start_area": rect_to_list(self.start_area_rect),
+            "exit_area": rect_to_list(self.exit_area_rect),
+            "worker_area": rect_to_list(self.worker_spawn_rect),  # NEU
             "global_exit_direction": global_exit_direction,
             "background_image": self.background_image_path,
             "background_scale": self.background_scale,
@@ -193,8 +175,6 @@ class MapManager:
     def delete_current_map(self):
         if not self.current_map_file:
             return False
-        # Schutzmechanismus: Standardkarten nicht löschen, wenn man nicht will
-        # Hier optional. Wir löschen einfach.
         try:
             os.remove(self.current_map_file)
             self.current_map_file = None
@@ -210,7 +190,6 @@ class MapManager:
         return maps
 
     def _create_default_map(self):
-        # FIX: Standard Name geändert
         default_name = "Standard (Einfach).json"
         default_data = {"routes": {}, "shelves": [], "checkouts": []}
         try:
@@ -218,6 +197,18 @@ class MapManager:
                 json.dump(default_data, f, indent=4)
         except:
             pass
+
+    def reset_map(self):
+        self.shop_routes = {}
+        self.start_routes = {}
+        self.exit_routes = {}
+        self.all_shelves = []
+        self.checkouts_data = []
+        self.waiting_area_rect = None
+        self.start_area_rect = None
+        self.exit_area_rect = None
+        self.worker_spawn_rect = None
+        self.background_image_path = None
 
     def set_background(self, source_path):
         if not self.current_map_file:

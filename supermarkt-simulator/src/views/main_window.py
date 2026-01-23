@@ -1,8 +1,7 @@
 """
 Main window module.
-Refactored: 
-- Removed self.showMaximized() from __init__ to prevent resize glitches on startup.
-- Connects Scene to MainWindow for Tool Detection.
+Refactored:
+- CLEANUP: Removed redundancy regarding Stats GroupBox handling (now handled by Tab visibility).
 """
 
 from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QSplitter
@@ -14,32 +13,32 @@ from .components.toolbar import TopToolbar
 from .components.sidebar import Sidebar
 from .components.canvas import SimulationCanvas
 
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Supermarkt Simulator - Workbench")
-        # FIX: showMaximized() hier entfernt. Wird vom Controller aufgerufen.
-        
+
         # States
         self.is_admin_mode = False
         self.is_drawing_mode = False
         self.is_placing_shelves = False
         self.is_drawing_waiting_area = False
         self.is_drawing_start_area = False
+        self.is_drawing_worker_area = False
         self.is_placing_checkout = False
         self.is_drawing_start_route = False
         self.is_drawing_exit_route = False
         self.is_drawing_exit_area = False
-        
+
         self.is_q1_maximized = False
-        self.item_q1 = None 
+        self.item_q1 = None
 
         self.setup_ui()
         self.setStyleSheet(get_application_style())
         self._expose_ui_elements()
-        
-        # Scene connection
-        if hasattr(self, 'sim_scene'):
+
+        if hasattr(self, "sim_scene"):
             self.sim_scene.main_window = self
 
     def set_controller(self, c):
@@ -48,30 +47,42 @@ class MainWindow(QMainWindow):
     def setup_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        self.toolbar_component = TopToolbar() 
-        layout.addWidget(self.toolbar_component)
+        root_layout = QVBoxLayout(central)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        layout.addWidget(splitter)
+        root_layout.addWidget(splitter)
 
         self.sidebar_component = Sidebar()
         splitter.addWidget(self.sidebar_component)
 
-        self.canvas_component = SimulationCanvas(self) 
-        splitter.addWidget(self.canvas_component)
+        right_container = QWidget()
+        right_layout = QVBoxLayout(right_container)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
 
-        splitter.setSizes([450, 1150])
+        self.toolbar_component = TopToolbar()
+        right_layout.addWidget(self.toolbar_component)
+
+        self.canvas_component = SimulationCanvas(self)
+        right_layout.addWidget(self.canvas_component)
+
+        splitter.addWidget(right_container)
+        splitter.setSizes([350, 1250])
         splitter.setCollapsible(0, False)
 
     def _expose_ui_elements(self):
         t = self.toolbar_component
-        self.mode_combo = t.mode_combo
-        self.map_combo = t.map_combo
-        self.lbl_clock = t.lbl_clock
+        s = self.sidebar_component
+
+        # Sidebar Controls
+        self.mode_combo = s.mode_combo
+        self.map_combo = s.map_combo
+        self.main_tabs = s.main_tabs
+
+        # Toolbar Controls
+        self.clock_widget = t.clock_widget
         self.btn_reset = t.btn_reset
         self.btn_play_pause = t.btn_play_pause
         self.btn_skip = t.btn_skip
@@ -81,9 +92,7 @@ class MainWindow(QMainWindow):
         self.btn_reset_zoom = t.btn_reset_zoom
         self.speed_group = t.speed_group
 
-        s = self.sidebar_component
-        self.control_tabs = s.control_tabs
-        # Input
+        # Sidebar Inputs & Logic
         self.time_open = s.time_open
         self.time_close = s.time_close
         self.actor_count_input = s.actor_count_input
@@ -105,14 +114,16 @@ class MainWindow(QMainWindow):
         self.scan_speed_pro_max = s.scan_speed_pro_max
         self.checkout_fail_rate_normal = s.checkout_fail_rate_normal
         self.checkout_fail_rate_sb = s.checkout_fail_rate_sb
-        # Sim
+        self.worker_repair_min = s.worker_repair_min
+        self.worker_repair_max = s.worker_repair_max
+
         self.list_log = s.list_log
         self.lbl_queue_count = s.lbl_queue_count
         self.lbl_customers_in_store = s.lbl_customers_in_store
         self.lbl_total_customers = s.lbl_total_customers
-        # Stats
+        self.gb_stats = s.gb_stats
         self.plot_widget = s.plot_widget
-        # Editor
+
         self.btn_new_map = s.btn_new_map
         self.btn_save_map = s.btn_save_map
         self.btn_delete_map = s.btn_delete_map
@@ -120,27 +131,30 @@ class MainWindow(QMainWindow):
         self.btn_remove_background = s.btn_remove_background
         self.spin_bg_scale = s.spin_bg_scale
         self.combo_global_exit = s.combo_global_exit
+        self.btn_move_map = s.btn_move_map
+
         self.start_area_button = s.start_area_button
-        self.btn_start_route = s.btn_start_route
-        self.new_route_button = s.new_route_button
-        self.place_shelves_button = s.place_shelves_button
         self.waiting_area_button = s.waiting_area_button
-        self.btn_exit_route = s.btn_exit_route
         self.btn_exit_area = s.btn_exit_area
+        self.btn_worker_area = s.btn_worker_area
         self.btn_visibility = s.btn_visibility
         self.btn_offsets = s.btn_offsets
         self.btn_config_sizes = s.btn_config_sizes
+
+        self.btn_start_route = s.btn_start_route
+        self.new_route_button = s.new_route_button
+        self.btn_exit_route = s.btn_exit_route
+        self.admin_toolbar = s.admin_toolbar
+        self.btn_save_admin = s.btn_save_admin
+        self.btn_cancel_route = s.btn_cancel_route
+        self.route_list_widget = s.route_list_widget
+        self.btn_del_route = s.btn_del_route
+
+        self.place_shelves_button = s.place_shelves_button
         self.btn_kl = s.btn_kl
         self.btn_kr = s.btn_kr
         self.btn_sl = s.btn_sl
         self.btn_sr = s.btn_sr
-        self.btn_move_map = s.btn_move_map
-        self.admin_toolbar = s.admin_toolbar
-        self.btn_save_admin = s.btn_save_admin
-        self.btn_cancel_route = s.btn_cancel_route
-        # Data
-        self.route_list_widget = s.route_list_widget
-        self.btn_del_route = s.btn_del_route
         self.object_list_widget = s.object_list_widget
         self.btn_edit_obj = s.btn_edit_obj
         self.btn_del_obj = s.btn_del_obj
@@ -159,12 +173,19 @@ class MainWindow(QMainWindow):
 
     def update_sidebar_mode(self, mode_text):
         is_sim = mode_text == "Simulation"
-        self.control_tabs.setTabVisible(0, is_sim)
-        self.control_tabs.setTabVisible(1, is_sim)
-        self.control_tabs.setTabVisible(2, is_sim)
-        self.control_tabs.setTabVisible(3, not is_sim)
-        self.control_tabs.setTabVisible(4, not is_sim)
-        self.control_tabs.setCurrentIndex(0 if is_sim else 3)
+
+        # 0: Eingabe, 1: Stats, 2: Editor
+        if is_sim:
+            self.main_tabs.setTabVisible(0, True)
+            self.main_tabs.setTabVisible(1, True)
+            self.main_tabs.setTabVisible(2, False)
+            self.main_tabs.setCurrentIndex(0)
+        else:
+            self.main_tabs.setTabVisible(0, False)
+            self.main_tabs.setTabVisible(1, False)
+            self.main_tabs.setTabVisible(2, True)
+            self.main_tabs.setCurrentIndex(2)
+
         self.btn_play_pause.setEnabled(is_sim)
         self.btn_reset.setEnabled(is_sim)
         self.btn_skip.setEnabled(is_sim)

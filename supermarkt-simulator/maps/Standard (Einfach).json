@@ -825,7 +825,7 @@
             "max_queue": 5,
             "angle": 0,
             "cashier_skill": "Azubi",
-            "malfunction": false
+            "malfunction": true
         },
         {
             "id": 2,
@@ -837,7 +837,7 @@
             "skill": "Azubi",
             "max_queue": 5,
             "angle": 0,
-            "malfunction": false
+            "malfunction": true
         },
         {
             "id": 3,
@@ -845,11 +845,12 @@
             "y": 80.0,
             "type": "SB",
             "orientation": "Right",
-            "open": true,
+            "open": false,
             "skill": "Azubi",
             "max_queue": 5,
             "angle": 0,
-            "malfunction": false
+            "malfunction": false,
+            "cashier_skill": "Azubi"
         },
         {
             "id": 4,
@@ -870,11 +871,12 @@
             "y": 107.0,
             "type": "SB",
             "orientation": "Left",
-            "open": true,
+            "open": false,
             "skill": "Azubi",
             "max_queue": 5,
             "angle": 180,
-            "malfunction": false
+            "malfunction": false,
+            "cashier_skill": "Azubi"
         },
         {
             "id": 6,
@@ -882,11 +884,12 @@
             "y": 107.0,
             "type": "SB",
             "orientation": "Left",
-            "open": true,
+            "open": false,
             "skill": "Azubi",
             "max_queue": 5,
             "angle": 180,
-            "malfunction": false
+            "malfunction": false,
+            "cashier_skill": "Azubi"
         },
         {
             "id": 7,
@@ -899,7 +902,7 @@
             "max_queue": 5,
             "angle": 0,
             "cashier_skill": "Azubi",
-            "malfunction": false
+            "malfunction": true
         },
         {
             "id": 8,
@@ -911,7 +914,7 @@
             "skill": "Azubi",
             "max_queue": 5,
             "angle": 0,
-            "malfunction": false
+            "malfunction": true
         }
     ],
     "waiting_area": [
@@ -932,6 +935,7 @@
         54.724603196574435,
         61.71947728936982
     ],
+    "worker_area": null,
     "global_exit_direction": "Rechts",
     "background_image": "bg_Standard (Einfach).png",
     "background_scale": 0.09,

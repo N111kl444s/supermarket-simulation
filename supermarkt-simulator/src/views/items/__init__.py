@@ -4,7 +4,8 @@ from .cashier_item import CashierItem
 from .customer_item import CustomerItem
 from .waiting_area_item import WaitingAreaItem
 from .start_area_item import StartAreaItem
-from .exit_area_item import ExitAreaItem  # NEU
+from .exit_area_item import ExitAreaItem
+from .worker_item import WorkerItem
 
 __all__ = [
     "ShelfItem",
@@ -14,4 +15,5 @@ __all__ = [
     "WaitingAreaItem",
     "StartAreaItem",
     "ExitAreaItem",
+    "WorkerItem",
 ]
