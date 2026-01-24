@@ -11,3 +11,5 @@ Smart-Buttons für Überwachungskameras:
 An der SB-Kasse wird die geschlossene Kasse benutzt
 
 Kunden smüssen über Cashier stehen
+
+Tooltips überarbeiten

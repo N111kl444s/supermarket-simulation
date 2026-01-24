@@ -1,95 +1,73 @@
 """
-Graphics Scene for the editor.
-Handles mouse events for drawing areas and forwarding clicks.
-Refactored: Robust Fallback for Item Clicking.
+Simulation Scene.
+Refactored:
+- FIX: No circular imports.
+- LOGIC: Handles temporary drawing of selection rectangles.
 """
 
-from PyQt6.QtWidgets import QGraphicsScene, QGraphicsRectItem, QGraphicsItem
+from PyQt6.QtWidgets import QGraphicsScene, QGraphicsRectItem
 from PyQt6.QtCore import Qt, pyqtSignal, QRectF, QPointF
-from PyQt6.QtGui import QPen, QBrush, QColor
-from config import COLOR_WAITING_AREA, COLOR_START_AREA, COLOR_EXIT_AREA
-from views.items.shelf_item import ShelfItem
-from views.items.checkout_item import CheckoutItem
+from PyQt6.QtGui import QPen, QColor, QBrush
 
-class RouteEditorScene(QGraphicsScene):
-    # Signals
+
+class SimulationScene(QGraphicsScene):
+    # Signale für Interaktion
     clicked_point = pyqtSignal(QPointF)
-    waiting_area_created = pyqtSignal(QRectF)
-    
+    waiting_area_created = pyqtSignal(QRectF)  # Wird für ALLE Areas genutzt
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.main_window = None
-        
-        # Temporary item for drawing rectangles (rubberband)
         self.temp_rect_item = None
         self.start_point = None
 
+        # Hintergrund-Gitter oder ähnliches könnte man hier initen
+        # self.setBackgroundBrush(QBrush(QColor("#F5F7FA")))
+
     def mousePressEvent(self, event):
-        # 1. Standard-Verarbeitung (Items klicken)
+        # Basis-Handling (Items selektieren etc.)
         super().mousePressEvent(event)
-        
-        # 2. Wurde Klick verbraucht?
-        if event.isAccepted():
-            return
 
-        # FAIL-SAFE: Wenn super() das Item nicht getroffen hat (z.B. wegen Layering),
-        # suchen wir manuell danach.
-        if event.button() == Qt.MouseButton.LeftButton or event.button() == Qt.MouseButton.RightButton:
-            items_at_pos = self.items(event.scenePos())
-            for item in items_at_pos:
-                # Prüfen auf unsere interaktiven Items
-                if isinstance(item, (ShelfItem, CheckoutItem)):
-                    # Klick manuell auslösen
-                    item.mousePressEvent(event)
-                    if event.isAccepted():
-                        return
-
-        # 3. Wenn immer noch nicht akzeptiert -> Zeichnen oder Platzieren
-        if not self.main_window:
-            return
-
-        pos = event.scenePos()
-        is_wa = getattr(self.main_window, 'is_drawing_waiting_area', False)
-        is_sa = getattr(self.main_window, 'is_drawing_start_area', False)
-        is_ea = getattr(self.main_window, 'is_drawing_exit_area', False)
-
+        # Linksklick auf leere Fläche -> Signal senden (für Regale/Kassen platzieren)
         if event.button() == Qt.MouseButton.LeftButton:
-            if is_wa or is_sa or is_ea:
-                # Start Drawing Area
-                self.start_point = pos
-                self.temp_rect_item = QGraphicsRectItem()
-                
-                color = QColor(0, 0, 0)
-                if is_wa: color = COLOR_WAITING_AREA
-                elif is_sa: color = COLOR_START_AREA
-                elif is_ea: color = COLOR_EXIT_AREA
-                
-                self.temp_rect_item.setBrush(QBrush(color))
-                self.temp_rect_item.setPen(QPen(Qt.GlobalColor.black, 1, Qt.PenStyle.DashLine))
-                self.addItem(self.temp_rect_item)
-                event.accept()
+            if not self.itemAt(
+                event.scenePos(), _transform=self.views()[0].transform()
+            ):
+                self.clicked_point.emit(event.scenePos())
             else:
-                # Platzierungssignal für neue Objekte
-                self.clicked_point.emit(pos)
+                # Auch wenn Item da ist, wollen wir das Event für Logic nutzen (z.B. Kasse anklicken)
+                # Aber VisualController handled Klicks auf Items direkt via Item-Callbacks.
+                # Wir senden clicked_point trotzdem für Map-Move oder Placement-Logic.
+                self.clicked_point.emit(event.scenePos())
 
-    def mouseMoveEvent(self, event):
+    def start_drawing_area(self, pos):
+        """Startet das Zeichnen eines Rechtecks."""
+        self.start_point = pos
+        self.temp_rect_item = QGraphicsRectItem()
+        self.temp_rect_item.setPen(
+            QPen(Qt.GlobalColor.black, 1, Qt.PenStyle.DashLine)
+        )
+        self.temp_rect_item.setBrush(
+            QBrush(QColor(0, 0, 0, 30))
+        )  # Leicht transparentes Grau
+        self.addItem(self.temp_rect_item)
+        self.temp_rect_item.setRect(QRectF(pos, pos))
+
+    def update_drawing_area(self, pos):
+        """Aktualisiert das Rechteck während der Mausbewegung."""
         if self.temp_rect_item and self.start_point:
-            current_pos = event.scenePos()
-            rect = QRectF(self.start_point, current_pos).normalized()
+            rect = QRectF(self.start_point, pos).normalized()
             self.temp_rect_item.setRect(rect)
-            event.accept()
-        else:
-            super().mouseMoveEvent(event)
 
-    def mouseReleaseEvent(self, event):
-        if self.temp_rect_item and self.start_point:
+    def finish_drawing_area(self):
+        """Beendet das Zeichnen und sendet das Rechteck."""
+        if self.temp_rect_item:
             final_rect = self.temp_rect_item.rect()
+
+            # Aufräumen
             self.removeItem(self.temp_rect_item)
             self.temp_rect_item = None
             self.start_point = None
-            
+
+            # Nur senden wenn Größe > 0
             if final_rect.width() > 5 and final_rect.height() > 5:
                 self.waiting_area_created.emit(final_rect)
-            event.accept()
-        else:
-            super().mouseReleaseEvent(event)

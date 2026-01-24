@@ -1,95 +1,190 @@
 """
 Simulation Canvas Component.
-Handles the Scene and GraphicsView.
-Updated: Added set_drawing_cursor method to fix AttributeError.
+Refactored:
+- ADJUST: Increased default start zoom to 2.5x ("Closer to shop").
+- LOGIC: Zoom limit constrained by HEIGHT ratio (prevents top/bottom borders).
+- LOGIC: Allows horizontal panning.
 """
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QFrame
-from PyQt6.QtCore import Qt, QRectF
-from PyQt6.QtGui import QBrush, QPixmap
-from config import COLOR_FLOOR, IMAGE_DIR
-from views.scene import RouteEditorScene
-from views.ui_components import AutoFitGraphicsView, ClickablePixmapItem
+from PyQt6.QtWidgets import QGraphicsView
+from PyQt6.QtCore import Qt, QPoint, QRectF
+from PyQt6.QtGui import QPainter, QMouseEvent, QCursor
+from views.scene import SimulationScene
 
 
-class SimulationCanvas(QWidget):
-    def __init__(self, main_window_ref, parent=None):
-        super().__init__(parent)
-        self.mw = main_window_ref  # Referenz auf MainWindow (für State)
-        self.setup_ui()
+class SimulationCanvas(QGraphicsView):
+    def __init__(self, main_window):
+        super().__init__()
+        self.main_window = main_window
 
-    def setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        self.sim_scene = SimulationScene(self)
+        self.setScene(self.sim_scene)
 
-        self.sim_scene = RouteEditorScene()
-        self.sim_scene.main_window = self.mw
-        self.sim_scene.setBackgroundBrush(QBrush(COLOR_FLOOR))
+        self.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.setViewportUpdateMode(
+            QGraphicsView.ViewportUpdateMode.FullViewportUpdate
+        )
+        self.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setDragMode(QGraphicsView.DragMode.NoDrag)
 
-        self.sim_view = AutoFitGraphicsView(self.sim_scene)
-        self.sim_view.setFrameShape(QFrame.Shape.NoFrame)
-        layout.addWidget(self.sim_view)
+        self.setTransformationAnchor(
+            QGraphicsView.ViewportAnchor.AnchorUnderMouse
+        )
+        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
 
-        # Standard Quadranten laden (Fallback)
-        try:
-            self.item_q1 = ClickablePixmapItem(
-                QPixmap(str(IMAGE_DIR / "quadrant_1.png"))
-            )
-            self.sim_scene.addItem(self.item_q1)
-            self.item_q1.setPos(0, 0)
-            self.item_q1.clicked.connect(self.toggle_q1_fullscreen)
+        self.zoom_level = 1.0
+        self.zoom_max = 5.0
 
-            # WICHTIG: Referenz im MainWindow setzen für AutoFit-Logik
-            self.mw.item_q1 = self.item_q1
+        self._is_panning = False
+        self._pan_start_pos = QPoint()
 
-            self.item_q2 = self.sim_scene.addPixmap(
-                QPixmap(str(IMAGE_DIR / "quadrant_2.png"))
-            )
-            self.item_q2.setPos(800, 0)
-            self.item_q3 = self.sim_scene.addPixmap(
-                QPixmap(str(IMAGE_DIR / "quadrant_3.png"))
-            )
-            self.item_q3.setPos(0, 450)
-            self.item_q4 = self.sim_scene.addPixmap(
-                QPixmap(str(IMAGE_DIR / "quadrant_4.png"))
-            )
-            self.item_q4.setPos(800, 450)
+    def set_drawing_cursor(self, active):
+        if active:
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        else:
+            self.setCursor(Qt.CursorShape.ArrowCursor)
 
-            self.scene_rect = QRectF(0, 0, 1600, 900)
-            self.sim_scene.setSceneRect(self.scene_rect)
-            self.sim_view.fitInView(
-                self.scene_rect, Qt.AspectRatioMode.KeepAspectRatio
-            )
-        except Exception:
-            pass
+    def _get_min_zoom_level(self):
+        """
+        Berechnet den minimalen Zoom basierend NUR auf der HÖHE.
+        Das verhindert schwarze Ränder oben und unten, erlaubt aber Panning links/rechts.
+        """
+        scene_rect = self.scene().sceneRect()
+        view_rect = self.viewport().rect()
 
-    def toggle_q1_fullscreen(self):
-        if self.mw.is_admin_mode:
+        if scene_rect.height() == 0:
+            return 0.1
+
+        # min_zoom = Fensterhöhe / Bildhöhe
+        height_ratio = view_rect.height() / scene_rect.height()
+
+        return height_ratio
+
+    def wheelEvent(self, event):
+        zoom_in_factor = 1.15
+        zoom_out_factor = 1 / zoom_in_factor
+
+        current_min = self._get_min_zoom_level()
+
+        if event.angleDelta().y() > 0:
+            # Zoom In
+            target_zoom = self.zoom_level * zoom_in_factor
+            if target_zoom > self.zoom_max:
+                target_zoom = self.zoom_max
+            factor = target_zoom / self.zoom_level
+        else:
+            # Zoom Out
+            target_zoom = self.zoom_level * zoom_out_factor
+
+            # LIMIT: Nicht kleiner als die Fensterhöhe zulässt
+            if target_zoom < current_min:
+                target_zoom = current_min
+
+            factor = target_zoom / self.zoom_level
+
+        self.scale(factor, factor)
+        self.zoom_level = target_zoom
+
+    def reset_zoom(self, center_point=None):
+        """
+        Setzt Kamera zurück.
+        Ziel: 2.5x Zoom (250%), damit man direkt Details (Laden) sieht.
+        Aber niemals kleiner als 'min_zoom' (keine schwarzen Ränder).
+        """
+        self.resetTransform()
+
+        min_zoom = self._get_min_zoom_level()
+
+        # HIER DIE ÄNDERUNG: Standard ist jetzt 2.5 (viel näher)
+        target_zoom = max(2.5, min_zoom)
+
+        self.scale(target_zoom, target_zoom)
+        self.zoom_level = target_zoom
+
+        if center_point:
+            self.centerOn(center_point)
+        else:
+            sr = self.scene().sceneRect()
+            self.centerOn(sr.center())
+
+    # --- MOUSE EVENTS ---
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self._is_panning = True
+            self._pan_start_pos = event.pos()
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            event.accept()
             return
 
-        # State auf MainWindow toggeln, da View dort prüft
-        self.mw.is_q1_maximized = not getattr(
-            self.mw, "is_q1_maximized", False
-        )
+        mw = self.main_window
+        if event.button() == Qt.MouseButton.LeftButton:
+            if (
+                mw.is_drawing_waiting_area
+                or mw.is_drawing_start_area
+                or mw.is_drawing_exit_area
+                or mw.is_drawing_worker_area
+            ):
 
-        # Reset Zoom ruft _apply_auto_fit auf, welches den neuen State nutzt
-        self.sim_view.reset_zoom()
+                pos = self.mapToScene(event.pos())
+                self.sim_scene.start_drawing_area(pos)
+                return
 
-        items = [self.item_q2, self.item_q3, self.item_q4]
-        if self.mw.is_q1_maximized:
-            for i in items:
-                i.hide()
-            # Der explizite fitInView Aufruf passiert jetzt im reset_zoom() via _apply_auto_fit
-        else:
-            for i in items:
-                i.show()
+        super().mousePressEvent(event)
 
-    def set_drawing_cursor(self, active: bool):
-        """
-        Setzt den Cursor des Views.
-        Wird vom MainController aufgerufen, wenn in den Editor-Modus gewechselt wird.
-        """
-        if active:
-            self.sim_view.setCursor(Qt.CursorShape.CrossCursor)
-        else:
-            self.sim_view.setCursor(Qt.CursorShape.ArrowCursor)
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if self._is_panning:
+            delta = event.pos() - self._pan_start_pos
+            hbar = self.horizontalScrollBar()
+            vbar = self.verticalScrollBar()
+            hbar.setValue(hbar.value() - delta.x())
+            vbar.setValue(vbar.value() - delta.y())
+            self._pan_start_pos = event.pos()
+            event.accept()
+            return
+
+        mw = self.main_window
+        if (
+            mw.is_drawing_waiting_area
+            or mw.is_drawing_start_area
+            or mw.is_drawing_exit_area
+            or mw.is_drawing_worker_area
+        ):
+
+            if self.sim_scene.temp_rect_item:
+                pos = self.mapToScene(event.pos())
+                self.sim_scene.update_drawing_area(pos)
+                return
+
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self._is_panning = False
+            mw = self.main_window
+            is_drawing = (
+                mw.is_drawing_waiting_area
+                or mw.is_drawing_start_area
+                or mw.is_drawing_exit_area
+                or mw.is_drawing_worker_area
+            )
+            self.set_drawing_cursor(is_drawing)
+            event.accept()
+            return
+
+        mw = self.main_window
+        if event.button() == Qt.MouseButton.LeftButton:
+            if (
+                mw.is_drawing_waiting_area
+                or mw.is_drawing_start_area
+                or mw.is_drawing_exit_area
+                or mw.is_drawing_worker_area
+            ):
+
+                self.sim_scene.finish_drawing_area()
+                return
+
+        super().mouseReleaseEvent(event)

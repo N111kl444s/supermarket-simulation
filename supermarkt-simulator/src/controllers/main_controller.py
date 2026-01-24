@@ -1,7 +1,8 @@
 """
 Main Controller.
 Refactored:
-- UPDATE: Handles ProgressClock (Progress calculation & Overtime check).
+- FIX: 'load_map' now centers camera on the shop again (as requested),
+       while Canvas handles the correct zoom level (1.0).
 """
 
 from PyQt6.QtWidgets import (
@@ -50,29 +51,25 @@ class MainController:
         )
 
         self.interaction_controller = InteractionController(
-            self.view.sim_scene,  # scene
-            self.map_manager,  # map_manager
-            self.visual_controller,  # visual_controller
-            self.view,  # view
-            self.sim_manager,  # sim_manager
+            self.view.sim_scene,
+            self.map_manager,
+            self.visual_controller,
+            self.view,
+            self.sim_manager,
         )
 
         self._setup_connections()
         self._init_ui_state()
 
-        # Initial Map Load
         self.load_map("Standard (Einfach).json")
-
         self.view.showMaximized()
 
     def _setup_connections(self):
-        # --- TOOLBAR ---
         self.view.mode_combo.currentTextChanged.connect(self.on_mode_changed)
         self.view.btn_play_pause.clicked.connect(self.toggle_simulation)
         self.view.btn_reset.clicked.connect(self.reset_simulation)
         self.view.btn_skip.clicked.connect(self.skip_day)
 
-        # Speed
         self.view.btn_speed_1.clicked.connect(
             lambda: self.set_speed(FACTOR_1X)
         )
@@ -83,31 +80,26 @@ class MainController:
             lambda: self.set_speed(FACTOR_16X)
         )
 
+        # Reset Zoom mit Center-Berechnung
         self.view.btn_reset_zoom.clicked.connect(
             lambda: self.view.reset_sim_zoom(
                 self.visual_controller.get_map_center()
             )
         )
 
-        # --- SIMULATION SIGNALS (CLOCK UPDATE) ---
-        # Update Clock Text AND Progress
         self.sim_manager.time_updated.connect(self._update_clock_ui)
-
         self.sim_manager.stats_updated.connect(
             lambda w, c, t: (
                 self.view.lbl_queue_count.setText(str(w)),
                 self.view.lbl_customers_in_store.setText(str(c)),
                 self.view.lbl_total_customers.setText(str(t)),
-                # Check for Overtime on stats update (as 'c' changes)
                 self._check_overtime(c),
             )
         )
         self.sim_manager.log_message.connect(self.view.add_log_entry)
         self.sim_manager.day_finished.connect(self._on_day_finished)
-
         self.sim_manager.sim_timer.timeout.connect(self._on_sim_tick)
 
-        # --- MAP MANAGEMENT ---
         self.view.map_combo.currentTextChanged.connect(self.load_map)
         self.view.btn_new_map.clicked.connect(self.create_new_map)
         self.view.btn_save_map.clicked.connect(self.save_current_map)
@@ -120,24 +112,19 @@ class MainController:
         )
         self.view.spin_bg_scale.valueChanged.connect(self.update_bg_scale)
 
-        # --- SETTINGS & DIALOGS ---
         self.view.btn_config_sizes.clicked.connect(self.open_size_config)
         self.view.btn_offsets.clicked.connect(self.open_offsets_dialog)
         self.view.btn_visibility.clicked.connect(self.open_visibility_dialog)
 
-        # --- INTERACTION ---
         self.interaction_controller.map_data_changed.connect(
             self.on_map_data_changed
         )
-
         self.visual_controller.set_checkout_click_callback(
             self.on_checkout_clicked
         )
         self.visual_controller.set_shelf_click_callback(self.on_shelf_clicked)
 
-        # Sidebar Buttons
         ic = self.interaction_controller
-
         self.view.start_area_button.clicked.connect(
             lambda: ic.set_tool(
                 "start_area", button_ref=self.view.start_area_button
@@ -158,7 +145,6 @@ class MainController:
                 "worker_area", button_ref=self.view.btn_worker_area
             )
         )
-
         self.view.btn_start_route.clicked.connect(
             lambda: ic.set_tool(
                 "start_route", button_ref=self.view.btn_start_route
@@ -172,7 +158,6 @@ class MainController:
         self.view.new_route_button.clicked.connect(
             lambda: ic.set_tool("route", button_ref=self.view.new_route_button)
         )
-
         self.view.place_shelves_button.clicked.connect(
             lambda: ic.set_tool(
                 "shelf", button_ref=self.view.place_shelves_button
@@ -201,14 +186,12 @@ class MainController:
                 "checkout", {"type": "SB", "ori": "Right"}, self.view.btn_sr
             )
         )
-
         self.view.btn_move_map.clicked.connect(
             lambda: ic.set_tool("move_map", button_ref=self.view.btn_move_map)
         )
 
         self.view.btn_save_admin.clicked.connect(ic.finish_route_drawing)
         self.view.btn_cancel_route.clicked.connect(ic.cancel_route_drawing)
-
         self.view.btn_del_route.clicked.connect(self.delete_selected_route)
         self.view.route_list_widget.itemClicked.connect(self.on_route_selected)
         self.view.btn_del_obj.clicked.connect(self.delete_selected_object)
@@ -218,26 +201,16 @@ class MainController:
         )
 
     def _update_clock_ui(self, time_str):
-        # 1. Update Text
         self.view.clock_widget.setText(time_str)
-
-        # 2. Update Progress
-        # Berechne Sekunden seit Öffnung / Gesamtsekunden
         current = self.sim_manager.sim_time
         open_t = self.sim_manager.open_time
         close_t = self.sim_manager.close_time
-
         total_secs = open_t.secsTo(close_t)
         elapsed = open_t.secsTo(current)
-
         if total_secs > 0:
             progress = elapsed / total_secs
             self.view.clock_widget.set_progress(progress)
-
-        # Check Overtime (falls Zeit-basiert)
         is_past_closing = elapsed >= total_secs
-        # Wir brauchen die Kundenzahl, um das Blinken zu steuern
-        # Das machen wir in _check_overtime, aber hier setzen wir das Flag "Zeit abgelaufen"
         if not is_past_closing:
             self.view.clock_widget.set_overtime(False)
 
@@ -261,7 +234,6 @@ class MainController:
         QMessageBox.information(self.view, "Info", "Tag beendet.")
         self.view.btn_play_pause.setChecked(False)
         self.view.btn_play_pause.setText("▶")
-        # Clock reset visual
         self.view.clock_widget.set_overtime(False)
 
     def _init_ui_state(self):
@@ -288,7 +260,6 @@ class MainController:
         with open(self.settings_file, "w") as f:
             json.dump(self.settings, f, indent=4)
 
-    # --- DIALOGS ---
     def open_size_config(self):
         dlg = SizeConfigDialog(self.settings, self.view)
         if dlg.exec():
@@ -326,11 +297,9 @@ class MainController:
         dlg.exec()
         self._save_settings()
 
-    # --- MAP ---
     def _refresh_map_list(self):
         self.view.map_combo.blockSignals(True)
         self.view.map_combo.clear()
-
         maps = self.map_manager.get_available_maps()
         self.view.map_combo.addItems(maps)
 
@@ -338,10 +307,8 @@ class MainController:
         target = None
         if self.map_manager.current_map_file:
             target = self.map_manager.current_map_file.name
-
         if not target and preferred_map in maps:
             target = preferred_map
-
         if target:
             index = self.view.map_combo.findText(target)
             if index != -1:
@@ -350,13 +317,11 @@ class MainController:
                 self.view.map_combo.setCurrentIndex(0)
         elif self.view.map_combo.count() > 0:
             self.view.map_combo.setCurrentIndex(0)
-
         self.view.map_combo.blockSignals(False)
 
     def on_mode_changed(self, mode_text):
         self.view.update_sidebar_mode(mode_text)
         self.view.is_admin_mode = mode_text == "Editor"
-
         if mode_text == "Simulation":
             self.interaction_controller.set_tool(None)
             self.view.canvas_component.set_drawing_cursor(False)
@@ -372,7 +337,6 @@ class MainController:
             self.view.btn_play_pause.setChecked(False)
             self.view.btn_play_pause.setText("▶")
             self.view.canvas_component.set_drawing_cursor(True)
-
         self.visual_controller.draw_map_elements(self.map_manager)
 
     def on_map_data_changed(self):
@@ -390,7 +354,6 @@ class MainController:
             self.map_manager.create_new_map(name)
             self.map_manager.current_map_file = MAPS_DIR / name
             self.map_manager.save_map()
-
             self._refresh_map_list()
             self.view.map_combo.setCurrentText(name)
             self.visual_controller.draw_map_elements(self.map_manager)
@@ -409,6 +372,8 @@ class MainController:
             self.visual_controller.draw_map_elements(self.map_manager)
             self._refresh_object_list()
             self._refresh_route_list()
+
+            # WICHTIG: Hier wieder mit Center aufrufen für "Näher beim Start"
             center = self.visual_controller.get_map_center()
             self.view.reset_sim_zoom(center)
 
@@ -489,7 +454,6 @@ class MainController:
                     )
                     self.view.btn_play_pause.setChecked(False)
                     return
-
             self.sim_manager.start()
             self.view.btn_play_pause.setChecked(True)
             self.view.btn_play_pause.setText("⏸")
@@ -504,6 +468,10 @@ class MainController:
         self.visual_controller.sync_customers([])
         self.visual_controller.draw_map_elements(self.map_manager)
 
+        # Reset View auch hier
+        center = self.visual_controller.get_map_center()
+        self.view.reset_sim_zoom(center)
+
     def skip_day(self):
         if self.sim_manager.is_initialized:
             self.sim_manager.skip_day()
@@ -515,11 +483,9 @@ class MainController:
 
     def _get_sim_params_from_ui(self, is_disabled):
         try:
-            # Same implementation as before (omitted for brevity, copy from previous response if needed or keep existing)
             handheld_val = 0
             if hasattr(self.view, "hand_scanner_prob"):
                 handheld_val = self.view.hand_scanner_prob.value()
-
             scan = (
                 (
                     self.view.scan_speed_disabled_min.value(),
@@ -531,7 +497,6 @@ class MainController:
                     self.view.scan_speed_normal_max.value(),
                 )
             )
-
             staff = {
                 "newbie": (
                     self.view.scan_speed_newbie_min.value(),
@@ -542,18 +507,16 @@ class MainController:
                     self.view.scan_speed_pro_max.value(),
                 ),
             }
-
             fail_rate_normal = 0.0
             if hasattr(self.view, "checkout_fail_rate_normal"):
                 fail_rate_normal = self.view.checkout_fail_rate_normal.value()
             fail_rate_sb = 0.0
             if hasattr(self.view, "checkout_fail_rate_sb"):
                 fail_rate_sb = self.view.checkout_fail_rate_sb.value()
-
             repair_min = 5.0
-            repair_max = 15.0
             if hasattr(self.view, "worker_repair_min"):
                 repair_min = self.view.worker_repair_min.value()
+            repair_max = 15.0
             if hasattr(self.view, "worker_repair_max"):
                 repair_max = self.view.worker_repair_max.value()
 
@@ -582,7 +545,8 @@ class MainController:
             print(f"UI Params Error: {e}")
             return None
 
-    # --- Interaction Proxies (Keep same as before) ---
+    # Proxies omitted for brevity (same as previous) but need to be in final file.
+    # Just copying methods from previous response for completion:
     def on_checkout_clicked(self, cid):
         self.interaction_controller.handle_checkout_click(cid)
         self._highlight_list_item(self.view.object_list_widget, cid)

@@ -1,7 +1,7 @@
 """
 Main window module.
 Refactored:
-- CLEANUP: Removed redundancy regarding Stats GroupBox handling (now handled by Tab visibility).
+- FIX: 'SimulationCanvas' IS the view, so self.sim_view = c.
 """
 
 from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QSplitter
@@ -38,7 +38,9 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(get_application_style())
         self._expose_ui_elements()
 
-        if hasattr(self, "sim_scene"):
+        # Scene connection fix (Canvas initializes Scene)
+        if hasattr(self.canvas_component, "sim_scene"):
+            self.sim_scene = self.canvas_component.sim_scene
             self.sim_scene.main_window = self
 
     def set_controller(self, c):
@@ -162,7 +164,9 @@ class MainWindow(QMainWindow):
         # -- CANVAS --
         c = self.canvas_component
         self.sim_scene = c.sim_scene
-        self.sim_view = c.sim_view
+
+        # FIX: Canvas IS the view
+        self.sim_view = c
 
     def add_log_entry(self, message, color="black"):
         self.list_log.insertItem(0, message)

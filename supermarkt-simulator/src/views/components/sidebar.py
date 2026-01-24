@@ -1,8 +1,7 @@
 """
 Sidebar Component.
 Refactored:
-- LAYOUT: Moved Live Stats and Log into the 'Statistiken' tab.
-- CLEANUP: Removed permanent footer area.
+- STYLE: Added margin-top to QTabWidget::pane to create space between tabs and content.
 """
 
 from PyQt6.QtWidgets import (
@@ -23,9 +22,11 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QButtonGroup,
     QFrame,
+    QApplication,
+    QStyle,
 )
 from PyQt6.QtCore import QTime, Qt
-from config import COLOR_ACCENT
+from config import COLOR_ACCENT, COLOR_ERROR, COLOR_SUCCESS, COLOR_BG_PANEL
 
 
 class Sidebar(QWidget):
@@ -42,24 +43,16 @@ class Sidebar(QWidget):
                 background-color: #FFFFFF;
                 border-right: 1px solid #D1D5DB;
             }}
-            QGroupBox {{
-                border: 1px solid #D1D5DB;
-                border-radius: 6px;
-                margin-top: 12px;
-                padding-top: 10px;
-                font-weight: bold;
-                background-color: transparent;
+            /* Transparent ScrollArea Fix */
+            QScrollArea {{
+                background: transparent;
+                border: none;
             }}
-            QGroupBox::title {{
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                left: 10px;
-                padding: 0 5px;
-                background-color: #F5F7FA;
-                color: #374151;
+            QScrollArea > QWidget > QWidget {{
+                background: transparent;
             }}
             
-            /* --- HEADER BUTTONS --- */
+            /* Header Buttons */
             QPushButton.HeaderBtn {{
                 background-color: #FFFFFF;
                 border: 1px solid #D1D5DB;
@@ -74,21 +67,18 @@ class Sidebar(QWidget):
                 color: white;
                 border: 1px solid {accent};
             }}
-            QPushButton.HeaderBtn:hover {{
-                border-color: {accent};
-                background-color: #EFF6FF;
-            }}
-            
             QPushButton#BtnLang {{
                 font-size: 26px;
                 padding-bottom: 2px;
             }}
 
-            /* --- TABS --- */
+            /* Tabs */
             QTabWidget::pane {{
                 border: 1px solid #D1D5DB;
                 background: #FFFFFF;
                 border-radius: 4px;
+                /* HIER IST DER SPACE: */
+                margin-top: 6px; 
             }}
             QTabBar::tab {{
                 background: #E5E7EB;
@@ -103,14 +93,26 @@ class Sidebar(QWidget):
                 background: #FFFFFF;
                 border-bottom: 1px solid #FFFFFF; 
                 font-weight: bold;
+                /* Optional: Den Tab etwas wachsen lassen, damit er über den Margin ragt (Overlay Look)
+                   margin-bottom: -1px; 
+                */
             }}
             
-            /* --- LOG LIST --- */
-            QListWidget {{
-                background-color: #FFFFFF;
+            /* Modern GroupBox */
+            QGroupBox {{
                 border: 1px solid #D1D5DB;
-                border-radius: 4px;
-                font-size: 11px;
+                border-radius: 6px;
+                margin-top: 12px;
+                padding-top: 5px; 
+                font-weight: bold;
+                background-color: #F9FAFB; 
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 10px;
+                padding: 0 5px;
+                color: #374151;
             }}
         """
         )
@@ -120,7 +122,7 @@ class Sidebar(QWidget):
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
-        # === HEADER (MODE & LANG) ===
+        # === HEADER ===
         self.setup_header(main_layout)
 
         line = QFrame()
@@ -129,17 +131,22 @@ class Sidebar(QWidget):
         line.setStyleSheet("color: #E5E7EB;")
         main_layout.addWidget(line)
 
-        # === TABS ===
+        # === MAIN TABS ===
         self.main_tabs = QTabWidget()
         main_layout.addWidget(self.main_tabs)
 
-        # 1. Eingabe
+        # 1. EINGABE (mit Subtabs)
         self._init_tab_input()
-        # 2. Statistiken (Hier sind jetzt Live Stats & Log)
+
+        # 2. STATISTIKEN
         self._init_tab_stats()
-        # 3. Editor
+
+        # 3. EDITOR
         self._init_tab_editor()
 
+    # ==========================================
+    # HEADER LOGIC
+    # ==========================================
     def setup_header(self, layout):
         h_layout = QHBoxLayout()
         h_layout.setSpacing(10)
@@ -149,7 +156,7 @@ class Sidebar(QWidget):
         self.mode_combo.setVisible(False)
         layout.addWidget(self.mode_combo)
 
-        # --- MODE BUTTONS ---
+        # Mode Buttons
         self.mode_group = QButtonGroup(self)
 
         self.btn_mode_sim = QPushButton("Simulation")
@@ -186,7 +193,7 @@ class Sidebar(QWidget):
         h_mode.addWidget(self.btn_mode_edit)
         h_layout.addLayout(h_mode, 1)
 
-        # --- LANGUAGE BUTTON ---
+        # Language
         self.btn_lang = QPushButton("🇩🇪")
         self.btn_lang.setObjectName("BtnLang")
         self.btn_lang.setProperty("class", "HeaderBtn")
@@ -197,130 +204,270 @@ class Sidebar(QWidget):
 
         layout.addLayout(h_layout)
 
+    # ==========================================
+    # HELPER: GroupBox Header
+    # ==========================================
+    def _add_gb_header(self, layout, subtitle, tooltip=None):
+        """Adds a subtitle row with help icon inside a GroupBox Layout."""
+        row = QHBoxLayout()
+        row.setContentsMargins(5, 0, 0, 5)  # Etwas Abstand
+
+        lbl_sub = QLabel(subtitle)
+        lbl_sub.setStyleSheet(
+            "color: #6B7280; font-style: italic; font-size: 11px;"
+        )
+        row.addWidget(lbl_sub)
+
+        if tooltip:
+            icon = self._create_help_icon(tooltip)
+            row.addWidget(icon)
+
+        row.addStretch()
+        layout.addLayout(row)
+
+    # ==========================================
+    # TAB 1: EINGABE
+    # ==========================================
     def _init_tab_input(self):
         tab_input_container = QWidget()
         l_input_main = QVBoxLayout(tab_input_container)
         l_input_main.setContentsMargins(0, 5, 0, 0)
+
         self.input_sub_tabs = QTabWidget()
         l_input_main.addWidget(self.input_sub_tabs)
 
-        # SUB 1: LADEN
+        # --- SUB 1: LADEN ---
+        self._setup_shop_tab()
+
+        # --- SUB 2: KUNDEN (Old Layout Style) ---
+        self._setup_cust_tab()
+
+        # --- SUB 3: PERSONAL (Old Layout Style) ---
+        self._setup_staff_tab()
+
+        self.main_tabs.addTab(tab_input_container, "Eingabe")
+
+    def _setup_shop_tab(self):
         sub_shop = QWidget()
         l_shop = QVBoxLayout(sub_shop)
+        l_shop.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # 1. Map
         gb_map = QGroupBox("Karte wählen")
-        l_gb_map = QVBoxLayout(gb_map)
+        v_map = QVBoxLayout(gb_map)
         self.map_combo = QComboBox()
-        self.map_combo.setToolTip("Wähle eine gespeicherte Karte aus.")
-        l_gb_map.addWidget(self.map_combo)
+        v_map.addWidget(self.map_combo)
         l_shop.addWidget(gb_map)
+
+        # 2. Time
         gb_time = QGroupBox("Zeitsteuerung")
-        f_time = QFormLayout(gb_time)
+        v_time = QVBoxLayout(gb_time)
+        f_time = QFormLayout()
         self.time_open = QTimeEdit(QTime(8, 0))
         self.time_close = QTimeEdit(QTime(20, 0))
         f_time.addRow("Öffnen:", self.time_open)
         f_time.addRow("Schließen:", self.time_close)
+        v_time.addLayout(f_time)
         l_shop.addWidget(gb_time)
-        gb_co = QGroupBox("Störungen & Kassen")
-        f_co = QFormLayout(gb_co)
+
+        # 3. Failures
+        gb_co = QGroupBox("Kassenstörungen")
+        v_co = QVBoxLayout(gb_co)
+        self._add_gb_header(
+            v_co,
+            "(Wahrscheinlichkeit in %)",
+            "Chance, dass eine Kasse pro Minute ausfällt.",
+        )
+        f_co = QFormLayout()
         self.checkout_fail_rate_normal = self._create_spin(0, 0, 100, " %")
         self.checkout_fail_rate_sb = self._create_spin(0, 0, 100, " %")
-        f_co.addRow("Ausfall Normal (%):", self.checkout_fail_rate_normal)
-        f_co.addRow("Ausfall SB (%):", self.checkout_fail_rate_sb)
+        f_co.addRow("Ausfall (Normal):", self.checkout_fail_rate_normal)
+        f_co.addRow("Ausfall (SB):", self.checkout_fail_rate_sb)
+        v_co.addLayout(f_co)
         l_shop.addWidget(gb_co)
-        l_shop.addStretch()
+
         self.input_sub_tabs.addTab(sub_shop, "Laden")
 
-        # SUB 2: KUNDEN
-        sub_cust = QWidget()
-        l_cust = QVBoxLayout(sub_cust)
+    def _setup_cust_tab(self):
+        # Setup Scroll Area Logic
+        tab_cust_container = QWidget()
+        l_cust_cont = QVBoxLayout(tab_cust_container)
+        l_cust_cont.setContentsMargins(0, 0, 0, 0)
         scroll_cust = QScrollArea()
         scroll_cust.setWidgetResizable(True)
-        cust_content = QWidget()
-        l_cust_content = QVBoxLayout(cust_content)
-        gb_spawn = QGroupBox("Kundenaufkommen (Exp)")
-        f_spawn = QFormLayout(gb_spawn)
-        self.actor_count_input = QSpinBox()
-        self.actor_count_input.setRange(1, 2000)
-        self.actor_count_input.setValue(50)
+        content_cust = QWidget()
+        l_gb_cust = QVBoxLayout(content_cust)
+        l_gb_cust.setAlignment(Qt.AlignmentFlag.AlignTop)
+        l_gb_cust.setSpacing(15)
+
+        # 1. Spawn
+        gb_spawn = QGroupBox("Kundenaufkommen")
+        v_spawn = QVBoxLayout(gb_spawn)
+        self._add_gb_header(
+            v_spawn,
+            "(Exponentialverteilung)",
+            "Zeitabstände zwischen Kunden sind zufällig (Poisson-Prozess).",
+        )
+        f_spawn = QFormLayout()
+        self.actor_count_input = self._create_spin(50, 1, 10000)
         self.disabled_prob_input = self._create_spin(10, 0, 100, " %")
         f_spawn.addRow("Kunden / Tag:", self.actor_count_input)
-        f_spawn.addRow("Anteil Beeintr. (%):", self.disabled_prob_input)
-        l_cust_content.addWidget(gb_spawn)
-        gb_speed = QGroupBox("Geschwindigkeit (Normal)")
-        f_speed = QFormLayout(gb_speed)
-        self.speed_walk_mean = self._create_double_spin(1.5, 0.5, 5.0)
-        self.speed_walk_std = self._create_double_spin(0.3, 0.0, 2.0)
-        self.speed_roll_mean = self._create_double_spin(1.0, 0.5, 4.0)
-        self.speed_roll_std = self._create_double_spin(0.2, 0.0, 1.5)
-        f_speed.addRow("Gehen Ø:", self.speed_walk_mean)
-        f_speed.addRow("Gehen σ:", self.speed_walk_std)
-        f_speed.addRow("Rollen Ø:", self.speed_roll_mean)
-        f_speed.addRow("Rollen σ:", self.speed_roll_std)
-        l_cust_content.addWidget(gb_speed)
-        gb_cart = QGroupBox("Einkaufswagen (Normal)")
-        f_cart = QFormLayout(gb_cart)
-        self.items_mean = self._create_spin(15, 1, 100)
-        self.items_std = self._create_spin(5, 0, 50)
-        self.hand_scanner_prob = self._create_spin(20, 0, 100, " %")
-        f_cart.addRow("Artikel Ø:", self.items_mean)
-        f_cart.addRow("Artikel σ:", self.items_std)
-        f_cart.addRow("Handscanner %:", self.hand_scanner_prob)
-        l_cust_content.addWidget(gb_cart)
-        gb_checkout = QGroupBox("Scan-Dauer (Gleich)")
-        f_checkout = QFormLayout(gb_checkout)
-        self.scan_speed_normal_min = self._create_double_spin(0.5, 0.1, 5.0)
-        self.scan_speed_normal_max = self._create_double_spin(1.5, 0.1, 5.0)
-        self.scan_speed_disabled_min = self._create_double_spin(1.0, 0.1, 8.0)
-        self.scan_speed_disabled_max = self._create_double_spin(2.5, 0.1, 8.0)
-        f_checkout.addRow("Normal Min:", self.scan_speed_normal_min)
-        f_checkout.addRow("Normal Max:", self.scan_speed_normal_max)
-        f_checkout.addRow("Einges. Min:", self.scan_speed_disabled_min)
-        f_checkout.addRow("Einges. Max:", self.scan_speed_disabled_max)
-        l_cust_content.addWidget(gb_checkout)
-        l_cust_content.addStretch()
-        scroll_cust.setWidget(cust_content)
-        l_cust.addWidget(scroll_cust)
-        self.input_sub_tabs.addTab(sub_cust, "Kunden")
+        f_spawn.addRow("Anteil Beeintr.:", self.disabled_prob_input)
+        v_spawn.addLayout(f_spawn)
+        l_gb_cust.addWidget(gb_spawn)
 
-        # SUB 3: PERSONAL
-        sub_staff = QWidget()
-        l_staff = QVBoxLayout(sub_staff)
-        gb_cashier = QGroupBox("Kassierer (Sek/Artikel)")
-        f_cashier = QFormLayout(gb_cashier)
-        self.scan_speed_newbie_min = self._create_double_spin(1.5, 0.5, 5.0)
-        self.scan_speed_newbie_max = self._create_double_spin(2.5, 0.5, 6.0)
-        self.scan_speed_pro_min = self._create_double_spin(0.8, 0.2, 3.0)
-        self.scan_speed_pro_max = self._create_double_spin(1.2, 0.2, 4.0)
-        f_cashier.addRow("Azubi Min:", self.scan_speed_newbie_min)
-        f_cashier.addRow("Azubi Max:", self.scan_speed_newbie_max)
-        f_cashier.addRow("Profi Min:", self.scan_speed_pro_min)
-        f_cashier.addRow("Profi Max:", self.scan_speed_pro_max)
-        l_staff.addWidget(gb_cashier)
-        gb_maint = QGroupBox("Wartung / Reparatur")
-        f_maint = QFormLayout(gb_maint)
-        self.worker_repair_min = self._create_double_spin(5.0, 1.0, 60.0, " s")
-        self.worker_repair_max = self._create_double_spin(
-            15.0, 1.0, 120.0, " s"
+        # 2. Speed
+        gb_speed = QGroupBox("Geschwindigkeit")
+        v_speed = QVBoxLayout(gb_speed)
+        self._add_gb_header(
+            v_speed,
+            "(Normalverteilung)",
+            "Gauß-Verteilung mit Mittelwert (Ø) und Standardabweichung (σ).",
         )
-        f_maint.addRow("Dauer Min:", self.worker_repair_min)
-        f_maint.addRow("Dauer Max:", self.worker_repair_max)
-        l_staff.addWidget(gb_maint)
-        l_staff.addStretch()
-        self.input_sub_tabs.addTab(sub_staff, "Personal")
-        self.main_tabs.addTab(tab_input_container, "Eingabe")
+        f_speed = QFormLayout()
+        self.speed_walk_mean, self.speed_walk_std = self._create_dist_row(
+            "Gehen:", 2.5, 0.5, f_speed
+        )
+        self.speed_roll_mean, self.speed_roll_std = self._create_dist_row(
+            "Rollen:", 1.5, 0.3, f_speed
+        )
+        v_speed.addLayout(f_speed)
+        l_gb_cust.addWidget(gb_speed)
 
+        # 3. Cart
+        gb_cart = QGroupBox("Einkaufswagen")
+        v_cart = QVBoxLayout(gb_cart)
+        self._add_gb_header(
+            v_cart, "(Normalverteilung)", "Anzahl der Artikel im Wagen."
+        )
+        f_cart = QFormLayout()
+        self.items_mean = self._create_spin(15, 1, 100)
+        self.items_std = self._create_double_spin(5.0, 0, 50)
+        # Custom Row for Items
+        h_it = QHBoxLayout()
+        h_it.addWidget(QLabel("Ø:"))
+        h_it.addWidget(self.items_mean)
+        h_it.addWidget(QLabel("σ:"))
+        h_it.addWidget(self.items_std)
+        f_cart.addRow("Artikel:", h_it)
+
+        self.hand_scanner_prob = self._create_spin(20, 0, 100, " %")
+        f_cart.addRow("Handscanner:", self.hand_scanner_prob)
+        v_cart.addLayout(f_cart)
+        l_gb_cust.addWidget(gb_cart)
+
+        # 4. Scan Speed (Customer side - SB)
+        gb_scan = QGroupBox("Scan-Dauer (Kunde)")
+        v_scan = QVBoxLayout(gb_scan)
+        self._add_gb_header(
+            v_scan,
+            "(Gleichverteilung)",
+            "Zufällige Zeit pro Artikel zwischen Min und Max.",
+        )
+        f_scan = QFormLayout()
+        self.scan_speed_normal_min, self.scan_speed_normal_max = (
+            self._create_range_row("Normal:", 0.5, 1.5, f_scan)
+        )
+        self.scan_speed_disabled_min, self.scan_speed_disabled_max = (
+            self._create_range_row("Einges.:", 1.0, 3.0, f_scan)
+        )
+        v_scan.addLayout(f_scan)
+        l_gb_cust.addWidget(gb_scan)
+
+        # 5. Payment
+        gb_pay = QGroupBox("Zahlungsmethoden")
+        v_pay = QVBoxLayout(gb_pay)
+        self._add_gb_header(
+            v_pay, "(Verteilung in %)", "Muss sich auf 100% ergänzen."
+        )
+        f_pay = QFormLayout()
+        self.payment_cash = self._create_double_spin(30.0, 0, 100, " %")
+        self.payment_card = self._create_double_spin(70.0, 0, 100, " %")
+        # Auto-Balance Logic
+        self.payment_cash.valueChanged.connect(
+            lambda v: self.payment_card.setValue(100.0 - v)
+        )
+        self.payment_card.valueChanged.connect(
+            lambda v: self.payment_cash.setValue(100.0 - v)
+        )
+        f_pay.addRow("Bargeld:", self.payment_cash)
+        f_pay.addRow("Karte:", self.payment_card)
+        v_pay.addLayout(f_pay)
+        l_gb_cust.addWidget(gb_pay)
+
+        scroll_cust.setWidget(content_cust)
+        l_cust_cont.addWidget(scroll_cust)
+        self.input_sub_tabs.addTab(tab_cust_container, "Kunden")
+
+    def _setup_staff_tab(self):
+        tab_staff = QWidget()
+        l_staff = QVBoxLayout(tab_staff)
+        l_staff.setAlignment(Qt.AlignmentFlag.AlignTop)
+        l_staff.setSpacing(15)
+
+        # 1. Cashier Scan
+        gb_cashier = QGroupBox("Kassierer Geschwindigkeit")
+        v_cashier = QVBoxLayout(gb_cashier)
+        self._add_gb_header(
+            v_cashier,
+            "(Sek/Artikel - Gleichverteilung)",
+            "Scan-Tempo des Personals.",
+        )
+        f_cashier = QFormLayout()
+        self.scan_speed_newbie_min, self.scan_speed_newbie_max = (
+            self._create_range_row("Azubi:", 1.5, 2.5, f_cashier)
+        )
+        self.scan_speed_pro_min, self.scan_speed_pro_max = (
+            self._create_range_row("Profi:", 0.8, 1.2, f_cashier)
+        )
+        v_cashier.addLayout(f_cashier)
+        l_staff.addWidget(gb_cashier)
+
+        # 2. Pay Duration
+        gb_paytime = QGroupBox("Bezahldauer")
+        v_paytime = QVBoxLayout(gb_paytime)
+        self._add_gb_header(
+            v_paytime,
+            "(Sekunden - Gleichverteilung)",
+            "Dauer des Bezahlvorgangs.",
+        )
+        f_paytime = QFormLayout()
+        self.pay_duration_cash_min, self.pay_duration_cash_max = (
+            self._create_range_row("Bargeld:", 3.0, 8.0, f_paytime)
+        )
+        self.pay_duration_card_min, self.pay_duration_card_max = (
+            self._create_range_row("Karte:", 1.0, 4.0, f_paytime)
+        )
+        v_paytime.addLayout(f_paytime)
+        l_staff.addWidget(gb_paytime)
+
+        # 3. Maintenance
+        gb_maint = QGroupBox("Wartung / Reparatur")
+        v_maint = QVBoxLayout(gb_maint)
+        self._add_gb_header(
+            v_maint,
+            "(Sekunden - Gleichverteilung)",
+            "Wie lange ein Techniker braucht.",
+        )
+        f_maint = QFormLayout()
+        self.worker_repair_min, self.worker_repair_max = (
+            self._create_range_row("Dauer:", 5.0, 15.0, f_maint)
+        )
+        v_maint.addLayout(f_maint)
+        l_staff.addWidget(gb_maint)
+
+        self.input_sub_tabs.addTab(tab_staff, "Personal")
+
+    # ==========================================
+    # TAB 2: STATISTIKEN
+    # ==========================================
     def _init_tab_stats(self):
-        """
-        Stats Tab now contains Live Stats and the Log.
-        """
         tab_stats = QWidget()
         l_stats = QVBoxLayout(tab_stats)
         l_stats.setSpacing(15)
         l_stats.setContentsMargins(10, 10, 10, 10)
 
-        # 1. LIVE STATS
         self.gb_stats = QGroupBox("Live Daten")
-        # Ensure gb_stats references are available
         self.lbl_queue_count = QLabel("0")
         self.lbl_customers_in_store = QLabel("0")
         self.lbl_total_customers = QLabel("0")
@@ -329,40 +476,34 @@ class Sidebar(QWidget):
         f_stats_grid.addRow("Kunden in Schlange:", self.lbl_queue_count)
         f_stats_grid.addRow("Kunden im Laden:", self.lbl_customers_in_store)
         f_stats_grid.addRow("Kunden Gesamt:", self.lbl_total_customers)
-
         l_stats.addWidget(self.gb_stats)
 
-        # 2. LOG
         gb_log = QGroupBox("Ereignis-Protokoll")
         l_log = QVBoxLayout(gb_log)
         self.list_log = QListWidget()
-        # Flexible Höhe für das Log
         self.list_log.setMinimumHeight(200)
         l_log.addWidget(self.list_log)
-
         l_stats.addWidget(gb_log)
 
-        # 3. Charts Platzhalter (Optional)
         self.plot_widget = None
-        lbl_charts = QLabel("(Hier könnten Charts stehen)")
-        lbl_charts.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_charts.setStyleSheet("color: #9CA3AF;")
-        l_stats.addWidget(lbl_charts)
-
         l_stats.addStretch()
         self.main_tabs.addTab(tab_stats, "Statistiken")
 
+    # ==========================================
+    # TAB 3: EDITOR
+    # ==========================================
     def _init_tab_editor(self):
-        # ... (Identischer Editor Code) ...
-        # COPY OF _init_tab_editor logic
         tab_editor_container = QWidget()
         l_editor_main = QVBoxLayout(tab_editor_container)
         l_editor_main.setContentsMargins(0, 5, 0, 0)
         self.editor_subtabs = QTabWidget()
         l_editor_main.addWidget(self.editor_subtabs)
+
         # Sub KARTE
         sub_map = QWidget()
         l_map = QVBoxLayout(sub_map)
+        l_map.setAlignment(Qt.AlignmentFlag.AlignTop)
+
         gb_map_file = QGroupBox("Datei")
         l_map_file = QVBoxLayout(gb_map_file)
         self.btn_new_map = QPushButton("Neue Karte")
@@ -372,6 +513,7 @@ class Sidebar(QWidget):
         l_map_file.addWidget(self.btn_save_map)
         l_map_file.addWidget(self.btn_delete_map)
         l_map.addWidget(gb_map_file)
+
         gb_map_bg = QGroupBox("Hintergrund")
         l_map_bg = QVBoxLayout(gb_map_bg)
         self.btn_set_background = QPushButton("Bild laden...")
@@ -388,6 +530,7 @@ class Sidebar(QWidget):
         l_map_bg.addWidget(self.btn_remove_background)
         l_map_bg.addLayout(h_scale)
         l_map.addWidget(gb_map_bg)
+
         gb_map_opts = QGroupBox("Optionen")
         l_map_opts = QVBoxLayout(gb_map_opts)
         self.btn_move_map = QPushButton("Karte verschieben")
@@ -400,11 +543,14 @@ class Sidebar(QWidget):
         l_map_opts.addWidget(self.btn_move_map)
         l_map_opts.addLayout(h_exit)
         l_map.addWidget(gb_map_opts)
-        l_map.addStretch()
+
         self.editor_subtabs.addTab(sub_map, "Karte")
+
         # Sub WERKZEUGE
         sub_areas = QWidget()
         l_areas = QVBoxLayout(sub_areas)
+        l_areas.setAlignment(Qt.AlignmentFlag.AlignTop)
+
         gb_areas = QGroupBox("Flächen zeichnen")
         l_areas_btn = QVBoxLayout(gb_areas)
         self.start_area_button = QPushButton("Start-Bereich")
@@ -423,6 +569,7 @@ class Sidebar(QWidget):
         l_areas_btn.addWidget(self.btn_exit_area)
         l_areas_btn.addWidget(self.btn_worker_area)
         l_areas.addWidget(gb_areas)
+
         gb_view = QGroupBox("Anzeige")
         l_view = QVBoxLayout(gb_view)
         self.btn_visibility = QPushButton("Ebenen / Sichtbarkeit")
@@ -432,11 +579,14 @@ class Sidebar(QWidget):
         l_view.addWidget(self.btn_offsets)
         l_view.addWidget(self.btn_config_sizes)
         l_areas.addWidget(gb_view)
-        l_areas.addStretch()
+
         self.editor_subtabs.addTab(sub_areas, "Bereiche")
+
         # Sub ROUTEN
         sub_routes = QWidget()
         l_routes = QVBoxLayout(sub_routes)
+        l_routes.setAlignment(Qt.AlignmentFlag.AlignTop)
+
         gb_route_tools = QGroupBox("Neue Route")
         l_rt = QVBoxLayout(gb_route_tools)
         self.btn_start_route = QPushButton("Eingang -> Laden")
@@ -449,6 +599,7 @@ class Sidebar(QWidget):
         l_rt.addWidget(self.new_route_button)
         l_rt.addWidget(self.btn_exit_route)
         l_routes.addWidget(gb_route_tools)
+
         self.admin_toolbar = QWidget()
         self.admin_toolbar.setVisible(False)
         l_atb = QHBoxLayout(self.admin_toolbar)
@@ -461,6 +612,7 @@ class Sidebar(QWidget):
         l_atb.addWidget(self.btn_save_admin)
         l_atb.addWidget(self.btn_cancel_route)
         l_routes.addWidget(self.admin_toolbar)
+
         gb_route_list = QGroupBox("Vorhandene Routen")
         l_rl = QVBoxLayout(gb_route_list)
         self.route_list_widget = QListWidget()
@@ -468,16 +620,21 @@ class Sidebar(QWidget):
         l_rl.addWidget(self.route_list_widget)
         l_rl.addWidget(self.btn_del_route)
         l_routes.addWidget(gb_route_list)
+
         self.editor_subtabs.addTab(sub_routes, "Routen")
+
         # Sub OBJEKTE
         sub_objs = QWidget()
         l_objs = QVBoxLayout(sub_objs)
+        l_objs.setAlignment(Qt.AlignmentFlag.AlignTop)
+
         gb_shelves = QGroupBox("Regale")
         l_sh = QVBoxLayout(gb_shelves)
         self.place_shelves_button = QPushButton("+ Regal platzieren")
         self.place_shelves_button.setCheckable(True)
         l_sh.addWidget(self.place_shelves_button)
         l_objs.addWidget(gb_shelves)
+
         gb_checkouts = QGroupBox("Kassen")
         l_ch = QVBoxLayout(gb_checkouts)
         r1 = QHBoxLayout()
@@ -497,6 +654,7 @@ class Sidebar(QWidget):
         l_ch.addLayout(r1)
         l_ch.addLayout(r2)
         l_objs.addWidget(gb_checkouts)
+
         gb_obj_list = QGroupBox("Objekt Liste")
         l_ol = QVBoxLayout(gb_obj_list)
         self.object_list_widget = QListWidget()
@@ -508,28 +666,83 @@ class Sidebar(QWidget):
         l_ol.addWidget(self.object_list_widget)
         l_ol.addLayout(h_act)
         l_objs.addWidget(gb_obj_list)
+
         self.editor_subtabs.addTab(sub_objs, "Objekte")
 
         self.main_tabs.addTab(tab_editor_container, "Editor")
 
-    def _create_spin(self, val, min_v, max_v, suffix="", tooltip=""):
+    # ==========================================
+    # HELPERS
+    # ==========================================
+
+    def _create_spin(self, val, min_v, max_v, suffix=""):
         sb = QSpinBox()
         sb.setRange(min_v, max_v)
         sb.setValue(val)
-        sb.setSuffix(suffix)
-        if tooltip:
-            sb.setToolTip(tooltip)
+        if suffix:
+            sb.setSuffix(suffix)
         return sb
 
-    def _create_double_spin(self, val, min_v, max_v, suffix="", tooltip=""):
+    def _create_double_spin(self, val, min_v, max_v, suffix=""):
         dsb = QDoubleSpinBox()
         dsb.setRange(min_v, max_v)
         dsb.setValue(val)
         dsb.setSingleStep(0.1)
-        dsb.setSuffix(suffix)
-        if tooltip:
-            dsb.setToolTip(tooltip)
+        if suffix:
+            dsb.setSuffix(suffix)
         return dsb
+
+    def _create_help_icon(self, tooltip):
+        lbl = QLabel()
+        icon = QApplication.style().standardIcon(
+            QStyle.StandardPixmap.SP_MessageBoxQuestion
+        )
+        lbl.setPixmap(icon.pixmap(14, 14))  # Kleines Icon
+        lbl.setToolTip(tooltip)
+        lbl.setCursor(Qt.CursorShape.WhatsThisCursor)
+        return lbl
+
+    def _add_gb_header(self, layout, subtitle, tooltip=None):
+        """Adds a subtitle row with help icon inside a GroupBox Layout."""
+        row = QHBoxLayout()
+        row.setContentsMargins(5, 0, 0, 5)  # Etwas Abstand
+
+        lbl_sub = QLabel(subtitle)
+        lbl_sub.setStyleSheet(
+            "color: #6B7280; font-style: italic; font-size: 11px;"
+        )
+        row.addWidget(lbl_sub)
+
+        if tooltip:
+            icon = self._create_help_icon(tooltip)
+            row.addWidget(icon)
+
+        row.addStretch()
+        layout.addLayout(row)
+
+    def _create_dist_row(self, label, val_mean, val_std, layout):
+        h = QHBoxLayout()
+        h.setContentsMargins(0, 0, 0, 0)
+        sb_mean = self._create_double_spin(val_mean, 0.1, 20.0)
+        sb_std = self._create_double_spin(val_std, 0.0, 5.0)
+        h.addWidget(QLabel("Ø:"))
+        h.addWidget(sb_mean)
+        h.addWidget(QLabel("σ:"))
+        h.addWidget(sb_std)
+        layout.addRow(label, h)
+        return sb_mean, sb_std
+
+    def _create_range_row(self, label, val_min, val_max, layout):
+        h = QHBoxLayout()
+        h.setContentsMargins(0, 0, 0, 0)
+        sb_min = self._create_double_spin(val_min, 0.1, 10.0)
+        sb_max = self._create_double_spin(val_max, 0.1, 10.0)
+        h.addWidget(QLabel("Min:"))
+        h.addWidget(sb_min)
+        h.addWidget(QLabel("Max:"))
+        h.addWidget(sb_max)
+        layout.addRow(label, h)
+        return sb_min, sb_max
 
     def _toggle_lang(self):
         if self.btn_lang.text() == "🇩🇪":
