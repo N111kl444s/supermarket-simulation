@@ -9,7 +9,7 @@
     "show_waiting_area": false,
     "show_start_area": false,
     "show_exit_area": false,
-    "show_worker_area": false,
+    "show_worker_area": true,
     "size_shelf": 26,
     "size_cashier": 10,
     "size_customer": 10,

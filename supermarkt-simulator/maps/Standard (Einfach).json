@@ -825,7 +825,7 @@
             "max_queue": 5,
             "angle": 0,
             "cashier_skill": "Azubi",
-            "malfunction": true
+            "malfunction": false
         },
         {
             "id": 2,
@@ -914,7 +914,7 @@
             "skill": "Azubi",
             "max_queue": 5,
             "angle": 0,
-            "malfunction": true
+            "malfunction": false
         }
     ],
     "waiting_area": [
@@ -935,7 +935,12 @@
         54.724603196574435,
         61.71947728936982
     ],
-    "worker_area": null,
+    "worker_area": [
+        176.0994588931028,
+        18.505309741315784,
+        54.330459770115,
+        6.698275862068954
+    ],
     "global_exit_direction": "Rechts",
     "background_image": "bg_Standard (Einfach).png",
     "background_scale": 0.09,

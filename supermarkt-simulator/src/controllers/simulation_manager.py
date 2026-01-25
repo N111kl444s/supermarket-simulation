@@ -1,13 +1,12 @@
 """
 Simulation Manager Module.
-Updated:
-- ADDED: Worker Logic (Spawning, Repairing, Despawning).
-- Worker spawns if checkout broken and no worker assigned.
+REVERTED: Worker Ziel ist wieder der Kassen-Bildschirm/Arbeitsplatz.
 """
 
 import random
 import math
-from PyQt6.QtCore import QTimer, QTime, QObject, pyqtSignal, QPointF
+import traceback
+from PyQt6.QtCore import QTimer, QTime, QObject, pyqtSignal, QPointF, QRectF
 from PyQt6.QtGui import QVector2D
 from models.customer import CustomerModel
 from models.worker import WorkerModel
@@ -41,10 +40,8 @@ class SimulationManager(QObject):
         self.store_is_closed_trigger = False
 
         self.customers_model = []
-        self.active_workers = []  # NEU: Liste der Arbeiter
+        self.active_workers = []
         self.checkout_queues = {}
-
-        # Mapping: Checkout-ID -> WorkerModel (um Doppelzuweisungen zu verhindern)
         self.assigned_maintenance = {}
 
         self.total_customers_spawned = 0
@@ -83,7 +80,6 @@ class SimulationManager(QObject):
         self.total_customers_spawned = 0
         self.store_is_closed_trigger = False
 
-        # Reset Malfunctions
         for c_data in self.map_mgr.checkouts_data:
             c_data["malfunction"] = False
 
@@ -111,100 +107,133 @@ class SimulationManager(QObject):
         self.spawn_timer_acc = 0.0
         self._calc_next_spawn()
 
-        # Reset Malfunctions
         for c_data in self.map_mgr.checkouts_data:
             c_data["malfunction"] = False
 
         self.active_workers.clear()
         self.assigned_maintenance = {}
-
         self.is_initialized = True
         self.log_message.emit(
             f"Laden geöffnet. Erwarte ca. {self.target_daily_customers} Kunden.",
             "blue",
         )
 
-    def skip_day(self):
-        self.pause()
-        self.sim_time = self.close_time
-        self.time_updated.emit(self.sim_time.toString("HH:mm"))
-        self.log_message.emit("Tag übersprungen.", "orange")
-        self.day_finished.emit()
-
     def _tick(self):
-        real_dt = ANIMATION_TICK_MS / 1000.0
-        game_dt = real_dt * self.time_factor
-        self.time_accumulator_sec += game_dt
-        while self.time_accumulator_sec >= 60.0:
-            self.sim_time = self.sim_time.addSecs(60)
-            self.time_accumulator_sec -= 60.0
-            self.time_updated.emit(self.sim_time.toString("HH:mm"))
-
-        # 1. Maintenance Logic
-        self._check_maintenance()
-        self._handle_workers(game_dt)
-
-        is_closing_time = self.sim_time >= self.close_time
-        if is_closing_time:
-            if not self.store_is_closed_trigger:
-                self.log_message.emit(
-                    "Ladenschluss! Eingang geschlossen...", "orange"
-                )
-                self.store_is_closed_trigger = True
-            if not self.customers_model and not self.active_workers:
-                self.pause()
+        try:
+            real_dt = ANIMATION_TICK_MS / 1000.0
+            game_dt = real_dt * self.time_factor
+            self.time_accumulator_sec += game_dt
+            while self.time_accumulator_sec >= 60.0:
+                self.sim_time = self.sim_time.addSecs(60)
+                self.time_accumulator_sec -= 60.0
                 self.time_updated.emit(self.sim_time.toString("HH:mm"))
-                self.log_message.emit(
-                    "Feierabend! Alle Kunden bedient.", "red"
-                )
-                self.day_finished.emit()
-                return
-        else:
-            self._attempt_spawn(game_dt)
 
-        # 2. Customers Logic
-        active_models = []
-        waiting_cnt = 0
-        current_global_params = (
-            self.param_access_func(False) if self.param_access_func else None
-        )
+            # 1. Maintenance & Worker Logic
+            self._check_maintenance()
+            self._handle_workers(game_dt)
 
-        for model in self.customers_model:
-            # Störungs-Check für Pausieren
-            is_stuck_due_to_malfunction = False
-            if (
-                model.state in ("SCANNING", "PAYING")
-                and model.assigned_checkout_id is not None
-            ):
-                c_data = next(
-                    (
-                        x
-                        for x in self.map_mgr.checkouts_data
-                        if x["id"] == model.assigned_checkout_id
-                    ),
-                    None,
-                )
-                if c_data and c_data.get("malfunction", False):
-                    is_stuck_due_to_malfunction = True
+            is_closing_time = self.sim_time >= self.close_time
+            if is_closing_time:
+                if not self.store_is_closed_trigger:
+                    self.log_message.emit(
+                        "Ladenschluss! Eingang geschlossen...", "orange"
+                    )
+                    self.store_is_closed_trigger = True
+                if not self.customers_model and not self.active_workers:
+                    self.pause()
+                    self.time_updated.emit(self.sim_time.toString("HH:mm"))
+                    self.log_message.emit(
+                        "Feierabend! Alle Kunden bedient.", "red"
+                    )
+                    self.day_finished.emit()
+                    return
+            else:
+                self._attempt_spawn(game_dt)
 
-            if not is_stuck_due_to_malfunction:
-                model.tick(game_dt)
+            # Kunden Logik
+            active_models = []
+            waiting_cnt = 0
+            current_global_params = (
+                self.param_access_func(False)
+                if self.param_access_func
+                else None
+            )
 
-            if model.state == "WAITING_AREA":
-                waiting_cnt += 1
-                if model.assigned_checkout_id is None:
-                    self._try_assign_checkout(model)
-            elif (
-                model.state == "IN_QUEUE"
-                and model.assigned_checkout_id is not None
-            ):
-                cid = model.assigned_checkout_id
-                q = self.checkout_queues.get(cid, [])
-                if q and q[0] == model:
-                    dist = (model.pos - model.target_pos).manhattanLength()
-                    if dist < 5.0:
-                        model.state = "SCANNING"
-                        min_s, max_s = 1.0, 2.0
+            for model in self.customers_model:
+                is_stuck = False
+                if (
+                    model.state in ("SCANNING", "PAYING")
+                    and model.assigned_checkout_id is not None
+                ):
+                    c_data = next(
+                        (
+                            x
+                            for x in self.map_mgr.checkouts_data
+                            if x["id"] == model.assigned_checkout_id
+                        ),
+                        None,
+                    )
+                    if c_data and c_data.get("malfunction", False):
+                        is_stuck = True
+
+                if not is_stuck:
+                    model.tick(game_dt)
+
+                if model.state == "WAITING_AREA":
+                    waiting_cnt += 1
+                    if model.assigned_checkout_id is None:
+                        self._try_assign_checkout(model)
+                elif (
+                    model.state == "IN_QUEUE"
+                    and model.assigned_checkout_id is not None
+                ):
+                    cid = model.assigned_checkout_id
+                    q = self.checkout_queues.get(cid, [])
+                    if q and q[0] == model:
+                        dist = (model.pos - model.target_pos).manhattanLength()
+                        if dist < 5.0:
+                            model.state = "SCANNING"
+                            min_s, max_s = 1.0, 2.0
+                            c_data = next(
+                                (
+                                    x
+                                    for x in self.map_mgr.checkouts_data
+                                    if x["id"] == cid
+                                ),
+                                None,
+                            )
+                            if c_data:
+                                if c_data.get("type") == "SB":
+                                    if self.param_access_func:
+                                        cust_params = self.param_access_func(
+                                            model.is_disabled
+                                        )
+                                        if (
+                                            cust_params
+                                            and "scan" in cust_params
+                                        ):
+                                            min_s, max_s = cust_params["scan"]
+                                else:
+                                    skill = c_data.get("skill", "Azubi")
+                                    key = (
+                                        "newbie" if skill == "Azubi" else "pro"
+                                    )
+                                    if (
+                                        current_global_params
+                                        and "staff" in current_global_params
+                                    ):
+                                        staff_rng = current_global_params[
+                                            "staff"
+                                        ].get(key)
+                                        if staff_rng:
+                                            min_s, max_s = staff_rng
+                            model.set_scan_speed_range(min_s, max_s)
+
+                if (
+                    model.state == "SCANNING" or model.state == "PAYING"
+                ) and not is_stuck:
+                    if current_global_params:
+                        cid = model.assigned_checkout_id
                         c_data = next(
                             (
                                 x
@@ -214,127 +243,146 @@ class SimulationManager(QObject):
                             None,
                         )
                         if c_data:
-                            if c_data.get("type") == "SB":
-                                if self.param_access_func:
-                                    cust_params = self.param_access_func(
-                                        model.is_disabled
-                                    )
-                                    if cust_params and "scan" in cust_params:
-                                        min_s, max_s = cust_params["scan"]
-                            else:
-                                skill = c_data.get("skill", "Azubi")
-                                key = "newbie" if skill == "Azubi" else "pro"
-                                if (
-                                    current_global_params
-                                    and "staff" in current_global_params
-                                ):
-                                    staff_rng = current_global_params[
-                                        "staff"
-                                    ].get(key)
-                                    if staff_rng:
-                                        min_s, max_s = staff_rng
-                        model.set_scan_speed_range(min_s, max_s)
-
-            # Zufällige Störung
-            if (
-                model.state == "SCANNING" or model.state == "PAYING"
-            ) and not is_stuck_due_to_malfunction:
-                if current_global_params:
-                    cid = model.assigned_checkout_id
-                    c_data = next(
-                        (
-                            x
-                            for x in self.map_mgr.checkouts_data
-                            if x["id"] == cid
-                        ),
-                        None,
-                    )
-                    if c_data:
-                        if c_data.get("type") == "SB":
                             fail_rate = current_global_params.get(
-                                "checkout_fail_rate_sb", 0.0
+                                (
+                                    "checkout_fail_rate_sb"
+                                    if c_data.get("type") == "SB"
+                                    else "checkout_fail_rate_normal"
+                                ),
+                                0.0,
                             )
-                        else:
-                            fail_rate = current_global_params.get(
-                                "checkout_fail_rate_normal", 0.0
-                            )
+                            if random.random() < (fail_rate / 100.0) * game_dt:
+                                c_data["malfunction"] = True
+                                self.log_message.emit(
+                                    f"⚠️ STÖRUNG an Kasse {cid}!", "red"
+                                )
 
-                        chance = (fail_rate / 100.0) * game_dt
-                        if random.random() < chance:
-                            c_data["malfunction"] = True
-                            self.log_message.emit(
-                                f"⚠️ STÖRUNG an Kasse {cid}!", "red"
-                            )
-
-            elif (
-                model.state == "LEAVING"
-                and model.assigned_checkout_id is not None
-            ):
-                cid = model.assigned_checkout_id
-                if (
-                    cid in self.checkout_queues
-                    and self.checkout_queues[cid]
-                    and self.checkout_queues[cid][0] == model
+                elif (
+                    model.state == "LEAVING"
+                    and model.assigned_checkout_id is not None
                 ):
-                    self.checkout_queues[cid].pop(0)
-                    self._advance_queue(cid)
-                    model.assigned_checkout_id = None
-            if model.state == "GONE":
-                pass
-            else:
-                active_models.append(model)
-        self.customers_model = active_models
-        self.stats_updated.emit(
-            waiting_cnt,
-            len(self.customers_model),
-            self.total_customers_spawned,
+                    cid = model.assigned_checkout_id
+                    if (
+                        cid in self.checkout_queues
+                        and self.checkout_queues[cid]
+                        and self.checkout_queues[cid][0] == model
+                    ):
+                        self.checkout_queues[cid].pop(0)
+                        self._advance_queue(cid)
+                        model.assigned_checkout_id = None
+
+                if model.state != "GONE":
+                    active_models.append(model)
+
+            self.customers_model = active_models
+            self.stats_updated.emit(
+                waiting_cnt,
+                len(self.customers_model),
+                self.total_customers_spawned,
+            )
+
+        except Exception as e:
+            print("CRITICAL ERROR IN SIMULATION TICK:")
+            traceback.print_exc()
+
+    def _get_checkout_interaction_point(self, c_data):
+        """
+        Berechnet den Punkt, an dem der Bildschirm/Kasse steht.
+        Ziel: Exakter Punkt des Kassen-Screens (basierend auf Settings).
+        """
+        cw = self.settings.get("size_checkout_width", 100)
+        ch = self.settings.get("size_checkout_height", 100)
+
+        cx, cy = c_data["x"], c_data["y"]
+        ori = c_data.get("orientation", "Right")
+        angle = c_data.get("angle", 0)
+        c_type = c_data["type"]
+        is_sb = c_type == "SB"
+
+        # REVERT: Wir nutzen wieder offset_screen_...
+        suffix = "left" if ori == "Left" else "right"
+        key_offset = (
+            "offset_screen_sb_" + suffix
+            if is_sb
+            else "offset_screen_normal_" + suffix
         )
 
-    # --- WORKER LOGIC ---
+        off = self.settings.get(key_offset, [0, 0])
+        lox, loy = float(off[0]), float(off[1])
+
+        # Fallback
+        if lox == 0 and loy == 0:
+            lox = cw / 2
+            loy = 10 if ori == "Right" else ch - 10
+
+        center_x = cx + cw / 2
+        center_y = cy + ch / 2
+
+        p_unrot_x = cx + lox
+        p_unrot_y = cy + loy
+
+        # Rotation um Center
+        rad = math.radians(angle)
+        tx = p_unrot_x - center_x
+        ty = p_unrot_y - center_y
+
+        rx = tx * math.cos(rad) - ty * math.sin(rad)
+        ry = tx * math.sin(rad) + ty * math.cos(rad)
+
+        final_x = rx + center_x
+        final_y = ry + center_y
+
+        return QPointF(final_x, final_y)
+
     def _check_maintenance(self):
-        """Prüft kaputte Kassen und entsendet Arbeiter."""
-        # Parameter holen
+        """Prüft Kassen und spawnt Arbeiter bei Bedarf."""
         params = (
             self.param_access_func(False) if self.param_access_func else {}
         )
         repair_min = params.get("worker_repair_min", 5.0)
         repair_max = params.get("worker_repair_max", 15.0)
 
-        spawn_rect = self.map_mgr.worker_spawn_rect
+        spawn_rect = getattr(self.map_mgr, "worker_spawn_rect", None)
         if not spawn_rect:
-            # Falls kein Bereich definiert ist, kann kein Arbeiter kommen.
-            # Alternativ: Start Area nutzen oder Fehler loggen.
-            return
+            spawn_rect = self.map_mgr.start_area_rect
+        if not spawn_rect:
+            spawn_rect = QRectF(0, 0, 100, 100)
 
         for c_data in self.map_mgr.checkouts_data:
             if c_data.get("malfunction", False):
                 cid = c_data["id"]
-                # Ist schon jemand unterwegs?
                 if cid not in self.assigned_maintenance:
-                    # Spawn Worker
-                    worker = WorkerModel(
-                        spawn_rect,
-                        c_data,
-                        self.map_mgr.exit_area_rect,
-                        (repair_min, repair_max),
-                    )
-                    self.active_workers.append(worker)
-                    self.assigned_maintenance[cid] = worker
-                    self.log_message.emit(
-                        f"🔧 Techniker zu Kasse {cid} unterwegs.", "blue"
-                    )
+                    try:
+                        # Berechne Zielpunkt (Screen)
+                        target_pos = self._get_checkout_interaction_point(
+                            c_data
+                        )
+
+                        worker = WorkerModel(
+                            spawn_rect,
+                            c_data,
+                            target_pos,
+                            self.map_mgr.exit_area_rect,
+                            (repair_min, repair_max),
+                        )
+                        self.active_workers.append(worker)
+                        self.assigned_maintenance[cid] = worker
+                        self.log_message.emit(
+                            f"🔧 Techniker alarmiert für Kasse {cid}.", "blue"
+                        )
+                    except Exception as e:
+                        print(f"ERROR beim Erstellen des Workers: {e}")
+                        traceback.print_exc()
 
     def _handle_workers(self, dt):
         alive = []
+        safe_dt = min(dt, 0.1)  # Verhindert Sprünge bei Lag
+
         for w in self.active_workers:
-            # Merke Status VOR Tick
             was_repairing = w.state == "REPAIRING"
+            w.tick(safe_dt)
 
-            w.tick(dt)
-
-            # Prüfe ob Reparatur fertig wurde in diesem Tick
             if was_repairing and w.state == "LEAVING":
-                # Kasse reparieren
                 cid = w.target_checkout_id
                 c_data = next(
                     (x for x in self.map_mgr.checkouts_data if x["id"] == cid),
@@ -343,9 +391,9 @@ class SimulationManager(QObject):
                 if c_data:
                     c_data["malfunction"] = False
                     self.log_message.emit(
-                        f"✅ Kasse {cid} repariert.", "green"
+                        f"✅ Kasse {cid} wieder einsatzbereit.", "green"
                     )
-                # Aus Mapping entfernen
+
                 if cid in self.assigned_maintenance:
                     del self.assigned_maintenance[cid]
 
@@ -366,11 +414,11 @@ class SimulationManager(QObject):
 
     def _spawn_single_customer(self):
         is_disabled = random.random() < self.prob_disabled
-        if self.param_access_func:
-            params = self.param_access_func(is_disabled)
-        else:
-            params = None
-
+        params = (
+            self.param_access_func(is_disabled)
+            if self.param_access_func
+            else None
+        )
         if params is None:
             params = {
                 "walk": (2.5, 0.5),
@@ -384,24 +432,20 @@ class SimulationManager(QObject):
             }
 
         offset = self.settings.get("customer_path_offset", 10)
-
-        prob_handheld = params.get("handheld", 0.0) / 100.0
-        uses_handheld = random.random() < prob_handheld
-
+        uses_handheld = random.random() < (params.get("handheld", 0.0) / 100.0)
         ratio = params.get("pay_ratio", (30, 70))
-        roll = random.uniform(0, 100)
-        if roll < ratio[0]:
+        if random.uniform(0, 100) < ratio[0]:
             pay_method = "cash"
             pay_speed = params.get("pay_cash_speed", (3.0, 8.0))
         else:
             pay_method = "card"
             pay_speed = params.get("pay_card_speed", (1.0, 4.0))
 
-        selected_route = []
-        if self.map_mgr.shop_routes:
-            all_routes = list(self.map_mgr.shop_routes.values())
-            selected_route = random.choice(all_routes)
-
+        selected_route = (
+            random.choice(list(self.map_mgr.shop_routes.values()))
+            if self.map_mgr.shop_routes
+            else []
+        )
         model = CustomerModel(
             selected_route,
             self.map_mgr.all_shelves,
@@ -420,45 +464,37 @@ class SimulationManager(QObject):
             items_params=params["items"],
             scan_speed_range=params["scan"],
         )
-        total_seconds_today = self.open_time.secsTo(self.sim_time)
-        model.entry_time_sec = total_seconds_today
+        model.entry_time_sec = self.open_time.secsTo(self.sim_time)
         self.customers_model.append(model)
         self.total_customers_spawned += 1
-
-        type_str = "Kunde"
-        if is_disabled:
-            type_str = "Kunde (eingeschränkt)"
-        if uses_handheld:
-            type_str += " [Handscanner]"
-
-        self.log_message.emit(f"{type_str} hat den Laden betreten.", "green")
+        self.log_message.emit(
+            f"{'Kunde (eingeschränkt)' if is_disabled else 'Kunde'} betritt den Laden.",
+            "green",
+        )
 
     def _try_assign_checkout(self, model):
-        candidates = []
-        for c_data in self.map_mgr.checkouts_data:
-            if not c_data.get("open", True):
-                continue
-            cid = c_data["id"]
-            if len(self.checkout_queues.get(cid, [])) < c_data.get(
-                "max_queue", 5
-            ):
-                candidates.append(cid)
+        candidates = [
+            c["id"]
+            for c in self.map_mgr.checkouts_data
+            if c.get("open", True)
+            and len(self.checkout_queues.get(c["id"], []))
+            < c.get("max_queue", 5)
+        ]
         if candidates:
-            chosen_id = random.choice(candidates)
-            if chosen_id not in self.checkout_queues:
-                self.checkout_queues[chosen_id] = []
-            self.checkout_queues[chosen_id].append(model)
+            cid = random.choice(candidates)
+            if cid not in self.checkout_queues:
+                self.checkout_queues[cid] = []
+            self.checkout_queues[cid].append(model)
             self._set_queue_target(
-                model, chosen_id, len(self.checkout_queues[chosen_id]) - 1
+                model, cid, len(self.checkout_queues[cid]) - 1
             )
 
     def _advance_queue(self, cid):
-        if cid not in self.checkout_queues:
-            return
-        for idx, model in enumerate(self.checkout_queues[cid]):
-            self._set_queue_target(model, cid, idx)
-            if model.state != "SCANNING" and model.state != "PAYING":
-                model.state = "IN_QUEUE"
+        if cid in self.checkout_queues:
+            for idx, model in enumerate(self.checkout_queues[cid]):
+                self._set_queue_target(model, cid, idx)
+                if model.state not in ("SCANNING", "PAYING"):
+                    model.state = "IN_QUEUE"
 
     def _set_queue_target(self, model, cid, q_index):
         c_data = next(
@@ -466,44 +502,29 @@ class SimulationManager(QObject):
         )
         if not c_data:
             return
-
-        cw = self.settings.get("size_checkout_width", 100)
-        ch = self.settings.get("size_checkout_height", 100)
+        cw, ch = self.settings.get(
+            "size_checkout_width", 100
+        ), self.settings.get("size_checkout_height", 100)
         spacing = self.settings.get("dist_queue_spacing", 36)
-
         cx, cy = c_data["x"], c_data["y"]
-        ori = c_data.get("orientation", "Right")
-        c_type = c_data["type"]
-        angle = c_data.get("angle", 0)
-
-        offset_key = (
+        ori, c_type, angle = (
+            c_data.get("orientation", "Right"),
+            c_data["type"],
+            c_data.get("angle", 0),
+        )
+        off = self.settings.get(
             "offset_queue_"
             + ("sb_" if c_type == "SB" else "")
-            + ("left" if ori == "Left" else "right")
+            + ("left" if ori == "Left" else "right"),
+            [0, 0],
         )
-        off = self.settings.get(offset_key, [0, 0])
-        qx_local, qy_local = off[0], off[1]
-
-        center_x = cx + cw / 2
-        center_y = cy + ch / 2
-        p_unrot_x = cx + qx_local
-        p_unrot_y = cy + qy_local
-
         rad = math.radians(angle)
-        tx = p_unrot_x - center_x
-        ty = p_unrot_y - center_y
+        tx, ty = (cx + off[0]) - (cx + cw / 2), (cy + off[1]) - (cy + ch / 2)
         rx = tx * math.cos(rad) - ty * math.sin(rad)
         ry = tx * math.sin(rad) + ty * math.cos(rad)
-        start_point = QPointF(rx + center_x, ry + center_y)
-
-        if ori == "Left":
-            dir_rad = math.radians(angle)
-        else:
-            dir_rad = math.radians(angle + 180)
-
-        dir_x = math.cos(dir_rad)
-        dir_y = math.sin(dir_rad)
-        dir_vec = QVector2D(dir_x, dir_y)
-        offset_vec = dir_vec * (q_index * spacing)
-        target = start_point + offset_vec.toPointF()
-        model.go_to_queue(target, cid, None)
+        start_point = QPointF(rx + (cx + cw / 2), ry + (cy + ch / 2))
+        dir_rad = math.radians(angle if ori == "Left" else angle + 180)
+        dir_vec = QVector2D(math.cos(dir_rad), math.sin(dir_rad))
+        model.go_to_queue(
+            start_point + (dir_vec * (q_index * spacing)).toPointF(), cid, None
+        )
