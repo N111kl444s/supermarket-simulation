@@ -1,7 +1,9 @@
 """
 Interaction Controller.
-Refactored:
-- ADDED: 'worker_area' tool logic.
+Handles mouse inputs on the canvas.
+Updated:
+- FIX: Safe access to sidebar attributes to prevent crashes.
+- FEATURE: 'worker_route' logic.
 """
 
 from PyQt6.QtWidgets import (
@@ -27,7 +29,7 @@ class InteractionController(QObject):
         self.scene = scene
         self.map_manager = map_manager
         self.visual_controller = visual_controller
-        self.view = view
+        self.view = view  # Das ist MainWindow
         self.sim_manager = sim_manager
 
         self.active_tool = None
@@ -51,6 +53,7 @@ class InteractionController(QObject):
         )
 
     def set_tool(self, tool_name, params=None, button_ref=None):
+        # Buttons zurücksetzen (visuell)
         if button_ref:
             self._reset_ui_buttons(exclude_btn=button_ref)
 
@@ -69,26 +72,29 @@ class InteractionController(QObject):
 
             if "route" in tool_name:
                 self.view.is_drawing_mode = True
-                color = (
-                    COLOR_ORANGE
-                    if tool_name == "route"
-                    else (
-                        COLOR_BLUE if tool_name == "start_route" else COLOR_RED
-                    )
-                )
-                self.view.admin_toolbar.show()
+
+                color = COLOR_ORANGE
+                if tool_name == "start_route":
+                    color = COLOR_BLUE
+                elif tool_name == "exit_route":
+                    color = COLOR_RED
+                elif tool_name == "worker_route":
+                    color = COLOR_ORANGE
+
+                # FIX: Sicherer Zugriff auf Sidebar
+                if hasattr(self.view, "sidebar") and hasattr(
+                    self.view.sidebar, "admin_toolbar"
+                ):
+                    self.view.sidebar.admin_toolbar.show()
+
                 self._init_temp_path(color)
+
             elif "area" in tool_name:
-                self.view.is_drawing_waiting_area = tool_name == "waiting_area"
-                self.view.is_drawing_start_area = tool_name == "start_area"
-                self.view.is_drawing_exit_area = tool_name == "exit_area"
-                self.view.is_drawing_worker_area = (
-                    tool_name == "worker_area"
-                )  # NEU
+                pass  # Logic handled in handle_area_created callback context setup
             elif tool_name == "shelf":
-                self.view.is_placing_shelves = True
+                pass
             elif tool_name == "checkout":
-                self.view.is_placing_checkout = True
+                pass
             elif tool_name == "move_map":
                 pass
 
@@ -107,14 +113,15 @@ class InteractionController(QObject):
 
     def _reset_internal_state(self):
         self.active_tool = None
-        self.view.is_drawing_mode = False
-        self.view.is_placing_shelves = False
-        self.view.is_drawing_waiting_area = False
-        self.view.is_drawing_start_area = False
-        self.view.is_drawing_exit_area = False
-        self.view.is_drawing_worker_area = False  # NEU
-        self.view.is_placing_checkout = False
-        self.view.admin_toolbar.hide()
+        # Falls View diese Flags nutzt (Legacy), setzen wir sie zurück,
+        # aber eigentlich steuern wir alles über active_tool.
+
+        # FIX: Sicherer Zugriff auf Sidebar Toolbar
+        if hasattr(self.view, "sidebar") and hasattr(
+            self.view.sidebar, "admin_toolbar"
+        ):
+            self.view.sidebar.admin_toolbar.hide()
+
         self._clear_temp_drawing()
         self.visual_controller.draw_map_elements(self.map_manager)
 
@@ -132,23 +139,29 @@ class InteractionController(QObject):
         self.current_route_points = []
 
     def _reset_ui_buttons(self, exclude_btn=None):
+        if not hasattr(self.view, "sidebar"):
+            return
+
+        sb = self.view.sidebar
+        # Liste aller Tool-Buttons
         btns = [
-            self.view.new_route_button,
-            self.view.place_shelves_button,
-            self.view.waiting_area_button,
-            self.view.start_area_button,
-            self.view.btn_worker_area,  # NEU
-            self.view.btn_start_route,
-            self.view.btn_exit_route,
-            self.view.btn_exit_area,
-            self.view.btn_kl,
-            self.view.btn_kr,
-            self.view.btn_sl,
-            self.view.btn_sr,
-            self.view.btn_move_map,
+            sb.new_route_button,
+            sb.place_shelves_button,
+            sb.waiting_area_button,
+            sb.start_area_button,
+            sb.btn_worker_area,
+            sb.btn_start_route,
+            sb.btn_exit_route,
+            sb.btn_worker_route,
+            sb.btn_exit_area,
+            sb.btn_kl,
+            sb.btn_kr,
+            sb.btn_sl,
+            sb.btn_sr,
+            sb.btn_move_map,
         ]
         for b in btns:
-            if b != exclude_btn:
+            if hasattr(b, "setChecked") and b != exclude_btn:
                 b.setChecked(False)
 
     def _init_temp_path(self, color):
@@ -164,8 +177,12 @@ class InteractionController(QObject):
         )
 
     def handle_scene_click(self, global_pos):
-        if not self.view.is_admin_mode:
-            return
+        # Prüfen ob wir im Editor Mode sind
+        # self.view.mode_combo ist in der Sidebar
+        if hasattr(self.view, "sidebar"):
+            mode = self.view.sidebar.mode_combo.currentText()
+            if mode != "Editor":
+                return
 
         if not self.active_tool:
             return
@@ -178,7 +195,12 @@ class InteractionController(QObject):
             self.visual_controller.draw_map_elements(self.map_manager)
             return
 
-        if self.active_tool in ["route", "start_route", "exit_route"]:
+        if self.active_tool in [
+            "route",
+            "start_route",
+            "exit_route",
+            "worker_route",
+        ]:
             self.current_route_points.append(local_pos)
             dot = QGraphicsEllipseItem(
                 local_pos.x() - 4, local_pos.y() - 4, 8, 8
@@ -260,7 +282,7 @@ class InteractionController(QObject):
             self.map_manager.start_area_rect = local_rect
         elif self.active_tool == "exit_area":
             self.map_manager.exit_area_rect = local_rect
-        elif self.active_tool == "worker_area":  # NEU
+        elif self.active_tool == "worker_area":
             self.map_manager.worker_spawn_rect = local_rect
 
         self.visual_controller.draw_map_elements(self.map_manager)
@@ -281,6 +303,11 @@ class InteractionController(QObject):
                 self.map_manager.exit_routes[
                     f"ExitRoute_{len(self.map_manager.exit_routes)+1}"
                 ] = list(self.current_route_points)
+            elif self.active_tool == "worker_route":
+                self.map_manager.worker_routes[
+                    f"WorkerRoute_{len(self.map_manager.worker_routes)+1}"
+                ] = list(self.current_route_points)
+
             self.map_data_changed.emit()
         self.set_tool(None)
         self._reset_ui_buttons(None)
@@ -405,47 +432,51 @@ class InteractionController(QObject):
         if self.active_tool:
             return
 
-        current_mode = self.view.mode_combo.currentText()
-        if current_mode == "Editor":
-            self.set_tool(None)
-            self._reset_ui_buttons(None)
-            spec = {"type": "checkout", "id": checkout_id}
-            self.visual_controller.draw_map_elements(
-                self.map_manager, selected_spec=spec
-            )
-            self.edit_object_position(spec)
-        elif current_mode == "Simulation":
-            if self.sim_manager.is_running:
-                return
-            c_data = next(
-                (
-                    x
-                    for x in self.map_manager.checkouts_data
-                    if x["id"] == checkout_id
-                ),
-                None,
-            )
-            if not c_data:
-                return
+        # Sicherstellen dass wir über sidebar gehen
+        if hasattr(self.view, "sidebar"):
+            current_mode = self.view.sidebar.mode_combo.currentText()
 
-            dlg = CheckoutConfigDialog(c_data, self.view)
-            if dlg.exec():
-                c_data.update(dlg.get_data())
-                self.visual_controller.draw_map_elements(self.map_manager)
+            if current_mode == "Editor":
+                self.set_tool(None)
+                self._reset_ui_buttons(None)
+                spec = {"type": "checkout", "id": checkout_id}
+                self.visual_controller.draw_map_elements(
+                    self.map_manager, selected_spec=spec
+                )
+                self.edit_object_position(spec)
+            elif current_mode == "Simulation":
+                if self.sim_manager.is_running:
+                    return
+                c_data = next(
+                    (
+                        x
+                        for x in self.map_manager.checkouts_data
+                        if x["id"] == checkout_id
+                    ),
+                    None,
+                )
+                if not c_data:
+                    return
+
+                dlg = CheckoutConfigDialog(c_data, self.view)
+                if dlg.exec():
+                    c_data.update(dlg.get_data())
+                    self.visual_controller.draw_map_elements(self.map_manager)
 
     def handle_shelf_click(self, index):
         if self.active_tool:
             return
 
-        current_mode = self.view.mode_combo.currentText()
-        if current_mode == "Editor":
-            self.set_tool(None)
-            self._reset_ui_buttons(None)
-            spec = {"type": "shelf", "index": index}
-            self.visual_controller.draw_map_elements(
-                self.map_manager, selected_spec=spec
-            )
-            self.edit_object_position(spec)
+        if hasattr(self.view, "sidebar"):
+            current_mode = self.view.sidebar.mode_combo.currentText()
+            if current_mode == "Editor":
+                self.set_tool(None)
+                self._reset_ui_buttons(None)
+                spec = {"type": "shelf", "index": index}
+                self.visual_controller.draw_map_elements(
+                    self.map_manager, selected_spec=spec
+                )
+                self.edit_object_position(spec)
 
     def delete_object(self, obj_spec):
         if not obj_spec:

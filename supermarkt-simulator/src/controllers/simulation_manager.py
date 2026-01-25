@@ -1,6 +1,7 @@
 """
 Simulation Manager Module.
-REVERTED: Worker Ziel ist wieder der Kassen-Bildschirm/Arbeitsplatz.
+Updated:
+- Passes Worker Route to the model.
 """
 
 import random
@@ -128,7 +129,6 @@ class SimulationManager(QObject):
                 self.time_accumulator_sec -= 60.0
                 self.time_updated.emit(self.sim_time.toString("HH:mm"))
 
-            # 1. Maintenance & Worker Logic
             self._check_maintenance()
             self._handle_workers(game_dt)
 
@@ -286,10 +286,6 @@ class SimulationManager(QObject):
             traceback.print_exc()
 
     def _get_checkout_interaction_point(self, c_data):
-        """
-        Berechnet den Punkt, an dem der Bildschirm/Kasse steht.
-        Ziel: Exakter Punkt des Kassen-Screens (basierend auf Settings).
-        """
         cw = self.settings.get("size_checkout_width", 100)
         ch = self.settings.get("size_checkout_height", 100)
 
@@ -299,7 +295,6 @@ class SimulationManager(QObject):
         c_type = c_data["type"]
         is_sb = c_type == "SB"
 
-        # REVERT: Wir nutzen wieder offset_screen_...
         suffix = "left" if ori == "Left" else "right"
         key_offset = (
             "offset_screen_sb_" + suffix
@@ -310,7 +305,6 @@ class SimulationManager(QObject):
         off = self.settings.get(key_offset, [0, 0])
         lox, loy = float(off[0]), float(off[1])
 
-        # Fallback
         if lox == 0 and loy == 0:
             lox = cw / 2
             loy = 10 if ori == "Right" else ch - 10
@@ -321,7 +315,6 @@ class SimulationManager(QObject):
         p_unrot_x = cx + lox
         p_unrot_y = cy + loy
 
-        # Rotation um Center
         rad = math.radians(angle)
         tx = p_unrot_x - center_x
         ty = p_unrot_y - center_y
@@ -348,12 +341,18 @@ class SimulationManager(QObject):
         if not spawn_rect:
             spawn_rect = QRectF(0, 0, 100, 100)
 
+        # NEU: ROUTE WÄHLEN
+        selected_route = []
+        if self.map_mgr.worker_routes:
+            # Nehme einfach die erste verfügbare Route
+            first_key = list(self.map_mgr.worker_routes.keys())[0]
+            selected_route = self.map_mgr.worker_routes[first_key]
+
         for c_data in self.map_mgr.checkouts_data:
             if c_data.get("malfunction", False):
                 cid = c_data["id"]
                 if cid not in self.assigned_maintenance:
                     try:
-                        # Berechne Zielpunkt (Screen)
                         target_pos = self._get_checkout_interaction_point(
                             c_data
                         )
@@ -364,6 +363,7 @@ class SimulationManager(QObject):
                             target_pos,
                             self.map_mgr.exit_area_rect,
                             (repair_min, repair_max),
+                            route_points=selected_route,  # NEU
                         )
                         self.active_workers.append(worker)
                         self.assigned_maintenance[cid] = worker
@@ -376,13 +376,17 @@ class SimulationManager(QObject):
 
     def _handle_workers(self, dt):
         alive = []
-        safe_dt = min(dt, 0.1)  # Verhindert Sprünge bei Lag
+        safe_dt = min(dt, 0.1)
 
         for w in self.active_workers:
             was_repairing = w.state == "REPAIRING"
             w.tick(safe_dt)
 
-            if was_repairing and w.state == "LEAVING":
+            if w.state == "LEAVING_DIRECT" or w.state == "FOLLOWING_ROUTE_OUT":
+                pass
+
+            # Wenn Reparatur beendet, aber Status nicht mehr REPAIRING
+            if was_repairing and w.state != "REPAIRING":
                 cid = w.target_checkout_id
                 c_data = next(
                     (x for x in self.map_mgr.checkouts_data if x["id"] == cid),

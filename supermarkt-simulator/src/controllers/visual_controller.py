@@ -2,7 +2,7 @@
 Visual Controller.
 Refactored:
 - FIX: Worker items are now correctly synchronized and added to the scene.
-- FIX: Removed circular import hacks.
+- FIX: Added visualization for 'worker_routes' (Orange).
 """
 
 import math
@@ -54,7 +54,7 @@ class VisualController:
         self.route_debug_items = []
         self.queue_debug_items = []
         self.customer_items = {}
-        self.worker_items = {}  # Dictionary für WorkerItems: Model -> Item
+        self.worker_items = {}
         self.screen_items = []
 
         self.waiting_area_item = None
@@ -147,7 +147,6 @@ class VisualController:
                 return selected_spec["id"] == idx_or_id
             return False
 
-        # AREAS
         if map_manager.waiting_area_rect and self.settings.get(
             "show_waiting_area", True
         ):
@@ -169,7 +168,6 @@ class VisualController:
             self.exit_area_item.setParentItem(self.map_group)
             self.exit_area_item.setZValue(1)
 
-        # Worker Area Visualisierung
         if map_manager.worker_spawn_rect and self.settings.get(
             "show_worker_area", True
         ):
@@ -450,9 +448,9 @@ class VisualController:
         draw(map_manager.shop_routes, QColor(100, 100, 100, 100))
         draw(map_manager.start_routes, COLOR_BLUE)
         draw(map_manager.exit_routes, COLOR_RED)
+        draw(map_manager.worker_routes, QColor("orange"))  # NEU
 
     def sync_customers(self, models):
-        # Customers synchronisieren
         current_set = set(models)
         to_remove = []
         for model, item in self.customer_items.items():
@@ -475,7 +473,6 @@ class VisualController:
                 self.customer_items[model].sync_visuals()
 
     def _sync_workers(self, worker_models):
-        # Workers synchronisieren
         current_set = set(worker_models)
         to_remove = []
         for model, item in self.worker_items.items():
@@ -490,16 +487,11 @@ class VisualController:
         for model in worker_models:
             if model not in self.worker_items:
                 try:
-                    # Item erstellen
                     item = WorkerItem(
                         model, size=self.settings.get("size_customer", 32)
                     )
-                    # Zur MapGroup hinzufügen
                     item.setParentItem(self.map_group)
-
-                    # WICHTIG: Sofort Position updaten!
                     item.sync_visuals()
-
                     self.worker_items[model] = item
                     print(
                         f"DEBUG: WorkerItem NEU erstellt bei {model.pos.x()}, {model.pos.y()}"
@@ -507,11 +499,9 @@ class VisualController:
                 except Exception as e:
                     print(f"ERROR beim Erstellen des WorkerItem: {e}")
             else:
-                # Update existierender Items
                 self.worker_items[model].sync_visuals()
 
     def sync_all_agents(self, customers, workers):
-        # Zentrale Methode für Tick
         self.sync_customers(customers)
         self._sync_workers(workers)
 
@@ -572,7 +562,6 @@ class VisualController:
         if self.worker_area_item:
             self.worker_area_item.setParentItem(None)
 
-        # Kunden & Worker Items auch aufräumen, um "Geister" zu vermeiden
         for item in self.customer_items.values():
             item.setParentItem(None)
             if item.scene():

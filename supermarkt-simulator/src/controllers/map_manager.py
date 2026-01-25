@@ -1,7 +1,7 @@
 """
 Map Manager Module.
 Handles loading, saving, and managing map data.
-Updated: Defaults to 'Standard (Einfach).json'. Added worker_spawn_rect.
+Updated: Added 'worker_routes' storage and load/save logic.
 """
 
 import json
@@ -17,16 +17,19 @@ class MapManager:
         self.settings = settings
         self.current_map_file = None
 
+        # Routen
         self.shop_routes = {}
         self.start_routes = {}
         self.exit_routes = {}
+        self.worker_routes = {}  # NEU: Routen für Techniker
+
         self.all_shelves = []
         self.checkouts_data = []
 
         self.waiting_area_rect = None
         self.start_area_rect = None
         self.exit_area_rect = None
-        self.worker_spawn_rect = None  # NEU: Spawn-Bereich für Arbeiter
+        self.worker_spawn_rect = None
 
         self.background_image_path = None
         self.background_scale = 0.5
@@ -58,6 +61,7 @@ class MapManager:
                         for name, pts in raw.items():
                             res[name] = [QPointF(p[0], p[1]) for p in pts]
                     elif isinstance(raw, list):
+                        # Fallback für alte Map-Formate
                         res["Route_Legacy"] = [
                             QPointF(p[0], p[1]) for p in raw
                         ]
@@ -66,6 +70,7 @@ class MapManager:
             self.shop_routes = load_routes("routes")
             self.start_routes = load_routes("start_routes")
             self.exit_routes = load_routes("exit_routes")
+            self.worker_routes = load_routes("worker_routes")  # NEU: Laden
 
             raw_shelves = data.get("shelves", [])
             self.all_shelves = []
@@ -105,7 +110,6 @@ class MapManager:
             self.exit_area_rect = (
                 QRectF(*data["exit_area"]) if data.get("exit_area") else None
             )
-            # NEU: Worker Area laden
             self.worker_spawn_rect = (
                 QRectF(*data["worker_area"])
                 if data.get("worker_area")
@@ -140,12 +144,15 @@ class MapManager:
             "routes": export_routes(self.shop_routes),
             "start_routes": export_routes(self.start_routes),
             "exit_routes": export_routes(self.exit_routes),
+            "worker_routes": export_routes(
+                self.worker_routes
+            ),  # NEU: Speichern
             "shelves": self.all_shelves,
             "checkouts": self.checkouts_data,
             "waiting_area": rect_to_list(self.waiting_area_rect),
             "start_area": rect_to_list(self.start_area_rect),
             "exit_area": rect_to_list(self.exit_area_rect),
-            "worker_area": rect_to_list(self.worker_spawn_rect),  # NEU
+            "worker_area": rect_to_list(self.worker_spawn_rect),
             "global_exit_direction": global_exit_direction,
             "background_image": self.background_image_path,
             "background_scale": self.background_scale,
@@ -202,6 +209,7 @@ class MapManager:
         self.shop_routes = {}
         self.start_routes = {}
         self.exit_routes = {}
+        self.worker_routes = {}  # Reset
         self.all_shelves = []
         self.checkouts_data = []
         self.waiting_area_rect = None

@@ -1,7 +1,7 @@
 """
 Simulation Scene.
 Refactored:
-- FIX: No circular imports.
+- FIX: TypeError in itemAt (removed keyword argument).
 - LOGIC: Handles temporary drawing of selection rectangles.
 """
 
@@ -20,23 +20,32 @@ class SimulationScene(QGraphicsScene):
         self.temp_rect_item = None
         self.start_point = None
 
-        # Hintergrund-Gitter oder ähnliches könnte man hier initen
-        # self.setBackgroundBrush(QBrush(QColor("#F5F7FA")))
-
     def mousePressEvent(self, event):
         # Basis-Handling (Items selektieren etc.)
         super().mousePressEvent(event)
 
         # Linksklick auf leere Fläche -> Signal senden (für Regale/Kassen platzieren)
         if event.button() == Qt.MouseButton.LeftButton:
-            if not self.itemAt(
-                event.scenePos(), _transform=self.views()[0].transform()
-            ):
+            views = self.views()
+            item = None
+
+            # FIX: itemAt darf keine Keyword-Arguments wie 'transform=' haben in manchen Bindings
+            if views:
+                # Wir nehmen die Transform-Matrix der ersten View
+                transform = views[0].transform()
+                item = self.itemAt(event.scenePos(), transform)
+            else:
+                # Fallback ohne Transform (weniger präzise bei Zoom, aber sicher)
+                # Alternative: self.items(pos)[0]
+                items_at_pos = self.items(event.scenePos())
+                if items_at_pos:
+                    item = items_at_pos[0]
+
+            if not item:
                 self.clicked_point.emit(event.scenePos())
             else:
-                # Auch wenn Item da ist, wollen wir das Event für Logic nutzen (z.B. Kasse anklicken)
-                # Aber VisualController handled Klicks auf Items direkt via Item-Callbacks.
-                # Wir senden clicked_point trotzdem für Map-Move oder Placement-Logic.
+                # Auch wenn Item da ist, leiten wir das Event weiter an den InteractionController,
+                # der entscheidet dann (z.B. wenn man im Regal-Platzieren-Modus ist, ignoriert er Klicks auf andere Items)
                 self.clicked_point.emit(event.scenePos())
 
     def start_drawing_area(self, pos):
