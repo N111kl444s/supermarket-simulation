@@ -1,7 +1,5 @@
 """
 Interaction Controller.
-Refactored:
-- ADDED: 'worker_area' tool logic.
 """
 
 from PyQt6.QtWidgets import (

@@ -140,11 +140,6 @@ class MainController:
                 "exit_area", button_ref=self.view.btn_exit_area
             )
         )
-        self.view.btn_worker_area.clicked.connect(
-            lambda: ic.set_tool(
-                "worker_area", button_ref=self.view.btn_worker_area
-            )
-        )
         self.view.btn_start_route.clicked.connect(
             lambda: ic.set_tool(
                 "start_route", button_ref=self.view.btn_start_route
@@ -224,7 +219,7 @@ class MainController:
 
     def _on_sim_tick(self):
         self.visual_controller.sync_all_agents(
-            self.sim_manager.customers_model, self.sim_manager.active_workers
+            self.sim_manager.customers_model, []
         )
         self.visual_controller.update_checkout_status(
             self.map_manager.checkouts_data
@@ -513,13 +508,9 @@ class MainController:
             fail_rate_sb = 0.0
             if hasattr(self.view, "checkout_fail_rate_sb"):
                 fail_rate_sb = self.view.checkout_fail_rate_sb.value()
-            repair_min = 5.0
-            if hasattr(self.view, "worker_repair_min"):
-                repair_min = self.view.worker_repair_min.value()
-            repair_max = 15.0
-            if hasattr(self.view, "worker_repair_max"):
-                repair_max = self.view.worker_repair_max.value()
-
+            customer_annoyance_rate = 0.0
+            if hasattr(self.view, "customer_annoyance_rate"):
+                customer_annoyance_rate = self.view.customer_annoyance_rate.value()
             return {
                 "walk": (
                     self.view.speed_walk_mean.value(),
@@ -538,8 +529,7 @@ class MainController:
                 "handheld": handheld_val,
                 "checkout_fail_rate_normal": fail_rate_normal,
                 "checkout_fail_rate_sb": fail_rate_sb,
-                "worker_repair_min": repair_min,
-                "worker_repair_max": repair_max,
+                "customer_annoyance_rate": customer_annoyance_rate,
             }
         except Exception as e:
             print(f"UI Params Error: {e}")

@@ -30,6 +30,7 @@ INTERNAL_BASE, EXTERNAL_BASE = get_paths()
 ASSETS_DIR = INTERNAL_BASE / "assets"
 IMAGE_DIR = ASSETS_DIR / "images"
 ICON_DIR = ASSETS_DIR / "icons"  # Falls tool.png ein Icon ist
+ICON_ANGRY = ICON_DIR / "angry.png"
 MAPS_DIR = EXTERNAL_BASE / "maps"
 SETTINGS_FILE = EXTERNAL_BASE / "settings.json"
 
@@ -83,7 +84,6 @@ COLOR_CHECKOUT = QColor("#3B82F6")
 COLOR_WAITING_AREA = QColor(59, 130, 246, 60)
 COLOR_START_AREA = QColor(16, 185, 129, 60)
 COLOR_EXIT_AREA = QColor(239, 68, 68, 60)
-COLOR_WORKER_SPAWN = QColor(245, 158, 11, 60)  # Orange transparent
 COLOR_SELECTION = QColor("#EF4444")
 COLOR_QUEUE_HIGHLIGHT = QColor("#8B5CF6")
 COLOR_SCAN_PROGRESS = QColor("#10B981")
@@ -158,10 +158,6 @@ IMG_CASHIERS_PRO = get_image_files("festangestellter")
 if not IMG_CASHIERS_PRO:
     IMG_CASHIERS_PRO = ["festangestellter.png"]
 
-# NEU: Worker & Tool
-IMG_WORKER = ["worker.png"]  # Erwartet worker.png in assets/images/
-IMG_TOOL = "tool.png"  # Erwartet tool.png in assets/images/ oder assets/icons/
-
 # --- DEFAULT SETTINGS DICT ---
 DEFAULT_SETTINGS = {
     "show_routes": True,
@@ -174,7 +170,6 @@ DEFAULT_SETTINGS = {
     "show_waiting_area": True,
     "show_start_area": True,
     "show_exit_area": True,
-    "show_worker_area": True,  # NEU
     "size_shelf": SHELF_SIZE,
     "size_cashier": CASHIER_SIZE,
     "size_customer": CUSTOMER_SIZE,

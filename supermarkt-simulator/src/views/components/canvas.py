@@ -36,7 +36,7 @@ class SimulationCanvas(QGraphicsView):
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
 
         self.zoom_level = 1.0
-        self.zoom_max = 5.0
+        self.zoom_max = 1000.0
 
         self._is_panning = False
         self._pan_start_pos = QPoint()
@@ -126,7 +126,6 @@ class SimulationCanvas(QGraphicsView):
                 mw.is_drawing_waiting_area
                 or mw.is_drawing_start_area
                 or mw.is_drawing_exit_area
-                or mw.is_drawing_worker_area
             ):
 
                 pos = self.mapToScene(event.pos())
@@ -151,7 +150,6 @@ class SimulationCanvas(QGraphicsView):
             mw.is_drawing_waiting_area
             or mw.is_drawing_start_area
             or mw.is_drawing_exit_area
-            or mw.is_drawing_worker_area
         ):
 
             if self.sim_scene.temp_rect_item:
@@ -169,7 +167,6 @@ class SimulationCanvas(QGraphicsView):
                 mw.is_drawing_waiting_area
                 or mw.is_drawing_start_area
                 or mw.is_drawing_exit_area
-                or mw.is_drawing_worker_area
             )
             self.set_drawing_cursor(is_drawing)
             event.accept()
@@ -181,7 +178,6 @@ class SimulationCanvas(QGraphicsView):
                 mw.is_drawing_waiting_area
                 or mw.is_drawing_start_area
                 or mw.is_drawing_exit_area
-                or mw.is_drawing_worker_area
             ):
 
                 self.sim_scene.finish_drawing_area()

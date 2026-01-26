@@ -1,7 +1,5 @@
 """
 Dialogs Module.
-Refactored:
-- ADDED: Checkbox for 'show_worker_area' in VisibilityDialog.
 """
 
 from PyQt6.QtWidgets import (
@@ -165,11 +163,6 @@ class VisibilityDialog(QDialog):
         self.cb_start = self._add_cb("Start-Bereich", "show_start_area", form)
         self.cb_wait = self._add_cb("Warte-Bereich", "show_waiting_area", form)
         self.cb_exit = self._add_cb("Ausgangs-Bereich", "show_exit_area", form)
-
-        # NEU: Worker Area
-        self.cb_worker = self._add_cb(
-            "Wartungs-Bereich (Techniker)", "show_worker_area", form
-        )
 
         layout.addWidget(gb)
 

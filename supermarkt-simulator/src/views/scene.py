@@ -30,7 +30,7 @@ class SimulationScene(QGraphicsScene):
         # Linksklick auf leere Fläche -> Signal senden (für Regale/Kassen platzieren)
         if event.button() == Qt.MouseButton.LeftButton:
             if not self.itemAt(
-                event.scenePos(), _transform=self.views()[0].transform()
+                event.scenePos(), self.views()[0].transform()
             ):
                 self.clicked_point.emit(event.scenePos())
             else:

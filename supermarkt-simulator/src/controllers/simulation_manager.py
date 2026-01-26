@@ -1,8 +1,5 @@
 """
 Simulation Manager Module.
-Updated:
-- ADDED: Worker Logic (Spawning, Repairing, Despawning).
-- Worker spawns if checkout broken and no worker assigned.
 """
 
 import random
@@ -10,7 +7,6 @@ import math
 from PyQt6.QtCore import QTimer, QTime, QObject, pyqtSignal, QPointF
 from PyQt6.QtGui import QVector2D
 from models.customer import CustomerModel
-from models.worker import WorkerModel
 from config import (
     DEFAULT_OPEN_TIME,
     DEFAULT_CLOSE_TIME,
@@ -41,11 +37,7 @@ class SimulationManager(QObject):
         self.store_is_closed_trigger = False
 
         self.customers_model = []
-        self.active_workers = []  # NEU: Liste der Arbeiter
         self.checkout_queues = {}
-
-        # Mapping: Checkout-ID -> WorkerModel (um Doppelzuweisungen zu verhindern)
-        self.assigned_maintenance = {}
 
         self.total_customers_spawned = 0
         self.target_daily_customers = 50
@@ -77,15 +69,14 @@ class SimulationManager(QObject):
         self.pause()
         self.is_initialized = False
         self.customers_model.clear()
-        self.active_workers.clear()
         self.checkout_queues = {}
-        self.assigned_maintenance = {}
         self.total_customers_spawned = 0
         self.store_is_closed_trigger = False
 
         # Reset Malfunctions
         for c_data in self.map_mgr.checkouts_data:
             c_data["malfunction"] = False
+            c_data["conflict"] = False
 
         self.sim_time = open_time_val
         self.open_time = open_time_val
@@ -114,9 +105,11 @@ class SimulationManager(QObject):
         # Reset Malfunctions
         for c_data in self.map_mgr.checkouts_data:
             c_data["malfunction"] = False
+            c_data["conflict"] = False
 
-        self.active_workers.clear()
-        self.assigned_maintenance = {}
+        # TEMP: Set first checkout to malfunction for testing
+        if self.map_mgr.checkouts_data:
+            self.map_mgr.checkouts_data[0]["malfunction"] = True
 
         self.is_initialized = True
         self.log_message.emit(
@@ -141,8 +134,8 @@ class SimulationManager(QObject):
             self.time_updated.emit(self.sim_time.toString("HH:mm"))
 
         # 1. Maintenance Logic
-        self._check_maintenance()
-        self._handle_workers(game_dt)
+        self._handle_maintenance(game_dt)
+        self._handle_conflicts(game_dt)
 
         is_closing_time = self.sim_time >= self.close_time
         if is_closing_time:
@@ -151,7 +144,7 @@ class SimulationManager(QObject):
                     "Ladenschluss! Eingang geschlossen...", "orange"
                 )
                 self.store_is_closed_trigger = True
-            if not self.customers_model and not self.active_workers:
+            if not self.customers_model:
                 self.pause()
                 self.time_updated.emit(self.sim_time.toString("HH:mm"))
                 self.log_message.emit(
@@ -172,6 +165,7 @@ class SimulationManager(QObject):
         for model in self.customers_model:
             # Störungs-Check für Pausieren
             is_stuck_due_to_malfunction = False
+            is_stuck_due_to_conflict = False
             if (
                 model.state in ("SCANNING", "PAYING")
                 and model.assigned_checkout_id is not None
@@ -186,8 +180,10 @@ class SimulationManager(QObject):
                 )
                 if c_data and c_data.get("malfunction", False):
                     is_stuck_due_to_malfunction = True
+                if c_data and c_data.get("conflict", False):
+                    is_stuck_due_to_conflict = True
 
-            if not is_stuck_due_to_malfunction:
+            if not is_stuck_due_to_malfunction and not is_stuck_due_to_conflict:
                 model.tick(game_dt)
 
             if model.state == "WAITING_AREA":
@@ -238,7 +234,7 @@ class SimulationManager(QObject):
             # Zufällige Störung
             if (
                 model.state == "SCANNING" or model.state == "PAYING"
-            ) and not is_stuck_due_to_malfunction:
+            ) and not is_stuck_due_to_malfunction and not is_stuck_due_to_conflict:
                 if current_global_params:
                     cid = model.assigned_checkout_id
                     c_data = next(
@@ -266,6 +262,32 @@ class SimulationManager(QObject):
                                 f"⚠️ STÖRUNG an Kasse {cid}!", "red"
                             )
 
+            # Zufällige Verärgerung des Kunden
+            if (
+                model.state == "SCANNING" or model.state == "PAYING"
+            ) and not is_stuck_due_to_malfunction and not is_stuck_due_to_conflict:
+                if current_global_params:
+                    cid = model.assigned_checkout_id
+                    c_data = next(
+                        (
+                            x
+                            for x in self.map_mgr.checkouts_data
+                            if x["id"] == cid
+                        ),
+                        None,
+                    )
+                    if c_data and not c_data.get("conflict", False):
+                        annoy_rate = current_global_params.get(
+                            "customer_annoyance_rate", 0.0
+                        )
+                        chance = (annoy_rate / 100.0) * game_dt
+                        if random.random() < chance:
+                            c_data["conflict"] = True
+                            print(f"DEBUG: Conflict triggered at checkout {cid} with annoy_rate {annoy_rate}%")
+                            self.log_message.emit(
+                                f"😠 Verärgerter Kunde an Kasse {cid}!", "orange"
+                            )
+
             elif (
                 model.state == "LEAVING"
                 and model.assigned_checkout_id is not None
@@ -290,68 +312,63 @@ class SimulationManager(QObject):
             self.total_customers_spawned,
         )
 
-    # --- WORKER LOGIC ---
-    def _check_maintenance(self):
-        """Prüft kaputte Kassen und entsendet Arbeiter."""
-        # Parameter holen
+    def _handle_maintenance(self, dt):
+        """Handles checkout repairs by cashiers."""
         params = (
             self.param_access_func(False) if self.param_access_func else {}
         )
         repair_min = params.get("worker_repair_min", 5.0)
         repair_max = params.get("worker_repair_max", 15.0)
 
-        spawn_rect = self.map_mgr.worker_spawn_rect
-        if not spawn_rect:
-            # Falls kein Bereich definiert ist, kann kein Arbeiter kommen.
-            # Alternativ: Start Area nutzen oder Fehler loggen.
-            return
-
         for c_data in self.map_mgr.checkouts_data:
             if c_data.get("malfunction", False):
-                cid = c_data["id"]
-                # Ist schon jemand unterwegs?
-                if cid not in self.assigned_maintenance:
-                    # Spawn Worker
-                    worker = WorkerModel(
-                        spawn_rect,
-                        c_data,
-                        self.map_mgr.exit_area_rect,
-                        (repair_min, repair_max),
-                    )
-                    self.active_workers.append(worker)
-                    self.assigned_maintenance[cid] = worker
+                if "repair_timer" not in c_data:
+                    # Start repair
+                    c_data["repair_duration"] = random.uniform(repair_min, repair_max)
+                    c_data["repair_timer"] = 0.0
                     self.log_message.emit(
-                        f"🔧 Techniker zu Kasse {cid} unterwegs.", "blue"
+                        f"🔧 Kassierer repariert Kasse {c_data['id']}.", "blue"
                     )
+                else:
+                    # Continue repair
+                    c_data["repair_timer"] += dt
+                    if c_data["repair_timer"] >= c_data["repair_duration"]:
+                        c_data["malfunction"] = False
+                        del c_data["repair_timer"]
+                        del c_data["repair_duration"]
+                        self.log_message.emit(
+                            f"✅ Kasse {c_data['id']} repariert.", "green"
+                        )
 
-    def _handle_workers(self, dt):
-        alive = []
-        for w in self.active_workers:
-            # Merke Status VOR Tick
-            was_repairing = w.state == "REPAIRING"
+    def _handle_conflicts(self, dt):
+        """Handles customer conflicts by cashiers."""
+        params = (
+            self.param_access_func(False) if self.param_access_func else {}
+        )
+        conflict_min = params.get("worker_conflict_min", 2.0)  # Shorter than repairs
+        conflict_max = params.get("worker_conflict_max", 8.0)
 
-            w.tick(dt)
-
-            # Prüfe ob Reparatur fertig wurde in diesem Tick
-            if was_repairing and w.state == "LEAVING":
-                # Kasse reparieren
-                cid = w.target_checkout_id
-                c_data = next(
-                    (x for x in self.map_mgr.checkouts_data if x["id"] == cid),
-                    None,
-                )
-                if c_data:
-                    c_data["malfunction"] = False
+        for c_data in self.map_mgr.checkouts_data:
+            if c_data.get("conflict", False):
+                print(f"DEBUG: Handling conflict at checkout {c_data['id']}")
+                if "conflict_timer" not in c_data:
+                    # Start conflict resolution
+                    c_data["conflict_duration"] = random.uniform(conflict_min, conflict_max)
+                    c_data["conflict_timer"] = 0.0
                     self.log_message.emit(
-                        f"✅ Kasse {cid} repariert.", "green"
+                        f"🗣️ Kassierer löst Konflikt an Kasse {c_data['id']}.", "blue"
                     )
-                # Aus Mapping entfernen
-                if cid in self.assigned_maintenance:
-                    del self.assigned_maintenance[cid]
-
-            if w.state != "GONE":
-                alive.append(w)
-        self.active_workers = alive
+                else:
+                    # Continue resolution
+                    c_data["conflict_timer"] += dt
+                    if c_data["conflict_timer"] >= c_data["conflict_duration"]:
+                        c_data["conflict"] = False
+                        del c_data["conflict_timer"]
+                        del c_data["conflict_duration"]
+                        print(f"DEBUG: Conflict resolved at checkout {c_data['id']}")
+                        self.log_message.emit(
+                            f"✅ Konflikt an Kasse {c_data['id']} gelöst.", "green"
+                        )
 
     def _attempt_spawn(self, dt_game_seconds):
         self.spawn_timer_acc += dt_game_seconds

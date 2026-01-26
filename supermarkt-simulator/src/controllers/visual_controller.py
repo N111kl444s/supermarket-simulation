@@ -1,8 +1,5 @@
 """
 Visual Controller.
-Refactored:
-- ADDED: Logic to draw and sync Worker items.
-- ADDED: Worker Area visualization.
 """
 
 import math
@@ -24,7 +21,6 @@ from config import (
     COLOR_SCREEN_OPEN,
     COLOR_SCREEN_CLOSED,
     COLOR_SCREEN_TEXT,
-    COLOR_WORKER_SPAWN,
 )
 from views.items import (
     CheckoutItem,
@@ -34,7 +30,6 @@ from views.items import (
     WaitingAreaItem,
     StartAreaItem,
     ExitAreaItem,
-    WorkerItem,  # NEU
 )
 
 
@@ -54,13 +49,11 @@ class VisualController:
         self.route_debug_items = []
         self.queue_debug_items = []
         self.customer_items = {}
-        self.worker_items = {}  # NEU
         self.screen_items = []
 
         self.waiting_area_item = None
         self.start_area_item = None
         self.exit_area_item = None
-        self.worker_area_item = None  # NEU
         self.background_item = None
 
         self.on_checkout_clicked = None
@@ -169,23 +162,6 @@ class VisualController:
             self.exit_area_item.setParentItem(self.map_group)
             self.exit_area_item.setZValue(1)
 
-        # NEU: Worker Area
-        if map_manager.worker_spawn_rect and self.settings.get(
-            "show_worker_area", True
-        ):
-            # Wir nutzen WaitingAreaItem als Basis, nur mit anderer Farbe
-            w_item = QGraphicsRectItem(map_manager.worker_spawn_rect)
-            w_item.setBrush(QBrush(COLOR_WORKER_SPAWN))
-            w_item.setPen(QPen(Qt.PenStyle.DashLine))
-            w_item.setParentItem(self.map_group)
-            w_item.setZValue(1)
-
-            t = QGraphicsSimpleTextItem("Techniker", w_item)
-            t.setBrush(QBrush(Qt.GlobalColor.black))
-            t.setPos(map_manager.worker_spawn_rect.topLeft() + QPointF(5, 5))
-
-            self.worker_area_item = w_item
-
         show_s_nums = self.settings.get("show_shelf_numbers", True)
         for idx, s_data in enumerate(map_manager.all_shelves):
             sx = s_data.get("x", 0)
@@ -280,7 +256,7 @@ class VisualController:
         if is_selected:
             ci.setSelected(True)
 
-        if c_type == "Normal" and self.settings["show_cashiers"] and is_open:
+        if c_type == "Normal" and self.settings["show_cashiers"] and (is_open or is_malfunction):
             skill = cd.get("cashier_skill") or cd.get("skill") or "Azubi"
             checkout_id = cd.get("id", 1)
             variant = max(0, checkout_id - 1)
@@ -310,9 +286,13 @@ class VisualController:
                 size=self.settings.get("size_cashier", CASHIER_SIZE),
                 variant_index=variant,
             )
+            cai.setData(0, cd["id"])  # Store checkout id
             cai.setParentItem(self.map_group)
             cai.setZValue(25)
             self.cashier_items.append(cai)
+
+            # Set repair icon if malfunction
+            cai.set_repairing(cd.get("malfunction", False))
 
         if self.settings["show_cashiers"]:
             cx, cy = cd["x"], cd["y"]
@@ -479,43 +459,9 @@ class VisualController:
             else:
                 self.customer_items[model].sync_visuals()
 
-        # NEU: Sync Workers
-        # Hinweis: Um die Methode sauber zu halten, könnte man das auslagern,
-        # aber hier für Kompaktheit:
-        from controllers.main_controller import (
-            MainController,
-        )  # (Referenz-Hack falls nötig, aber wir bekommen die Worker über SimManager später)
-
-        # Wir brauchen Zugriff auf die active_workers.
-        # VisualController wird aber oft nur mit customers gefüttert.
-        # Lösung: MainController muss beim Tick auch workers übergeben.
-        # Wir ändern sync_customers nicht, sondern fügen eine Methode hinzu.
-
-    def _sync_workers(self, worker_models):
-        current_set = set(worker_models)
-        to_remove = []
-        for model, item in self.worker_items.items():
-            if model not in current_set:
-                item.setParentItem(None)
-                if item.scene():
-                    self.scene.removeItem(item)
-                to_remove.append(model)
-        for m in to_remove:
-            del self.worker_items[m]
-
-        for model in worker_models:
-            if model not in self.worker_items:
-                item = WorkerItem(
-                    model, size=self.settings.get("size_customer", 32)
-                )  # Gleiche Größe wie Kunden
-                item.setParentItem(self.map_group)
-                self.worker_items[model] = item
-            else:
-                self.worker_items[model].sync_visuals()
-
     def sync_all_agents(self, customers, workers):
         self.sync_customers(customers)
-        self._sync_workers(workers)
+        # Workers removed, no sync needed
 
     def update_checkout_status(self, checkouts_data):
         blink_state = int(time.time() * 2) % 2 == 0
@@ -552,6 +498,33 @@ class VisualController:
                         )
                         text_item.setBrush(QBrush(COLOR_SCREEN_TEXT))
 
+        # Update cashier repair status
+        for cai in self.cashier_items:
+            cid = cai.data(0)  # Assuming data(0) is checkout id
+            if cid is not None and cid in data_map:
+                cd = data_map[cid]
+                is_malfunction = cd.get("malfunction", False)
+                is_conflict = cd.get("conflict", False)
+                if is_conflict:
+                    print(f"DEBUG: Visualizing conflict at checkout {cid}")
+                    cai.set_repairing(True, "angry.png")
+                    # Set conflict resolution progress overlay if conflict and timer/duration present
+                    if "conflict_timer" in cd and "conflict_duration" in cd:
+                        progress = min(max(cd["conflict_timer"] / cd["conflict_duration"], 0.0), 1.0)
+                        cai.set_repair_progress(progress)
+                    else:
+                        cai.set_repair_progress(0.0)
+                elif is_malfunction:
+                    cai.set_repairing(True, "tool.png")
+                    # Set repair progress overlay if malfunction and timer/duration present
+                    if "repair_timer" in cd and "repair_duration" in cd:
+                        progress = min(max(cd["repair_timer"] / cd["repair_duration"], 0.0), 1.0)
+                        cai.set_repair_progress(progress)
+                    else:
+                        cai.set_repair_progress(0.0)
+                else:
+                    cai.set_repairing(False)
+
     def _clear_dynamic_items(self):
         for i in (
             self.shelf_items
@@ -571,8 +544,6 @@ class VisualController:
             self.start_area_item.setParentItem(None)
         if self.exit_area_item:
             self.exit_area_item.setParentItem(None)
-        if self.worker_area_item:
-            self.worker_area_item.setParentItem(None)  # NEU
 
         # Customers & Workers clearen wir hier nicht explizit, das macht sync
 

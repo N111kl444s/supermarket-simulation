@@ -25,7 +25,6 @@ class MainWindow(QMainWindow):
         self.is_placing_shelves = False
         self.is_drawing_waiting_area = False
         self.is_drawing_start_area = False
-        self.is_drawing_worker_area = False
         self.is_placing_checkout = False
         self.is_drawing_start_route = False
         self.is_drawing_exit_route = False
@@ -116,8 +115,6 @@ class MainWindow(QMainWindow):
         self.scan_speed_pro_max = s.scan_speed_pro_max
         self.checkout_fail_rate_normal = s.checkout_fail_rate_normal
         self.checkout_fail_rate_sb = s.checkout_fail_rate_sb
-        self.worker_repair_min = s.worker_repair_min
-        self.worker_repair_max = s.worker_repair_max
 
         self.list_log = s.list_log
         self.lbl_queue_count = s.lbl_queue_count
@@ -138,7 +135,6 @@ class MainWindow(QMainWindow):
         self.start_area_button = s.start_area_button
         self.waiting_area_button = s.waiting_area_button
         self.btn_exit_area = s.btn_exit_area
-        self.btn_worker_area = s.btn_worker_area
         self.btn_visibility = s.btn_visibility
         self.btn_offsets = s.btn_offsets
         self.btn_config_sizes = s.btn_config_sizes

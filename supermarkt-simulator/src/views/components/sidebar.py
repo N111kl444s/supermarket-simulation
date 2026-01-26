@@ -245,6 +245,9 @@ class Sidebar(QWidget):
         # --- SUB 3: PERSONAL (Old Layout Style) ---
         self._setup_staff_tab()
 
+        # --- SUB 4: KONFLIKTE ---
+        self._setup_conflicts_tab()
+
         self.main_tabs.addTab(tab_input_container, "Eingabe")
 
     def _setup_shop_tab(self):
@@ -269,22 +272,6 @@ class Sidebar(QWidget):
         f_time.addRow("Schließen:", self.time_close)
         v_time.addLayout(f_time)
         l_shop.addWidget(gb_time)
-
-        # 3. Failures
-        gb_co = QGroupBox("Kassenstörungen")
-        v_co = QVBoxLayout(gb_co)
-        self._add_gb_header(
-            v_co,
-            "(Wahrscheinlichkeit in %)",
-            "Chance, dass eine Kasse pro Minute ausfällt.",
-        )
-        f_co = QFormLayout()
-        self.checkout_fail_rate_normal = self._create_spin(0, 0, 100, " %")
-        self.checkout_fail_rate_sb = self._create_spin(0, 0, 100, " %")
-        f_co.addRow("Ausfall (Normal):", self.checkout_fail_rate_normal)
-        f_co.addRow("Ausfall (SB):", self.checkout_fail_rate_sb)
-        v_co.addLayout(f_co)
-        l_shop.addWidget(gb_co)
 
         self.input_sub_tabs.addTab(sub_shop, "Laden")
 
@@ -441,8 +428,8 @@ class Sidebar(QWidget):
         v_paytime.addLayout(f_paytime)
         l_staff.addWidget(gb_paytime)
 
-        # 3. Maintenance
-        gb_maint = QGroupBox("Wartung / Reparatur")
+        # 3. Conflict Resolution
+        gb_maint = QGroupBox("Konfliktbewältigung")
         v_maint = QVBoxLayout(gb_maint)
         self._add_gb_header(
             v_maint,
@@ -457,6 +444,44 @@ class Sidebar(QWidget):
         l_staff.addWidget(gb_maint)
 
         self.input_sub_tabs.addTab(tab_staff, "Personal")
+
+    def _setup_conflicts_tab(self):
+        tab_conflicts = QWidget()
+        l_conflicts = QVBoxLayout(tab_conflicts)
+        l_conflicts.setAlignment(Qt.AlignmentFlag.AlignTop)
+        l_conflicts.setSpacing(15)
+
+        # 1. Failures
+        gb_co = QGroupBox("Kassenstörungen")
+        v_co = QVBoxLayout(gb_co)
+        self._add_gb_header(
+            v_co,
+            "(Wahrscheinlichkeit in %)",
+            "Chance, dass eine Kasse pro Minute ausfällt.",
+        )
+        f_co = QFormLayout()
+        self.checkout_fail_rate_normal = self._create_spin(0, 0, 100, " %")
+        self.checkout_fail_rate_sb = self._create_spin(0, 0, 100, " %")
+        f_co.addRow("Ausfall (Normal):", self.checkout_fail_rate_normal)
+        f_co.addRow("Ausfall (SB):", self.checkout_fail_rate_sb)
+        v_co.addLayout(f_co)
+        l_conflicts.addWidget(gb_co)
+
+        # 2. Customer Annoyance
+        gb_annoy = QGroupBox("Verärgerung der Kunden")
+        v_annoy = QVBoxLayout(gb_annoy)
+        self._add_gb_header(
+            v_annoy,
+            "(Wahrscheinlichkeit in %)",
+            "Chance, dass ein Kunde verärgert wird.",
+        )
+        f_annoy = QFormLayout()
+        self.customer_annoyance_rate = self._create_spin(0, 0, 100, " %")
+        f_annoy.addRow("Verärgerung:", self.customer_annoyance_rate)
+        v_annoy.addLayout(f_annoy)
+        l_conflicts.addWidget(gb_annoy)
+
+        self.input_sub_tabs.addTab(tab_conflicts, "Konflikte")
 
     # ==========================================
     # TAB 2: STATISTIKEN
@@ -559,15 +584,9 @@ class Sidebar(QWidget):
         self.waiting_area_button.setCheckable(True)
         self.btn_exit_area = QPushButton("Ausgangs-Bereich")
         self.btn_exit_area.setCheckable(True)
-        self.btn_worker_area = QPushButton("Wartungs-Bereich")
-        self.btn_worker_area.setCheckable(True)
-        self.btn_worker_area.setStyleSheet(
-            "QPushButton:checked { background-color: #F59E0B; color: white; }"
-        )
         l_areas_btn.addWidget(self.start_area_button)
         l_areas_btn.addWidget(self.waiting_area_button)
         l_areas_btn.addWidget(self.btn_exit_area)
-        l_areas_btn.addWidget(self.btn_worker_area)
         l_areas.addWidget(gb_areas)
 
         gb_view = QGroupBox("Anzeige")

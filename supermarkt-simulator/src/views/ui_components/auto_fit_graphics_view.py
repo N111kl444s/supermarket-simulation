@@ -39,7 +39,7 @@ class AutoFitGraphicsView(QGraphicsView):
         min_allowed_scale = 1.38956114
 
         if event.angleDelta().y() > 0:
-            if current_scale < 50.0:
+            if current_scale < 5.0:
                 self.scale(zoom_factor, zoom_factor)
         else:
             new_scale = current_scale / zoom_factor
