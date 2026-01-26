@@ -1,7 +1,8 @@
 """
 Main window module.
 Refactored:
-- FIX: 'SimulationCanvas' IS the view, so self.sim_view = c.
+- FIX: 'SimulationCanvas' IS the view.
+- FIX: Updated references to Sidebar conflict resolution parameters to avoid AttributeError.
 """
 
 from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QSplitter
@@ -15,7 +16,15 @@ from .components.canvas import SimulationCanvas
 
 
 class MainWindow(QMainWindow):
+    """
+    Das Hauptfenster der Anwendung.
+    Es koordiniert Toolbar, Sidebar und den Simulations-Canvas.
+    """
+
     def __init__(self):
+        """
+        Initialisiert das Fenster und seine Komponenten.
+        """
         super().__init__()
         self.setWindowTitle("Supermarkt Simulator - Workbench")
 
@@ -31,22 +40,28 @@ class MainWindow(QMainWindow):
         self.is_drawing_exit_route = False
         self.is_drawing_exit_area = False
 
-        self.is_q1_maximized = False
-        self.item_q1 = None
-
         self.setup_ui()
         self.setStyleSheet(get_application_style())
         self._expose_ui_elements()
 
-        # Scene connection fix (Canvas initializes Scene)
+        # Scene connection
         if hasattr(self.canvas_component, "sim_scene"):
             self.sim_scene = self.canvas_component.sim_scene
             self.sim_scene.main_window = self
 
     def set_controller(self, c):
+        """
+        Setzt den Controller für das Fenster.
+
+        @type c: MainController
+        @param c: Die Instanz des Haupt-Controllers.
+        """
         self.controller = c
 
     def setup_ui(self):
+        """
+        Baut das Layout des Hauptfensters auf.
+        """
         central = QWidget()
         self.setCentralWidget(central)
         root_layout = QVBoxLayout(central)
@@ -75,6 +90,10 @@ class MainWindow(QMainWindow):
         splitter.setCollapsible(0, False)
 
     def _expose_ui_elements(self):
+        """
+        Verknüpft die UI-Elemente der Komponenten direkt mit dem Hauptfenster.
+        Behebt den AttributeError durch Zuweisung der neuen Sidebar-Attribute.
+        """
         t = self.toolbar_component
         s = self.sidebar_component
 
@@ -116,8 +135,13 @@ class MainWindow(QMainWindow):
         self.scan_speed_pro_max = s.scan_speed_pro_max
         self.checkout_fail_rate_normal = s.checkout_fail_rate_normal
         self.checkout_fail_rate_sb = s.checkout_fail_rate_sb
-        self.worker_repair_min = s.worker_repair_min
-        self.worker_repair_max = s.worker_repair_max
+
+        # FIX: Neue Konflikt-Variablen aus der Sidebar
+        self.conflict_solve_newbie_min = s.conflict_solve_newbie_min
+        self.conflict_solve_newbie_max = s.conflict_solve_newbie_max
+        self.conflict_solve_pro_min = s.conflict_solve_pro_min
+        self.conflict_solve_pro_max = s.conflict_solve_pro_max
+        self.customer_annoyance_rate = s.customer_annoyance_rate
 
         self.list_log = s.list_log
         self.lbl_queue_count = s.lbl_queue_count
@@ -161,14 +185,17 @@ class MainWindow(QMainWindow):
         self.btn_edit_obj = s.btn_edit_obj
         self.btn_del_obj = s.btn_del_obj
 
-        # -- CANVAS --
-        c = self.canvas_component
-        self.sim_scene = c.sim_scene
-
-        # FIX: Canvas IS the view
-        self.sim_view = c
+        self.sim_view = self.canvas_component
 
     def add_log_entry(self, message, color="black"):
+        """
+        Fügt einen Eintrag in das Ereignis-Log ein.
+
+        @type message: str
+        @param message: Der Text.
+        @type color: str
+        @param color: Die Farbe des Eintrags.
+        """
         self.list_log.insertItem(0, message)
         item = self.list_log.item(0)
         item.setForeground(QBrush(QColor(color)))
@@ -176,9 +203,13 @@ class MainWindow(QMainWindow):
             self.list_log.takeItem(100)
 
     def update_sidebar_mode(self, mode_text):
-        is_sim = mode_text == "Simulation"
+        """
+        Schaltet die Sidebar-Ansicht um.
 
-        # 0: Eingabe, 1: Stats, 2: Editor
+        @type mode_text: str
+        @param mode_text: 'Simulation' oder 'Editor'.
+        """
+        is_sim = mode_text == "Simulation"
         if is_sim:
             self.main_tabs.setTabVisible(0, True)
             self.main_tabs.setTabVisible(1, True)
@@ -200,5 +231,8 @@ class MainWindow(QMainWindow):
         self.time_close.setEnabled(is_sim)
 
     def reset_sim_zoom(self, target_center=None):
+        """
+        Setzt den Zoom des Simulation-Canvas zurück.
+        """
         if self.sim_view:
             self.sim_view.reset_zoom(target_center)

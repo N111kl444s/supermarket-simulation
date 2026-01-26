@@ -1,7 +1,11 @@
 """
 Sidebar Component.
 Refactored:
-- STYLE: Added margin-top to QTabWidget::pane to create space between tabs and content.
+- Added "Konflikte" sub-tab in the "Eingabe" section.
+- Moved "Kassenstörungen" from "Laden" to "Konflikte".
+- Added "Verärgerung der Kunden" parameter to "Konflikte".
+- Renamed "Wartung / Reparatur" to "Konfliktbewältigung" in "Personal" tab.
+- Added specific conflict resolution times for Azubi and Pro.
 """
 
 from PyQt6.QtWidgets import (
@@ -30,12 +34,26 @@ from config import COLOR_ACCENT, COLOR_ERROR, COLOR_SUCCESS, COLOR_BG_PANEL
 
 
 class Sidebar(QWidget):
+    """
+    Die Sidebar-Klasse stellt das Hauptsteuerungs-Panel der Anwendung dar.
+    Sie enthält Reiter für Eingabe-Parameter, Live-Statistiken und den Editor-Modus.
+
+    @type parent: QWidget
+    @param parent: Das Eltern-Widget.
+    """
+
     def __init__(self, parent=None):
+        """
+        Initialisiert die Sidebar und baut die Benutzeroberfläche auf.
+        """
         super().__init__(parent)
         self.setup_ui()
         self.apply_styles()
 
     def apply_styles(self):
+        """
+        Wendet die QSS-Stylesheets auf die Sidebar und ihre Kinder an.
+        """
         accent = COLOR_ACCENT.name()
         self.setStyleSheet(
             f"""
@@ -43,7 +61,6 @@ class Sidebar(QWidget):
                 background-color: #FFFFFF;
                 border-right: 1px solid #D1D5DB;
             }}
-            /* Transparent ScrollArea Fix */
             QScrollArea {{
                 background: transparent;
                 border: none;
@@ -52,7 +69,6 @@ class Sidebar(QWidget):
                 background: transparent;
             }}
             
-            /* Header Buttons */
             QPushButton.HeaderBtn {{
                 background-color: #FFFFFF;
                 border: 1px solid #D1D5DB;
@@ -72,12 +88,10 @@ class Sidebar(QWidget):
                 padding-bottom: 2px;
             }}
 
-            /* Tabs */
             QTabWidget::pane {{
                 border: 1px solid #D1D5DB;
                 background: #FFFFFF;
                 border-radius: 4px;
-                /* HIER IST DER SPACE: */
                 margin-top: 6px; 
             }}
             QTabBar::tab {{
@@ -93,12 +107,8 @@ class Sidebar(QWidget):
                 background: #FFFFFF;
                 border-bottom: 1px solid #FFFFFF; 
                 font-weight: bold;
-                /* Optional: Den Tab etwas wachsen lassen, damit er über den Margin ragt (Overlay Look)
-                   margin-bottom: -1px; 
-                */
             }}
             
-            /* Modern GroupBox */
             QGroupBox {{
                 border: 1px solid #D1D5DB;
                 border-radius: 6px;
@@ -118,11 +128,13 @@ class Sidebar(QWidget):
         )
 
     def setup_ui(self):
+        """
+        Erstellt das Grundlayout der Sidebar.
+        """
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
-        # === HEADER ===
         self.setup_header(main_layout)
 
         line = QFrame()
@@ -131,23 +143,20 @@ class Sidebar(QWidget):
         line.setStyleSheet("color: #E5E7EB;")
         main_layout.addWidget(line)
 
-        # === MAIN TABS ===
         self.main_tabs = QTabWidget()
         main_layout.addWidget(self.main_tabs)
 
-        # 1. EINGABE (mit Subtabs)
         self._init_tab_input()
-
-        # 2. STATISTIKEN
         self._init_tab_stats()
-
-        # 3. EDITOR
         self._init_tab_editor()
 
-    # ==========================================
-    # HEADER LOGIC
-    # ==========================================
     def setup_header(self, layout):
+        """
+        Erstellt den Header-Bereich mit Modus-Umschalter und Sprachwahl.
+
+        @type layout: QLayout
+        @param layout: Das Layout, in das der Header eingefügt wird.
+        """
         h_layout = QHBoxLayout()
         h_layout.setSpacing(10)
 
@@ -156,7 +165,6 @@ class Sidebar(QWidget):
         self.mode_combo.setVisible(False)
         layout.addWidget(self.mode_combo)
 
-        # Mode Buttons
         self.mode_group = QButtonGroup(self)
 
         self.btn_mode_sim = QPushButton("Simulation")
@@ -193,7 +201,6 @@ class Sidebar(QWidget):
         h_mode.addWidget(self.btn_mode_edit)
         h_layout.addLayout(h_mode, 1)
 
-        # Language
         self.btn_lang = QPushButton("🇩🇪")
         self.btn_lang.setObjectName("BtnLang")
         self.btn_lang.setProperty("class", "HeaderBtn")
@@ -204,31 +211,10 @@ class Sidebar(QWidget):
 
         layout.addLayout(h_layout)
 
-    # ==========================================
-    # HELPER: GroupBox Header
-    # ==========================================
-    def _add_gb_header(self, layout, subtitle, tooltip=None):
-        """Adds a subtitle row with help icon inside a GroupBox Layout."""
-        row = QHBoxLayout()
-        row.setContentsMargins(5, 0, 0, 5)  # Etwas Abstand
-
-        lbl_sub = QLabel(subtitle)
-        lbl_sub.setStyleSheet(
-            "color: #6B7280; font-style: italic; font-size: 11px;"
-        )
-        row.addWidget(lbl_sub)
-
-        if tooltip:
-            icon = self._create_help_icon(tooltip)
-            row.addWidget(icon)
-
-        row.addStretch()
-        layout.addLayout(row)
-
-    # ==========================================
-    # TAB 1: EINGABE
-    # ==========================================
     def _init_tab_input(self):
+        """
+        Initialisiert den 'Eingabe' Reiter und seine Unterreiter.
+        """
         tab_input_container = QWidget()
         l_input_main = QVBoxLayout(tab_input_container)
         l_input_main.setContentsMargins(0, 5, 0, 0)
@@ -236,30 +222,27 @@ class Sidebar(QWidget):
         self.input_sub_tabs = QTabWidget()
         l_input_main.addWidget(self.input_sub_tabs)
 
-        # --- SUB 1: LADEN ---
         self._setup_shop_tab()
-
-        # --- SUB 2: KUNDEN (Old Layout Style) ---
         self._setup_cust_tab()
-
-        # --- SUB 3: PERSONAL (Old Layout Style) ---
         self._setup_staff_tab()
+        self._setup_conflict_tab()
 
         self.main_tabs.addTab(tab_input_container, "Eingabe")
 
     def _setup_shop_tab(self):
+        """
+        Konfiguriert den Unterreiter 'Laden'.
+        """
         sub_shop = QWidget()
         l_shop = QVBoxLayout(sub_shop)
         l_shop.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        # 1. Map
         gb_map = QGroupBox("Karte wählen")
         v_map = QVBoxLayout(gb_map)
         self.map_combo = QComboBox()
         v_map.addWidget(self.map_combo)
         l_shop.addWidget(gb_map)
 
-        # 2. Time
         gb_time = QGroupBox("Zeitsteuerung")
         v_time = QVBoxLayout(gb_time)
         f_time = QFormLayout()
@@ -270,7 +253,17 @@ class Sidebar(QWidget):
         v_time.addLayout(f_time)
         l_shop.addWidget(gb_time)
 
-        # 3. Failures
+        self.input_sub_tabs.addTab(sub_shop, "Laden")
+
+    def _setup_conflict_tab(self):
+        """
+        Konfiguriert den neuen Unterreiter 'Konflikte'.
+        """
+        sub_conflict = QWidget()
+        l_conflict = QVBoxLayout(sub_conflict)
+        l_conflict.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # 1. Kassenstörungen (Verschoben aus Laden)
         gb_co = QGroupBox("Kassenstörungen")
         v_co = QVBoxLayout(gb_co)
         self._add_gb_header(
@@ -284,12 +277,28 @@ class Sidebar(QWidget):
         f_co.addRow("Ausfall (Normal):", self.checkout_fail_rate_normal)
         f_co.addRow("Ausfall (SB):", self.checkout_fail_rate_sb)
         v_co.addLayout(f_co)
-        l_shop.addWidget(gb_co)
+        l_conflict.addWidget(gb_co)
 
-        self.input_sub_tabs.addTab(sub_shop, "Laden")
+        # 2. Verärgerung der Kunden (Neu)
+        gb_annoyance = QGroupBox("Verärgerung der Kunden")
+        v_annoyance = QVBoxLayout(gb_annoyance)
+        self._add_gb_header(
+            v_annoyance,
+            "(Steigerungsrate)",
+            "Wie schnell Kunden bei Problemen ungeduldig werden.",
+        )
+        f_annoyance = QFormLayout()
+        self.customer_annoyance_rate = self._create_double_spin(1.0, 0.0, 10.0)
+        f_annoyance.addRow("Faktor:", self.customer_annoyance_rate)
+        v_annoyance.addLayout(f_annoyance)
+        l_conflict.addWidget(gb_annoyance)
+
+        self.input_sub_tabs.addTab(sub_conflict, "Konflikte")
 
     def _setup_cust_tab(self):
-        # Setup Scroll Area Logic
+        """
+        Konfiguriert den Unterreiter 'Kunden'.
+        """
         tab_cust_container = QWidget()
         l_cust_cont = QVBoxLayout(tab_cust_container)
         l_cust_cont.setContentsMargins(0, 0, 0, 0)
@@ -300,7 +309,6 @@ class Sidebar(QWidget):
         l_gb_cust.setAlignment(Qt.AlignmentFlag.AlignTop)
         l_gb_cust.setSpacing(15)
 
-        # 1. Spawn
         gb_spawn = QGroupBox("Kundenaufkommen")
         v_spawn = QVBoxLayout(gb_spawn)
         self._add_gb_header(
@@ -316,7 +324,6 @@ class Sidebar(QWidget):
         v_spawn.addLayout(f_spawn)
         l_gb_cust.addWidget(gb_spawn)
 
-        # 2. Speed
         gb_speed = QGroupBox("Geschwindigkeit")
         v_speed = QVBoxLayout(gb_speed)
         self._add_gb_header(
@@ -334,7 +341,6 @@ class Sidebar(QWidget):
         v_speed.addLayout(f_speed)
         l_gb_cust.addWidget(gb_speed)
 
-        # 3. Cart
         gb_cart = QGroupBox("Einkaufswagen")
         v_cart = QVBoxLayout(gb_cart)
         self._add_gb_header(
@@ -343,7 +349,6 @@ class Sidebar(QWidget):
         f_cart = QFormLayout()
         self.items_mean = self._create_spin(15, 1, 100)
         self.items_std = self._create_double_spin(5.0, 0, 50)
-        # Custom Row for Items
         h_it = QHBoxLayout()
         h_it.addWidget(QLabel("Ø:"))
         h_it.addWidget(self.items_mean)
@@ -356,7 +361,6 @@ class Sidebar(QWidget):
         v_cart.addLayout(f_cart)
         l_gb_cust.addWidget(gb_cart)
 
-        # 4. Scan Speed (Customer side - SB)
         gb_scan = QGroupBox("Scan-Dauer (Kunde)")
         v_scan = QVBoxLayout(gb_scan)
         self._add_gb_header(
@@ -374,7 +378,6 @@ class Sidebar(QWidget):
         v_scan.addLayout(f_scan)
         l_gb_cust.addWidget(gb_scan)
 
-        # 5. Payment
         gb_pay = QGroupBox("Zahlungsmethoden")
         v_pay = QVBoxLayout(gb_pay)
         self._add_gb_header(
@@ -383,7 +386,6 @@ class Sidebar(QWidget):
         f_pay = QFormLayout()
         self.payment_cash = self._create_double_spin(30.0, 0, 100, " %")
         self.payment_card = self._create_double_spin(70.0, 0, 100, " %")
-        # Auto-Balance Logic
         self.payment_cash.valueChanged.connect(
             lambda v: self.payment_card.setValue(100.0 - v)
         )
@@ -400,12 +402,14 @@ class Sidebar(QWidget):
         self.input_sub_tabs.addTab(tab_cust_container, "Kunden")
 
     def _setup_staff_tab(self):
+        """
+        Konfiguriert den Unterreiter 'Personal'.
+        """
         tab_staff = QWidget()
         l_staff = QVBoxLayout(tab_staff)
         l_staff.setAlignment(Qt.AlignmentFlag.AlignTop)
         l_staff.setSpacing(15)
 
-        # 1. Cashier Scan
         gb_cashier = QGroupBox("Kassierer Geschwindigkeit")
         v_cashier = QVBoxLayout(gb_cashier)
         self._add_gb_header(
@@ -423,7 +427,6 @@ class Sidebar(QWidget):
         v_cashier.addLayout(f_cashier)
         l_staff.addWidget(gb_cashier)
 
-        # 2. Pay Duration
         gb_paytime = QGroupBox("Bezahldauer")
         v_paytime = QVBoxLayout(gb_paytime)
         self._add_gb_header(
@@ -441,27 +444,30 @@ class Sidebar(QWidget):
         v_paytime.addLayout(f_paytime)
         l_staff.addWidget(gb_paytime)
 
-        # 3. Maintenance
-        gb_maint = QGroupBox("Wartung / Reparatur")
-        v_maint = QVBoxLayout(gb_maint)
+        # 3. Konfliktbewältigung (Umbenannt von Wartung / Reparatur & Differenziert)
+        gb_conflict_solve = QGroupBox("Konfliktbewältigung")
+        v_conflict_solve = QVBoxLayout(gb_conflict_solve)
         self._add_gb_header(
-            v_maint,
+            v_conflict_solve,
             "(Sekunden - Gleichverteilung)",
-            "Wie lange ein Techniker braucht.",
+            "Zeitaufwand zur Behebung eines Konflikts.",
         )
-        f_maint = QFormLayout()
-        self.worker_repair_min, self.worker_repair_max = (
-            self._create_range_row("Dauer:", 5.0, 15.0, f_maint)
+        f_conflict_solve = QFormLayout()
+        self.conflict_solve_newbie_min, self.conflict_solve_newbie_max = (
+            self._create_range_row("Azubi:", 10.0, 20.0, f_conflict_solve)
         )
-        v_maint.addLayout(f_maint)
-        l_staff.addWidget(gb_maint)
+        self.conflict_solve_pro_min, self.conflict_solve_pro_max = (
+            self._create_range_row("Profi:", 5.0, 12.0, f_conflict_solve)
+        )
+        v_conflict_solve.addLayout(f_conflict_solve)
+        l_staff.addWidget(gb_conflict_solve)
 
         self.input_sub_tabs.addTab(tab_staff, "Personal")
 
-    # ==========================================
-    # TAB 2: STATISTIKEN
-    # ==========================================
     def _init_tab_stats(self):
+        """
+        Initialisiert den 'Statistiken' Reiter.
+        """
         tab_stats = QWidget()
         l_stats = QVBoxLayout(tab_stats)
         l_stats.setSpacing(15)
@@ -489,17 +495,16 @@ class Sidebar(QWidget):
         l_stats.addStretch()
         self.main_tabs.addTab(tab_stats, "Statistiken")
 
-    # ==========================================
-    # TAB 3: EDITOR
-    # ==========================================
     def _init_tab_editor(self):
+        """
+        Initialisiert den 'Editor' Reiter und seine Werkzeuge.
+        """
         tab_editor_container = QWidget()
         l_editor_main = QVBoxLayout(tab_editor_container)
         l_editor_main.setContentsMargins(0, 5, 0, 0)
         self.editor_subtabs = QTabWidget()
         l_editor_main.addWidget(self.editor_subtabs)
 
-        # Sub KARTE
         sub_map = QWidget()
         l_map = QVBoxLayout(sub_map)
         l_map.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -546,7 +551,6 @@ class Sidebar(QWidget):
 
         self.editor_subtabs.addTab(sub_map, "Karte")
 
-        # Sub WERKZEUGE
         sub_areas = QWidget()
         l_areas = QVBoxLayout(sub_areas)
         l_areas.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -582,7 +586,6 @@ class Sidebar(QWidget):
 
         self.editor_subtabs.addTab(sub_areas, "Bereiche")
 
-        # Sub ROUTEN
         sub_routes = QWidget()
         l_routes = QVBoxLayout(sub_routes)
         l_routes.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -623,7 +626,6 @@ class Sidebar(QWidget):
 
         self.editor_subtabs.addTab(sub_routes, "Routen")
 
-        # Sub OBJEKTE
         sub_objs = QWidget()
         l_objs = QVBoxLayout(sub_objs)
         l_objs.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -676,6 +678,19 @@ class Sidebar(QWidget):
     # ==========================================
 
     def _create_spin(self, val, min_v, max_v, suffix=""):
+        """
+        Hilfsmethode zur Erstellung einer QSpinBox.
+
+        @type val: int
+        @param val: Standardwert.
+        @type min_v: int
+        @param min_v: Minimalwert.
+        @type max_v: int
+        @param max_v: Maximalwert.
+        @type suffix: str
+        @param suffix: Optionale Einheit als Suffix.
+        @rtype: QSpinBox
+        """
         sb = QSpinBox()
         sb.setRange(min_v, max_v)
         sb.setValue(val)
@@ -684,6 +699,19 @@ class Sidebar(QWidget):
         return sb
 
     def _create_double_spin(self, val, min_v, max_v, suffix=""):
+        """
+        Hilfsmethode zur Erstellung einer QDoubleSpinBox.
+
+        @type val: float
+        @param val: Standardwert.
+        @type min_v: float
+        @param min_v: Minimalwert.
+        @type max_v: float
+        @param max_v: Maximalwert.
+        @type suffix: str
+        @param suffix: Optionale Einheit als Suffix.
+        @rtype: QDoubleSpinBox
+        """
         dsb = QDoubleSpinBox()
         dsb.setRange(min_v, max_v)
         dsb.setValue(val)
@@ -693,34 +721,36 @@ class Sidebar(QWidget):
         return dsb
 
     def _create_help_icon(self, tooltip):
+        """
+        Erstellt ein Hilfe-Icon mit einem Tooltip.
+
+        @type tooltip: str
+        @param tooltip: Der Text, der beim Hovern angezeigt wird.
+        @rtype: QLabel
+        """
         lbl = QLabel()
         icon = QApplication.style().standardIcon(
             QStyle.StandardPixmap.SP_MessageBoxQuestion
         )
-        lbl.setPixmap(icon.pixmap(14, 14))  # Kleines Icon
+        lbl.setPixmap(icon.pixmap(14, 14))
         lbl.setToolTip(tooltip)
         lbl.setCursor(Qt.CursorShape.WhatsThisCursor)
         return lbl
 
-    def _add_gb_header(self, layout, subtitle, tooltip=None):
-        """Adds a subtitle row with help icon inside a GroupBox Layout."""
-        row = QHBoxLayout()
-        row.setContentsMargins(5, 0, 0, 5)  # Etwas Abstand
-
-        lbl_sub = QLabel(subtitle)
-        lbl_sub.setStyleSheet(
-            "color: #6B7280; font-style: italic; font-size: 11px;"
-        )
-        row.addWidget(lbl_sub)
-
-        if tooltip:
-            icon = self._create_help_icon(tooltip)
-            row.addWidget(icon)
-
-        row.addStretch()
-        layout.addLayout(row)
-
     def _create_dist_row(self, label, val_mean, val_std, layout):
+        """
+        Erstellt eine Eingabezeile für Mittelwert und Standardabweichung.
+
+        @type label: str
+        @param label: Beschriftung der Zeile.
+        @type val_mean: float
+        @param val_mean: Standard-Mittelwert.
+        @type val_std: float
+        @param val_std: Standard-Abweichung.
+        @type layout: QFormLayout
+        @param layout: Ziel-Layout.
+        @rtype: tuple[QDoubleSpinBox, QDoubleSpinBox]
+        """
         h = QHBoxLayout()
         h.setContentsMargins(0, 0, 0, 0)
         sb_mean = self._create_double_spin(val_mean, 0.1, 20.0)
@@ -733,10 +763,23 @@ class Sidebar(QWidget):
         return sb_mean, sb_std
 
     def _create_range_row(self, label, val_min, val_max, layout):
+        """
+        Erstellt eine Eingabezeile für einen Min/Max-Bereich.
+
+        @type label: str
+        @param label: Beschriftung.
+        @type val_min: float
+        @param val_min: Standard-Minimum.
+        @type val_max: float
+        @param val_max: Standard-Maximum.
+        @type layout: QFormLayout
+        @param layout: Ziel-Layout.
+        @rtype: tuple[QDoubleSpinBox, QDoubleSpinBox]
+        """
         h = QHBoxLayout()
         h.setContentsMargins(0, 0, 0, 0)
-        sb_min = self._create_double_spin(val_min, 0.1, 10.0)
-        sb_max = self._create_double_spin(val_max, 0.1, 10.0)
+        sb_min = self._create_double_spin(val_min, 0.1, 20.0)
+        sb_max = self._create_double_spin(val_max, 0.1, 20.0)
         h.addWidget(QLabel("Min:"))
         h.addWidget(sb_min)
         h.addWidget(QLabel("Max:"))
@@ -745,12 +788,18 @@ class Sidebar(QWidget):
         return sb_min, sb_max
 
     def _toggle_lang(self):
+        """
+        Wechselt die Flagge des Sprachumschalters.
+        """
         if self.btn_lang.text() == "🇩🇪":
             self.btn_lang.setText("🇺🇸")
         else:
             self.btn_lang.setText("🇩🇪")
 
     def _sync_mode_buttons(self, index):
+        """
+        Synchronisiert die Header-Buttons mit der ComboBox.
+        """
         if index == 0:
             self.btn_mode_sim.setChecked(True)
             self.btn_mode_edit.setChecked(False)

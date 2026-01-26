@@ -62,7 +62,7 @@ class MainController:
         self._init_ui_state()
 
         self.load_map("Standard (Einfach).json")
-        self.view.showMaximized()
+        self.view.showFullScreen()
 
     def _setup_connections(self):
         self.view.mode_combo.currentTextChanged.connect(self.on_mode_changed)
