@@ -1,10 +1,31 @@
 Störung an der Kasse:
- - technisches Problem
+ - technisches Problem (SB-Kasse behebt sich selbst nach einer gewissen Zeit)
  - Verärgerte Kunden
 
 Smart-Buttons für Überwachungskameras:
 - Kameraperspektiven über Buttons einstellbar
 
-Kunden smüssen über Cashier stehen
+Kunden müssen über Cashier stehen
 
 Tooltips überarbeiten
+
+
+- Sprache wechseln (Icon bei Windows nicht vorhanden, sondern nur DE und EN)
+- Übersetzung hinzufügen
+
+
+- Pop-Up Style anpassen (Editor)
+
+- Kein Kassiertyp bei SB-Kasse
+
+- Anzahl der Schlange einstellen
+
+- Unit-Tests
+
+- großes Refactoring
+
+- Dokumentation
+- Diagramme
+
+- Benutzerhandbuch
+

@@ -135,7 +135,6 @@ class InteractionController(QObject):
             self.view.place_shelves_button,
             self.view.waiting_area_button,
             self.view.start_area_button,
-            self.view.btn_worker_area,  # NEU
             self.view.btn_start_route,
             self.view.btn_exit_route,
             self.view.btn_exit_area,

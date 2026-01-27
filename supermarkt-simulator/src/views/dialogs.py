@@ -4,6 +4,7 @@ Dialogs Module.
 
 from PyQt6.QtWidgets import (
     QDialog,
+    QHBoxLayout,
     QVBoxLayout,
     QFormLayout,
     QDialogButtonBox,
@@ -13,6 +14,8 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QLabel,
     QGroupBox,
+    QWidget,
+    QTabWidget,
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 

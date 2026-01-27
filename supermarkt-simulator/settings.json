@@ -1,15 +1,14 @@
 {
-    "show_routes": false,
+    "show_routes": true,
     "show_shelves": true,
     "show_shelf_numbers": false,
     "show_checkouts": true,
     "show_checkout_numbers": false,
     "show_cashiers": true,
     "show_queues": false,
-    "show_waiting_area": false,
-    "show_start_area": false,
-    "show_exit_area": false,
-    "show_worker_area": false,
+    "show_waiting_area": true,
+    "show_start_area": true,
+    "show_exit_area": true,
     "size_shelf": 26,
     "size_cashier": 10,
     "size_customer": 10,
@@ -62,6 +61,7 @@
         11.63,
         3.25
     ],
+    "show_worker_area": false,
     "size_checkout_light": 2,
     "offset_light_normal_left": [
         41,
