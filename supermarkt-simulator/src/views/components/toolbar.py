@@ -191,7 +191,5 @@ class TopToolbar(QWidget):
         layout.addStretch(1)
 
         # === FAR RIGHT: ZOOM ===
-        self.btn_reset_zoom = QPushButton("🔍 1:1")
-        self.btn_reset_zoom.setToolTip("Zoom zurücksetzen")
-        self.btn_reset_zoom.setFixedSize(90, 44)
+        self.btn_reset_zoom = QPushButton("Ansicht ausrichten")
         layout.addWidget(self.btn_reset_zoom)
