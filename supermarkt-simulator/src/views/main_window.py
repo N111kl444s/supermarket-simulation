@@ -5,7 +5,7 @@ Refactored:
 """
 
 from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QSplitter
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QBrush
 
 from .styles import get_application_style
@@ -15,9 +15,17 @@ from .components.canvas import SimulationCanvas
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    back_to_menu_requested = pyqtSignal()  # Signal to go back to main menu
+
+    def __init__(self, translator=None):
         super().__init__()
-        self.setWindowTitle("Supermarkt Simulator - Workbench")
+        self.translator = translator
+        title = (
+            self.translator.get("window.title")
+            if translator
+            else "Supermarkt Simulator - Workbench"
+        )
+        self.setWindowTitle(title)
 
         # States
         self.is_admin_mode = False
@@ -55,7 +63,7 @@ class MainWindow(QMainWindow):
         splitter = QSplitter(Qt.Orientation.Horizontal)
         root_layout.addWidget(splitter)
 
-        self.sidebar_component = Sidebar()
+        self.sidebar_component = Sidebar(translator=self.translator)
         splitter.addWidget(self.sidebar_component)
 
         right_container = QWidget()
@@ -63,7 +71,7 @@ class MainWindow(QMainWindow):
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(0)
 
-        self.toolbar_component = TopToolbar()
+        self.toolbar_component = TopToolbar(translator=self.translator)
         right_layout.addWidget(self.toolbar_component)
 
         self.canvas_component = SimulationCanvas(self)
@@ -198,3 +206,59 @@ class MainWindow(QMainWindow):
     def reset_sim_zoom(self, target_center=None):
         if self.sim_view:
             self.sim_view.reset_zoom(target_center)
+
+    def rebuild_sidebar(self, translator):
+        """Rebuild entire sidebar with new translator to refresh ALL widgets including lazy-loaded tabs."""
+        # Store current state
+        current_tab = self.sidebar_component.main_tabs.currentIndex()
+
+        # Get the splitter
+        central = self.centralWidget()
+        root_layout = central.layout()
+        splitter = root_layout.itemAt(0).widget()
+
+        # Remove old sidebar from splitter by setting parent to None
+        old_sidebar = self.sidebar_component
+        old_sidebar.setParent(None)
+        old_sidebar.deleteLater()
+
+        # Create new sidebar with updated translator
+        self.sidebar_component = Sidebar(translator=translator)
+        splitter.insertWidget(0, self.sidebar_component)
+
+        # Re-connect the language_changed signal
+        self.sidebar_component.language_changed.connect(
+            self.controller.on_language_changed
+        )
+
+        # Restore state
+        if (
+            current_tab >= 0
+            and current_tab < self.sidebar_component.main_tabs.count()
+        ):
+            self.sidebar_component.main_tabs.setCurrentIndex(current_tab)
+
+        # Re-expose sidebar UI elements to maintain controller connections
+        # Only expose attributes that are actually used by the controller
+        s = self.sidebar_component
+        self.mode_combo = s.mode_combo
+        self.map_combo = s.map_combo
+        self.main_tabs = s.main_tabs
+        self.time_open = s.time_open
+        self.time_close = s.time_close
+        self.actor_count_input = (
+            s.actor_count_input if hasattr(s, "actor_count_input") else None
+        )
+        self.disabled_prob_input = (
+            s.disabled_prob_input
+            if hasattr(s, "disabled_prob_input")
+            else None
+        )
+
+    def keyPressEvent(self, event):
+        """Handle key press events."""
+        # ESC key returns to main menu
+        if event.key() == Qt.Key.Key_Escape:
+            self.back_to_menu_requested.emit()
+        else:
+            super().keyPressEvent(event)

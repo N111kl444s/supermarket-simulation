@@ -192,4 +192,9 @@ DEFAULT_SETTINGS = {
     "offset_screen_normal_right": [0, 0],
     "offset_screen_sb_left": [0, 0],
     "offset_screen_sb_right": [0, 0],
+    "language": "de",
 }
+
+# --- LANGUAGE ---
+DEFAULT_LANGUAGE = "de"
+SUPPORTED_LANGUAGES = ["de", "en"]

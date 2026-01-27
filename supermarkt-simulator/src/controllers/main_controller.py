@@ -16,6 +16,7 @@ from PyQt6.QtCore import Qt
 
 from config import (
     DEFAULT_SETTINGS,
+    DEFAULT_LANGUAGE,
     SETTINGS_FILE,
     MAPS_DIR,
     IMAGE_DIR,
@@ -26,6 +27,7 @@ from config import (
     FACTOR_16X,
     FACTOR_32X,
 )
+from i18n import TranslationManager
 from controllers.map_manager import MapManager
 from controllers.simulation_manager import SimulationManager
 from controllers.visual_controller import VisualController
@@ -36,18 +38,25 @@ from views.dialogs import VisibilityDialog, OffsetDialog
 
 
 class MainController:
-    def __init__(self):
+    def __init__(self, translator=None):
         self.settings = DEFAULT_SETTINGS.copy()
         self.settings_file = SETTINGS_FILE
         self._load_settings()
 
-        self.view = MainWindow()
+        # Use provided translator or create new one
+        if translator:
+            self.translator = translator
+        else:
+            language = self.settings.get("language", DEFAULT_LANGUAGE)
+            self.translator = TranslationManager(language)
+
+        self.view = MainWindow(translator=self.translator)
         self.view.set_controller(self)
 
         self.map_manager = MapManager(self.settings)
         self.sim_manager = SimulationManager(self.map_manager, self.settings)
         self.visual_controller = VisualController(
-            self.view.sim_scene, self.settings
+            self.view.sim_scene, self.settings, translator=self.translator
         )
 
         self.interaction_controller = InteractionController(
@@ -65,6 +74,9 @@ class MainController:
         self.view.showMaximized()
 
     def _setup_connections(self):
+        # Language change
+        self.view.sidebar_component.language_changed.connect(self.on_language_changed)
+        
         self.view.mode_combo.currentTextChanged.connect(self.on_mode_changed)
         self.view.btn_play_pause.clicked.connect(self.toggle_simulation)
         self.view.btn_reset.clicked.connect(self.reset_simulation)
@@ -600,5 +612,37 @@ class MainController:
             it = list_widget.item(i)
             if f"#{ID_val}" in it.text():
                 it.setSelected(True)
-                list_widget.scrollToItem(it)
-                break
+
+    def on_language_changed(self, language: str):
+        """Handle language change from UI - rebuilds entire sidebar for complete refresh."""
+        # Pause simulation to avoid accessing deleted UI widgets
+        was_running = self.sim_manager.is_running
+        if was_running:
+            self.sim_manager.pause()
+            self.view.btn_play_pause.setChecked(False)
+            self.view.btn_play_pause.setText("▶")
+        
+        self.translator.set_language(language)
+        self.settings["language"] = language
+        self._save_settings()
+        
+        # Refresh toolbar (simple text updates)
+        self.view.toolbar_component.refresh_translations(self.translator)
+        
+        # Rebuild entire sidebar to ensure ALL widgets (including lazy-loaded tabs) are created with correct translations
+        self.view.rebuild_sidebar(self.translator)
+        
+        # Refresh checkout displays with new translations
+        self.visual_controller.refresh_checkout_displays(self.translator)
+        
+        # Update window title
+        self.view.setWindowTitle(self.translator.get("window.title"))
+        
+        # Reconnect param accessor to ensure simulation can access new UI elements
+        self.sim_manager.set_param_accessor(self._get_sim_params_from_ui)
+        
+        # Resume simulation if it was running
+        if was_running:
+            self.sim_manager.start()
+            self.view.btn_play_pause.setChecked(True)
+            self.view.btn_play_pause.setText("⏸")

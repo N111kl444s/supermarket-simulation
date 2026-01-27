@@ -86,8 +86,9 @@ class ProgressClock(QLabel):
 
 
 class TopToolbar(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, translator=None):
         super().__init__(parent)
+        self.translator = translator
         self.setFixedHeight(80)
         self.setup_ui()
         self.apply_styles()
@@ -141,16 +142,28 @@ class TopToolbar(QWidget):
 
         # 1. Sim Controls
         self.btn_reset = QPushButton("↺")
-        self.btn_reset.setToolTip("Reset")
+        self.btn_reset.setToolTip(
+            self.translator.get("toolbar.reset_tooltip")
+            if self.translator
+            else "Reset"
+        )
         self.btn_reset.setFixedSize(60, 44)
 
         self.btn_play_pause = QPushButton("▶")
         self.btn_play_pause.setCheckable(True)
-        self.btn_play_pause.setToolTip("Start / Pause")
+        self.btn_play_pause.setToolTip(
+            self.translator.get("toolbar.play_pause_tooltip")
+            if self.translator
+            else "Start / Pause"
+        )
         self.btn_play_pause.setFixedSize(70, 44)
 
         self.btn_skip = QPushButton("⏭")
-        self.btn_skip.setToolTip("Tag überspringen")
+        self.btn_skip.setToolTip(
+            self.translator.get("toolbar.skip_tooltip")
+            if self.translator
+            else "Tag überspringen"
+        )
         self.btn_skip.setFixedSize(60, 44)
 
         center_layout.addWidget(self.btn_reset)
@@ -191,5 +204,19 @@ class TopToolbar(QWidget):
         layout.addStretch(1)
 
         # === FAR RIGHT: ZOOM ===
-        self.btn_reset_zoom = QPushButton("Ansicht ausrichten")
+        self.btn_reset_zoom = QPushButton(
+            self.translator.get("toolbar.reset_zoom")
+            if self.translator
+            else "Ansicht ausrichten"
+        )
         layout.addWidget(self.btn_reset_zoom)
+
+    def refresh_translations(self, translator):
+        """Update all UI text with new translations."""
+        self.translator = translator
+        self.btn_reset.setToolTip(translator.get("toolbar.reset_tooltip"))
+        self.btn_play_pause.setToolTip(
+            translator.get("toolbar.play_pause_tooltip")
+        )
+        self.btn_skip.setToolTip(translator.get("toolbar.skip_tooltip"))
+        self.btn_reset_zoom.setText(translator.get("toolbar.reset_zoom"))

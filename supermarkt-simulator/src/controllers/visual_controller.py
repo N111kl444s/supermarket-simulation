@@ -34,9 +34,10 @@ from views.items import (
 
 
 class VisualController:
-    def __init__(self, scene, settings):
+    def __init__(self, scene, settings, translator=None):
         self.scene = scene
         self.settings = settings
+        self.translator = translator
 
         self.earth_item = None
         self.map_group = QGraphicsRectItem()
@@ -58,6 +59,9 @@ class VisualController:
 
         self.on_checkout_clicked = None
         self.on_shelf_clicked = None
+        
+        # Store checkout data for translation refresh
+        self.checkout_data = []
 
         self._init_earth()
 
@@ -189,6 +193,10 @@ class VisualController:
         show_queues = (
             self.settings.get("show_queues", False) or highlight_queues
         )
+        
+        # Store checkout data for translation refresh
+        self.checkout_data = map_manager.checkouts_data.copy() if map_manager.checkouts_data else []
+        
         for cd in map_manager.checkouts_data:
             show = self.settings["show_checkouts"] or is_selected(
                 "checkout", cd["id"]
@@ -325,10 +333,13 @@ class VisualController:
             screen_item.setPen(QPen(Qt.PenStyle.NoPen))
 
             if is_malfunction:
-                status_text = "STÖRUNG"
+                status_text = self.translator.get("stats.disruption") if self.translator else "STÖRUNG"
                 text_col = QColor("red")
             else:
-                status_text = "Geöffnet" if is_open else "Geschlossen"
+                if is_open:
+                    status_text = self.translator.get("stats.checkout_open") if self.translator else "Geöffnet"
+                else:
+                    status_text = self.translator.get("stats.checkout_closed") if self.translator else "Geschlossen"
                 text_col = COLOR_SCREEN_TEXT
 
             text_item = QGraphicsSimpleTextItem(
@@ -553,3 +564,108 @@ class VisualController:
         self.route_debug_items.clear()
         self.queue_debug_items.clear()
         self.screen_items.clear()
+    def refresh_checkout_displays(self, translator):
+        """Refresh all checkout display text with new translations."""
+        self.translator = translator
+        
+        # Update text in all screen items by removing old ones and recreating
+        # Remove old screen items
+        for screen_item in self.screen_items:
+            screen_item.setParentItem(None)
+        self.screen_items.clear()
+        
+        # Recreate screen items with new translations for all stored checkout data
+        for cd in self.checkout_data:
+            self._redraw_checkout_screen(cd)
+    
+    def _redraw_checkout_screen(self, cd):
+        """Redraw a single checkout screen with current translation."""
+        c_type = cd.get("type", "Normal")
+        is_sb = c_type == "SB"
+        ori = cd.get("orientation", "Right")
+        angle = cd.get("angle", 0)
+        is_open = cd.get("open", True)
+        is_malfunction = cd.get("malfunction", False)
+        
+        # Calculate screen_offset using the SAME logic as _draw_single_checkout
+        suffix = "left" if ori == "Left" else "right"
+        key_offset = (
+            "offset_screen_sb_" + suffix
+            if is_sb
+            else "offset_screen_normal_" + suffix
+        )
+        screen_offset = self.settings.get(key_offset, [0, 0])
+        
+        # Get screen size based on checkout type (SB or Normal) - MUST MATCH _draw_single_checkout
+        if is_sb:
+            sw = float(self.settings.get("size_screen_sb_width", 10.0))
+            sh = float(self.settings.get("size_screen_sb_height", 10.0))
+        else:
+            sw = float(self.settings.get("size_screen_normal_width", 15.0))
+            sh = float(self.settings.get("size_screen_normal_height", 10.0))
+        
+        cw = self.settings.get("size_checkout_width", 100)
+        ch = self.settings.get("size_checkout_height", 100)
+        
+        cx, cy = cd["x"], cd["y"]
+        center_x = cx + cw / 2
+        center_y = cy + ch / 2
+        lox, loy = screen_offset
+        if lox == 0 and loy == 0:
+            lox, loy = cw / 2, 10
+        lox = float(lox)
+        loy = float(loy)
+        p_unrot_x = cx + lox
+        p_unrot_y = cy + loy
+        rad = math.radians(angle)
+        tx = p_unrot_x - center_x
+        ty = p_unrot_y - center_y
+        rx = tx * math.cos(rad) - ty * math.sin(rad)
+        ry = tx * math.sin(rad) + ty * math.cos(rad)
+        screen_x = rx + center_x
+        screen_y = ry + center_y
+
+        screen_item = QGraphicsRectItem(-sw / 2, -sh / 2, sw, sh)
+        screen_item.setData(0, cd.get("id"))
+
+        if is_malfunction:
+            col = QColor("yellow")
+        else:
+            col = COLOR_SCREEN_OPEN if is_open else COLOR_SCREEN_CLOSED
+
+        screen_item.setBrush(QBrush(col))
+        screen_item.setPen(QPen(Qt.PenStyle.NoPen))
+
+        if is_malfunction:
+            status_text = self.translator.get("stats.disruption") if self.translator else "STÖRUNG"
+            text_col = QColor("red")
+        else:
+            if is_open:
+                status_text = self.translator.get("stats.checkout_open") if self.translator else "Geöffnet"
+            else:
+                status_text = self.translator.get("stats.checkout_closed") if self.translator else "Geschlossen"
+            text_col = COLOR_SCREEN_TEXT
+
+        text_item = QGraphicsSimpleTextItem(status_text, parent=screen_item)
+        text_item.setBrush(QBrush(text_col))
+        font = QFont("Segoe UI", 10, QFont.Weight.Bold)
+        text_item.setFont(font)
+
+        brect = text_item.boundingRect()
+        if brect.width() > 0 and brect.height() > 0:
+            target_w = sw * 0.9
+            target_h = sh * 0.9
+            scale = min(
+                target_w / brect.width(), target_h / brect.height()
+            )
+            text_item.setScale(scale)
+            tx_scaled = brect.width() * scale
+            ty_scaled = brect.height() * scale
+            text_item.setPos(-tx_scaled / 2, -ty_scaled / 2)
+
+        screen_item.setPos(screen_x, screen_y)
+        screen_item.setRotation(angle)
+        screen_item.setZValue(15)
+        screen_item.setParentItem(self.map_group)
+        screen_item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        self.screen_items.append(screen_item)
