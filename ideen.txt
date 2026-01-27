@@ -1,25 +1,11 @@
-Störung an der Kasse:
- - technisches Problem (SB-Kasse behebt sich selbst nach einer gewissen Zeit)
- - Verärgerte Kunden
-
-Kunden müssen über Cashier stehen
-
-- Sprache wechseln (Icon bei Windows nicht vorhanden, sondern nur DE und EN)
-- Übersetzung hinzufügen
-
-
 - Pop-Up Style anpassen (Editor)
 
-- Kein Kassiertyp bei SB-Kasse
-
-- Anzahl der Schlange einstellen
 
 
 - Tooltips überarbeiten
 
+- Eingabeparameter überprüfen und Logik anpassen
 - Statistiken!!!
-
-- Mini-Lag bei erstem Kunden
 
 - großes Refactoring
 
@@ -34,3 +20,5 @@ Kunden müssen über Cashier stehen
 Optional:
 - Unit-Tests
 - mart-Buttons für Überwachungskameras: Kameraperspektiven über Buttons einstellbar
+
+

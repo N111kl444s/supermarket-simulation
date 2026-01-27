@@ -123,6 +123,7 @@ class MainWindow(QMainWindow):
         self.scan_speed_pro_max = s.scan_speed_pro_max
         self.checkout_fail_rate_normal = s.checkout_fail_rate_normal
         self.checkout_fail_rate_sb = s.checkout_fail_rate_sb
+        self.customer_annoyance_rate = s.customer_annoyance_rate
 
         self.list_log = s.list_log
         self.lbl_queue_count = s.lbl_queue_count

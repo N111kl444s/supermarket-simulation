@@ -30,7 +30,7 @@ from config import COLOR_ACCENT, COLOR_ERROR, COLOR_SUCCESS, COLOR_BG_PANEL
 
 
 class Sidebar(QWidget):
-    language_changed = pyqtSignal(str)
+    back_to_menu_requested = pyqtSignal()  # Signal to go back to main menu
 
     def __init__(self, parent=None, translator=None):
         super().__init__(parent)
@@ -207,19 +207,20 @@ class Sidebar(QWidget):
         h_mode.addWidget(self.btn_mode_edit)
         h_layout.addLayout(h_mode, 1)
 
-        # Language
-        lang_text = (
-            self.translator.get("sidebar.language")
+        # Main Menu Button (Home)
+        self.btn_main_menu = QPushButton("🏠")  # House emoji
+        self.btn_main_menu.setObjectName("BtnMainMenu")
+        self.btn_main_menu.setProperty("class", "HeaderBtn")
+        self.btn_main_menu.setCheckable(False)
+        self.btn_main_menu.setFixedWidth(60)
+        tooltip_text = (
+            self.translator.get("sidebar.main_menu_tooltip")
             if self.translator
-            else "🇩🇪"
+            else "Zurück zum Hauptmenü"
         )
-        self.btn_lang = QPushButton(lang_text)
-        self.btn_lang.setObjectName("BtnLang")
-        self.btn_lang.setProperty("class", "HeaderBtn")
-        self.btn_lang.setCheckable(False)
-        self.btn_lang.setFixedWidth(60)
-        self.btn_lang.clicked.connect(self._toggle_lang)
-        h_layout.addWidget(self.btn_lang, 0)
+        self.btn_main_menu.setToolTip(tooltip_text)
+        self.btn_main_menu.clicked.connect(self._go_to_main_menu)
+        h_layout.addWidget(self.btn_main_menu, 0)
 
         layout.addLayout(h_layout)
 
@@ -1267,13 +1268,9 @@ class Sidebar(QWidget):
         layout.addRow(label, h)
         return sb_min, sb_max
 
-    def _toggle_lang(self):
-        if self.btn_lang.text() == "🇩🇪":
-            self.btn_lang.setText("🇺🇸")
-            self.language_changed.emit("en")
-        else:
-            self.btn_lang.setText("🇩🇪")
-            self.language_changed.emit("de")
+    def _go_to_main_menu(self):
+        """Emit signal to return to main menu."""
+        self.back_to_menu_requested.emit()
 
     def _sync_mode_buttons(self, index):
         if index == 0:

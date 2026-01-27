@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QTabWidget,
 )
 from PyQt6.QtCore import pyqtSignal, Qt
+from config import COLOR_BG_MAIN
 
 # ... (ObjectPositionDialog und CheckoutConfigDialog bleiben unverändert, hier weggelassen zur Kürze) ...
 # Bitte den Code für ObjectPositionDialog und CheckoutConfigDialog aus deiner bestehenden Datei beibehalten.
@@ -36,6 +37,7 @@ class ObjectPositionDialog(QDialog):
     ):
         super().__init__(parent)
         self.setWindowTitle(title)
+        self.setStyleSheet(f"QDialog {{ background-color: {COLOR_BG_MAIN.name()}; }}")
         self.x = x
         self.y = y
         self.orientation = orientation
@@ -100,6 +102,7 @@ class CheckoutConfigDialog(QDialog):
     def __init__(self, data, parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"Kasse #{data['id']} Konfigurieren")
+        self.setStyleSheet(f"QDialog {{ background-color: {COLOR_BG_MAIN.name()}; }}")
         self.data = data
         self._init_ui()
 
@@ -111,11 +114,23 @@ class CheckoutConfigDialog(QDialog):
         self.cb_open.setChecked(self.data.get("open", True))
         form.addRow(self.cb_open)
 
-        self.combo_skill = QComboBox()
-        self.combo_skill.addItems(["Azubi", "Festangestellter"])
-        skill = self.data.get("skill", "Azubi")
-        self.combo_skill.setCurrentText(skill)
-        form.addRow("Personal:", self.combo_skill)
+        # Max queue length
+        self.spin_max_queue = QSpinBox()
+        self.spin_max_queue.setRange(1, 20)
+        self.spin_max_queue.setValue(self.data.get("max_queue", 5))
+        self.spin_max_queue.setSuffix(" Kunden")
+        form.addRow("Max. Warteschlange:", self.spin_max_queue)
+
+        # Only show cashier skill for normal checkouts, not for SB (self-checkout)
+        checkout_type = self.data.get("type", "Normal")
+        if checkout_type != "SB":
+            self.combo_skill = QComboBox()
+            self.combo_skill.addItems(["Azubi", "Festangestellter"])
+            skill = self.data.get("skill", "Azubi")
+            self.combo_skill.setCurrentText(skill)
+            form.addRow("Personal:", self.combo_skill)
+        else:
+            self.combo_skill = None  # No skill selection for SB checkouts
 
         layout.addLayout(form)
         btns = QDialogButtonBox(
@@ -127,10 +142,14 @@ class CheckoutConfigDialog(QDialog):
         layout.addWidget(btns)
 
     def get_data(self):
-        return {
+        result = {
             "open": self.cb_open.isChecked(),
-            "skill": self.combo_skill.currentText(),
+            "max_queue": self.spin_max_queue.value(),
         }
+        # Only include skill if it exists (i.e., not SB checkout)
+        if self.combo_skill is not None:
+            result["skill"] = self.combo_skill.currentText()
+        return result
 
 
 class VisibilityDialog(QDialog):
@@ -139,6 +158,7 @@ class VisibilityDialog(QDialog):
     def __init__(self, current_settings, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Sichtbarkeit & Ebenen")
+        self.setStyleSheet(f"QDialog {{ background-color: {COLOR_BG_MAIN.name()}; }}")
         self.settings = current_settings.copy()
         self._init_ui()
 
@@ -191,6 +211,7 @@ class OffsetDialog(QDialog):
     def __init__(self, current_settings, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Offsets Konfigurieren")
+        self.setStyleSheet(f"QDialog {{ background-color: {COLOR_BG_MAIN.name()}; }}")
         self.settings = current_settings.copy()
         self.setMinimumWidth(400)
         self._init_ui()

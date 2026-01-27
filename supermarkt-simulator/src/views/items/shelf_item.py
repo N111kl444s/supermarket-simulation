@@ -50,10 +50,10 @@ class ShelfItem(QGraphicsObject):
     def _load_images(cls):
         if cls._images_loaded: return
         for i in range(1, 6):
-            path = IMAGE_DIR / f"regal{i}.png"
+            path = IMAGE_DIR / f"shelf{i}.png"
             if path.exists(): cls._pixmaps[i] = QPixmap(str(path))
             else:
-                fallback = IMAGE_DIR / "regal.png"
+                fallback = IMAGE_DIR / "shelf.png"
                 if fallback.exists(): cls._pixmaps[i] = QPixmap(str(fallback))
         cls._images_loaded = True
 

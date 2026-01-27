@@ -73,8 +73,8 @@ class CheckoutItem(QGraphicsObject):
     def _load_images(cls):
         if cls._images_loaded:
             return
-        p_n = IMAGE_DIR / "kasse.png"
-        p_s = IMAGE_DIR / "sb.png"
+        p_n = IMAGE_DIR / "cash_register.png"
+        p_s = IMAGE_DIR / "self_service.png"
         if p_n.exists():
             cls._pixmap_normal = QPixmap(str(p_n))
         if p_s.exists():

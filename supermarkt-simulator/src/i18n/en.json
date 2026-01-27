@@ -8,6 +8,7 @@
       "editor": "Editor"
     },
     "language": "🇺🇸",
+    "main_menu_tooltip": "Back to Main Menu",
     "tabs": {
       "input": "Input",
       "stats": "Statistics",
@@ -142,5 +143,23 @@
     "disruption": "DISRUPTION",
     "checkout_open": "Open",
     "checkout_closed": "Closed"
+  },
+  "menu": {
+    "start_simulation": "Start Simulation",
+    "info": "Information",
+    "settings": "Settings",
+    "exit": "Exit"
+  },
+  "settings": {
+    "title": "Settings",
+    "language_group": "Language Settings",
+    "language_label": "Language:",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "info": {
+    "title": "Information - Supermarket Simulator",
+    "back": "Back to Main Menu",
+    "content": "<h2>Welcome to the Supermarket Simulator!</h2>\n\n<p><b>Overview:</b></p>\n<p>The Supermarket Simulator is a tool for simulating and optimizing supermarket operations. You can create various scenarios, simulate customer flows, and analyze the efficiency of your virtual supermarket.</p>\n\n<p><b>Main Features:</b></p>\n<ul>\n<li><b>Simulation:</b> Run realistic supermarket scenarios</li>\n<li><b>Editor:</b> Create and edit your own supermarket layouts</li>\n<li><b>Statistics:</b> Analyze customer flows and queues</li>\n<li><b>Multilingual:</b> Support for German and English</li>\n</ul>\n\n<p><b>How it works:</b></p>\n<ol>\n<li>Choose a predefined map or create your own in editor mode</li>\n<li>Set simulation parameters (number of customers, opening hours, etc.)</li>\n<li>Start the simulation and watch customers shop</li>\n<li>Analyze results and optimize your layout</li>\n</ol>\n\n<p><b>Tips:</b></p>\n<ul>\n<li>Experiment with different checkout configurations</li>\n<li>Observe queues during simulation</li>\n<li>Use the editor to create new layouts</li>\n<li>Statistics help with optimization</li>\n</ul>\n\n<p><i>Version 1.0 - Happy Simulating!</i></p>"
   }
 }

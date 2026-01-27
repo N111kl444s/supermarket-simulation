@@ -69,13 +69,16 @@ class MainController:
 
         self._setup_connections()
         self._init_ui_state()
+        
+        # Preload customer images to avoid lag on first customer spawn
+        self._preload_customer_images()
 
         self.load_map("Standard (Einfach).json")
         self.view.showMaximized()
 
     def _setup_connections(self):
-        # Language change
-        self.view.sidebar_component.language_changed.connect(self.on_language_changed)
+        # Back to main menu
+        self.view.sidebar_component.back_to_menu_requested.connect(self.on_back_to_menu)
         
         self.view.mode_combo.currentTextChanged.connect(self.on_mode_changed)
         self.view.btn_play_pause.clicked.connect(self.toggle_simulation)
@@ -250,6 +253,13 @@ class MainController:
             self.sim_manager.sim_time.toString("HH:mm")
         )
         self.sim_manager.set_param_accessor(self._get_sim_params_from_ui)
+    
+    def _preload_customer_images(self):
+        """Preload customer images to avoid lag when first customer appears."""
+        from views.items.customer_item import CustomerItem
+        # Call class methods to load images into class variables
+        CustomerItem._load_images()
+        CustomerItem._load_icons()
 
     def show(self):
         self.view.showMaximized()
@@ -308,7 +318,20 @@ class MainController:
         self.view.map_combo.blockSignals(True)
         self.view.map_combo.clear()
         maps = self.map_manager.get_available_maps()
-        self.view.map_combo.addItems(maps)
+        
+        # Filter and format map names
+        display_maps = []
+        for map_name in maps:
+            # Skip default.json if there are other maps
+            if map_name == "default.json" and len(maps) > 1:
+                continue
+            # Remove .json extension for display
+            display_name = map_name.replace(".json", "")
+            display_maps.append((display_name, map_name))  # (display, actual)
+        
+        # Add formatted names to combo
+        for display_name, _ in display_maps:
+            self.view.map_combo.addItem(display_name)
 
         preferred_map = "Standard (Einfach).json"
         target = None
@@ -316,14 +339,19 @@ class MainController:
             target = self.map_manager.current_map_file.name
         if not target and preferred_map in maps:
             target = preferred_map
+        
+        # Find and select the target map
         if target:
-            index = self.view.map_combo.findText(target)
+            # Remove .json for comparison
+            target_display = target.replace(".json", "")
+            index = self.view.map_combo.findText(target_display)
             if index != -1:
                 self.view.map_combo.setCurrentIndex(index)
             else:
                 self.view.map_combo.setCurrentIndex(0)
         elif self.view.map_combo.count() > 0:
             self.view.map_combo.setCurrentIndex(0)
+        
         self.view.map_combo.blockSignals(False)
 
     def on_mode_changed(self, mode_text):
@@ -362,13 +390,18 @@ class MainController:
             self.map_manager.current_map_file = MAPS_DIR / name
             self.map_manager.save_map()
             self._refresh_map_list()
-            self.view.map_combo.setCurrentText(name)
+            # Set combo to display name (without .json)
+            display_name = name.replace(".json", "")
+            self.view.map_combo.setCurrentText(display_name)
             self.visual_controller.draw_map_elements(self.map_manager)
             self.view.add_log_entry(f"Karte '{name}' erstellt.", "green")
 
     def load_map(self, filename):
         if not filename:
             return
+        # Add .json extension if not present (combo now shows display names without .json)
+        if not filename.endswith(".json"):
+            filename = filename + ".json"
         if self.map_manager.load_map(filename):
             self.visual_controller.update_background(
                 self.map_manager.background_image_path,
@@ -523,6 +556,7 @@ class MainController:
             customer_annoyance_rate = 0.0
             if hasattr(self.view, "customer_annoyance_rate"):
                 customer_annoyance_rate = self.view.customer_annoyance_rate.value()
+            print(f"DEBUG: Getting UI params - customer_annoyance_rate: {customer_annoyance_rate}")
             return {
                 "walk": (
                     self.view.speed_walk_mean.value(),
@@ -613,36 +647,13 @@ class MainController:
             if f"#{ID_val}" in it.text():
                 it.setSelected(True)
 
-    def on_language_changed(self, language: str):
-        """Handle language change from UI - rebuilds entire sidebar for complete refresh."""
-        # Pause simulation to avoid accessing deleted UI widgets
-        was_running = self.sim_manager.is_running
-        if was_running:
+    def on_back_to_menu(self):
+        """Handle returning to main menu from simulation."""
+        # Pause simulation if running
+        if self.sim_manager.is_running:
             self.sim_manager.pause()
             self.view.btn_play_pause.setChecked(False)
             self.view.btn_play_pause.setText("▶")
         
-        self.translator.set_language(language)
-        self.settings["language"] = language
-        self._save_settings()
-        
-        # Refresh toolbar (simple text updates)
-        self.view.toolbar_component.refresh_translations(self.translator)
-        
-        # Rebuild entire sidebar to ensure ALL widgets (including lazy-loaded tabs) are created with correct translations
-        self.view.rebuild_sidebar(self.translator)
-        
-        # Refresh checkout displays with new translations
-        self.visual_controller.refresh_checkout_displays(self.translator)
-        
-        # Update window title
-        self.view.setWindowTitle(self.translator.get("window.title"))
-        
-        # Reconnect param accessor to ensure simulation can access new UI elements
-        self.sim_manager.set_param_accessor(self._get_sim_params_from_ui)
-        
-        # Resume simulation if it was running
-        if was_running:
-            self.sim_manager.start()
-            self.view.btn_play_pause.setChecked(True)
-            self.view.btn_play_pause.setText("⏸")
+        # Emit signal to application launcher to switch to menu screen
+        self.view.back_to_menu_requested.emit()

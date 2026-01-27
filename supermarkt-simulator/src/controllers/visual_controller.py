@@ -321,45 +321,46 @@ class VisualController:
             screen_x = rx + center_x
             screen_y = ry + center_y
 
+            # Create screen with background rect
             screen_item = QGraphicsRectItem(-sw / 2, -sh / 2, sw, sh)
             screen_item.setData(0, cd.get("id"))
-
-            if is_malfunction:
-                col = QColor("yellow")
-            else:
-                col = COLOR_SCREEN_OPEN if is_open else COLOR_SCREEN_CLOSED
-
-            screen_item.setBrush(QBrush(col))
+            screen_item.setBrush(QBrush(COLOR_SCREEN_OPEN if is_open else COLOR_SCREEN_CLOSED))
             screen_item.setPen(QPen(Qt.PenStyle.NoPen))
 
-            if is_malfunction:
-                status_text = self.translator.get("stats.disruption") if self.translator else "STÖRUNG"
-                text_col = QColor("red")
+            # Create text item (will be updated in update_checkout_status)
+            if is_open:
+                status_text = self.translator.get("stats.checkout_open") if self.translator else "Geöffnet"
             else:
-                if is_open:
-                    status_text = self.translator.get("stats.checkout_open") if self.translator else "Geöffnet"
-                else:
-                    status_text = self.translator.get("stats.checkout_closed") if self.translator else "Geschlossen"
-                text_col = COLOR_SCREEN_TEXT
-
-            text_item = QGraphicsSimpleTextItem(
-                status_text, parent=screen_item
-            )
-            text_item.setBrush(QBrush(text_col))
+                status_text = self.translator.get("stats.checkout_closed") if self.translator else "Geschlossen"
+            
+            text_item = QGraphicsSimpleTextItem(status_text, parent=screen_item)
+            text_item.setBrush(QBrush(COLOR_SCREEN_TEXT))
             font = QFont("Segoe UI", 10, QFont.Weight.Bold)
             text_item.setFont(font)
+            text_item.setData(1, "text")  # Mark as text item
+            text_item.setZValue(1)  # Text should be above background
 
             brect = text_item.boundingRect()
             if brect.width() > 0 and brect.height() > 0:
                 target_w = sw * 0.9
                 target_h = sh * 0.9
-                scale = min(
-                    target_w / brect.width(), target_h / brect.height()
-                )
+                scale = min(target_w / brect.width(), target_h / brect.height())
                 text_item.setScale(scale)
                 tx_scaled = brect.width() * scale
                 ty_scaled = brect.height() * scale
                 text_item.setPos(-tx_scaled / 2, -ty_scaled / 2)
+
+            # Create icon item (for tool.png during malfunction, initially hidden)
+            icon_item = QGraphicsPixmapItem(parent=screen_item)
+            icon_item.setData(1, "icon")  # Mark as icon item
+            icon_item.setVisible(False)
+            icon_item.setZValue(10)  # Icon must be above text and background
+            
+            # Create angry icon item (for angry.png during conflict, initially hidden)
+            angry_icon_item = QGraphicsPixmapItem(parent=screen_item)
+            angry_icon_item.setData(1, "angry_icon")  # Mark as angry icon item
+            angry_icon_item.setVisible(False)
+            angry_icon_item.setZValue(10)  # Icon must be above text and background
 
             screen_item.setPos(screen_x, screen_y)
             screen_item.setRotation(angle)
@@ -475,66 +476,184 @@ class VisualController:
         # Workers removed, no sync needed
 
     def update_checkout_status(self, checkouts_data):
-        blink_state = int(time.time() * 2) % 2 == 0
         data_map = {cd["id"]: cd for cd in checkouts_data}
 
-        for item in self.screen_items:
-            cid = item.data(0)
-            if cid is not None and cid in data_map:
-                cd = data_map[cid]
-                is_malfunction = cd.get("malfunction", False)
-                is_open = cd.get("open", True)
-
-                text_item = None
-                for child in item.childItems():
-                    if isinstance(child, QGraphicsSimpleTextItem):
-                        text_item = child
-                        break
-
-                if is_malfunction:
-                    col = QColor("yellow") if blink_state else QColor("red")
-                    item.setBrush(QBrush(col))
-                    if text_item:
-                        text_item.setText("STÖRUNG")
-                        text_col = (
-                            QColor("black") if blink_state else QColor("white")
-                        )
-                        text_item.setBrush(QBrush(text_col))
-                else:
-                    col = COLOR_SCREEN_OPEN if is_open else COLOR_SCREEN_CLOSED
-                    item.setBrush(QBrush(col))
-                    if text_item:
-                        text_item.setText(
-                            "Geöffnet" if is_open else "Geschlossen"
-                        )
-                        text_item.setBrush(QBrush(COLOR_SCREEN_TEXT))
-
-        # Update cashier repair status
-        for cai in self.cashier_items:
-            cid = cai.data(0)  # Assuming data(0) is checkout id
-            if cid is not None and cid in data_map:
-                cd = data_map[cid]
-                is_malfunction = cd.get("malfunction", False)
-                is_conflict = cd.get("conflict", False)
-                if is_conflict:
-                    print(f"DEBUG: Visualizing conflict at checkout {cid}")
-                    cai.set_repairing(True, "angry.png")
-                    # Set conflict resolution progress overlay if conflict and timer/duration present
-                    if "conflict_timer" in cd and "conflict_duration" in cd:
-                        progress = min(max(cd["conflict_timer"] / cd["conflict_duration"], 0.0), 1.0)
-                        cai.set_repair_progress(progress)
+        for screen_item in self.screen_items:
+            cid = screen_item.data(0)
+            if cid is None or cid not in data_map:
+                continue
+            
+            cd = data_map[cid]
+            is_malfunction = cd.get("malfunction", False)
+            is_open = cd.get("open", True)
+            
+            # Get child items
+            text_item = None
+            icon_item = None
+            angry_icon_item = None
+            
+            for child in screen_item.childItems():
+                child_type = child.data(1)
+                if child_type == "text" and isinstance(child, QGraphicsSimpleTextItem):
+                    text_item = child
+                elif child_type == "icon" and isinstance(child, QGraphicsPixmapItem):
+                    icon_item = child
+                elif child_type == "angry_icon" and isinstance(child, QGraphicsPixmapItem):
+                    angry_icon_item = child
+            
+            # Check for conflict (angry customer)
+            is_conflict = cd.get("conflict", False)
+            
+            if is_malfunction:
+                print(f"DEBUG: Malfunction detected at checkout {cid}")
+                # Show tool icon (no blinking, just static)
+                if icon_item:
+                    if not icon_item.pixmap() or icon_item.pixmap().isNull():
+                        # Load tool.png
+                        from config import ICON_DIR
+                        tool_path = ICON_DIR / "tool.png"
+                        print(f"DEBUG: Loading tool icon from {tool_path}, exists: {tool_path.exists()}")
+                        if tool_path.exists():
+                            tool_pixmap = QPixmap(str(tool_path))
+                            print(f"DEBUG: Pixmap loaded, isNull: {tool_pixmap.isNull()}, size: {tool_pixmap.width()}x{tool_pixmap.height()}")
+                            if not tool_pixmap.isNull():
+                                # Get screen size from settings (in scene units)
+                                c_type = cd.get("type", "Normal")
+                                if c_type == "SB":
+                                    sw = float(self.settings.get("size_screen_sb_width", 10.0))
+                                    sh = float(self.settings.get("size_screen_sb_height", 10.0))
+                                else:
+                                    sw = float(self.settings.get("size_screen_normal_width", 15.0))
+                                    sh = float(self.settings.get("size_screen_normal_height", 10.0))
+                                
+                                # Use original pixmap and scale via setScale() for better quality
+                                # Icon should be 50% of the smaller screen dimension
+                                icon_item.setPixmap(tool_pixmap)
+                                
+                                # Calculate scale factor: desired size / original size
+                                desired_size_in_scene = min(sw, sh)
+                                original_size = tool_pixmap.width()  # 512px
+                                scale_factor = desired_size_in_scene / original_size
+                                
+                                icon_item.setScale(scale_factor)
+                                icon_item.setTransformationMode(Qt.TransformationMode.SmoothTransformation)
+                                
+                                print(f"DEBUG: Screen size: {sw}x{sh} scene units, desired icon size: {desired_size_in_scene}, scale factor: {scale_factor}")
+                                
+                                # Get screen rect to center icon properly
+                                screen_rect = screen_item.boundingRect()
+                                icon_rect = icon_item.boundingRect()
+                                
+                                # Center icon in screen coordinates (before scaling is applied)
+                                icon_item.setPos(
+                                    screen_rect.center().x() - (icon_rect.width() * scale_factor) / 2,
+                                    screen_rect.center().y() - (icon_rect.height() * scale_factor) / 2
+                                )
+                                icon_item.setZValue(10)  # Ensure icon is on top
+                                print(f"DEBUG: Icon original size: {tool_pixmap.width()}x{tool_pixmap.height()} pixels, scaled by {scale_factor}, positioned at {icon_item.pos()}, z-value: {icon_item.zValue()}")
                     else:
-                        cai.set_repair_progress(0.0)
-                elif is_malfunction:
-                    cai.set_repairing(True, "tool.png")
-                    # Set repair progress overlay if malfunction and timer/duration present
-                    if "repair_timer" in cd and "repair_duration" in cd:
-                        progress = min(max(cd["repair_timer"] / cd["repair_duration"], 0.0), 1.0)
-                        cai.set_repair_progress(progress)
-                    else:
-                        cai.set_repair_progress(0.0)
+                        print(f"DEBUG: Icon already loaded, size: {icon_item.pixmap().width()}x{icon_item.pixmap().height()}")
+                    
+                    # Show icon (no blinking)
+                    icon_item.setVisible(True)
+                    print(f"DEBUG: Icon visible: {icon_item.isVisible()}, opacity: {icon_item.opacity()}")
                 else:
-                    cai.set_repairing(False)
+                    print(f"DEBUG: No icon_item found for checkout {cid}")
+                
+                # Hide text and angry icon during malfunction
+                if text_item:
+                    text_item.setVisible(False)
+                if angry_icon_item:
+                    angry_icon_item.setVisible(False)
+                
+                # White background during repair
+                screen_item.setBrush(QBrush(QColor(0, 0, 0)))  # Black
+                
+            elif is_conflict:
+                print(f"DEBUG: Conflict detected at checkout {cid}")
+                # Show angry icon
+                if angry_icon_item:
+                    if not angry_icon_item.pixmap() or angry_icon_item.pixmap().isNull():
+                        # Load angry.png
+                        from config import ICON_DIR
+                        angry_path = ICON_DIR / "angry.png"
+                        print(f"DEBUG: Loading angry icon from {angry_path}, exists: {angry_path.exists()}")
+                        if angry_path.exists():
+                            angry_pixmap = QPixmap(str(angry_path))
+                            print(f"DEBUG: Angry pixmap loaded, isNull: {angry_pixmap.isNull()}, size: {angry_pixmap.width()}x{angry_pixmap.height()}")
+                            if not angry_pixmap.isNull():
+                                # Get screen size from settings (in scene units)
+                                c_type = cd.get("type", "Normal")
+                                if c_type == "SB":
+                                    sw = float(self.settings.get("size_screen_sb_width", 10.0))
+                                    sh = float(self.settings.get("size_screen_sb_height", 10.0))
+                                else:
+                                    sw = float(self.settings.get("size_screen_normal_width", 15.0))
+                                    sh = float(self.settings.get("size_screen_normal_height", 10.0))
+                                
+                                # Use original pixmap and scale via setScale() for better quality
+                                # Icon should be 50% of the smaller screen dimension
+                                angry_icon_item.setPixmap(angry_pixmap)
+                                
+                                # Calculate scale factor: desired size / original size
+                                desired_size_in_scene = min(sw, sh)
+                                original_size = angry_pixmap.width()
+                                scale_factor = desired_size_in_scene / original_size
+                                
+                                angry_icon_item.setScale(scale_factor)
+                                angry_icon_item.setTransformationMode(Qt.TransformationMode.SmoothTransformation)
+                                
+                                print(f"DEBUG: Angry icon - Screen size: {sw}x{sh}, desired size: {desired_size_in_scene}, scale: {scale_factor}")
+                                
+                                # Get screen rect to center icon properly
+                                screen_rect = screen_item.boundingRect()
+                                icon_rect = angry_icon_item.boundingRect()
+                                
+                                # Center icon in screen coordinates (before scaling is applied)
+                                angry_icon_item.setPos(
+                                    screen_rect.center().x() - (icon_rect.width() * scale_factor) / 2,
+                                    screen_rect.center().y() - (icon_rect.height() * scale_factor) / 2
+                                )
+                                angry_icon_item.setZValue(10)
+                                print(f"DEBUG: Angry icon positioned at {angry_icon_item.pos()}, z-value: {angry_icon_item.zValue()}")
+                    
+                    # Show angry icon
+                    angry_icon_item.setVisible(True)
+                    print(f"DEBUG: Angry icon visible: {angry_icon_item.isVisible()}")
+                else:
+                    print(f"DEBUG: No angry_icon_item found for checkout {cid}")
+                
+                # Hide text and tool icon during conflict
+                if text_item:
+                    text_item.setVisible(False)
+                if icon_item:
+                    icon_item.setVisible(False)
+                
+                # Orange/red background during conflict
+                screen_item.setBrush(QBrush(QColor(255, 150, 0)))  # Orange
+                
+            else:
+                # No malfunction or conflict - show normal status
+                if icon_item:
+                    icon_item.setVisible(False)
+                if angry_icon_item:
+                    angry_icon_item.setVisible(False)
+                
+                # Show and update text
+                if text_item:
+                    status_text = self.translator.get("stats.checkout_open") if is_open else self.translator.get("stats.checkout_closed")
+                    if not self.translator:
+                        status_text = "Geöffnet" if is_open else "Geschlossen"
+                    text_item.setText(status_text)
+                    text_item.setBrush(QBrush(COLOR_SCREEN_TEXT))
+                    text_item.setVisible(True)
+                
+                # Update background color
+                col = COLOR_SCREEN_OPEN if is_open else COLOR_SCREEN_CLOSED
+                screen_item.setBrush(QBrush(col))
+
+        # Remove cashier repair status updates (moved to screen)
+        # No longer updating cashier items for repair visualization
 
     def _clear_dynamic_items(self):
         for i in (

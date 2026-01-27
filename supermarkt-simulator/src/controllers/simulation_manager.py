@@ -264,7 +264,8 @@ class SimulationManager(QObject):
 
             # Zufällige Verärgerung des Kunden
             if (
-                model.state == "SCANNING" or model.state == "PAYING"
+                model.state in ("SCANNING", "PAYING")
+                and model.assigned_checkout_id is not None
             ) and not is_stuck_due_to_malfunction and not is_stuck_due_to_conflict:
                 if current_global_params:
                     cid = model.assigned_checkout_id
@@ -280,8 +281,11 @@ class SimulationManager(QObject):
                         annoy_rate = current_global_params.get(
                             "customer_annoyance_rate", 0.0
                         )
+                        # Probability per frame, similar to malfunction logic
                         chance = (annoy_rate / 100.0) * game_dt
-                        if random.random() < chance:
+                        roll = random.random()
+                        print(f"DEBUG Annoyance: checkout {cid}, state {model.state}, rate {annoy_rate}%, chance {chance:.4f}, roll {roll:.4f}")
+                        if roll < chance:
                             c_data["conflict"] = True
                             print(f"DEBUG: Conflict triggered at checkout {cid} with annoy_rate {annoy_rate}%")
                             self.log_message.emit(

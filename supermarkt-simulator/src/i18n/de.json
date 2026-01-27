@@ -8,6 +8,7 @@
       "editor": "Editor"
     },
     "language": "🇩🇪",
+    "main_menu_tooltip": "Zurück zum Hauptmenü",
     "tabs": {
       "input": "Eingabe",
       "stats": "Statistiken",
@@ -142,5 +143,23 @@
     "disruption": "STÖRUNG",
     "checkout_open": "Geöffnet",
     "checkout_closed": "Geschlossen"
+  },
+  "menu": {
+    "start_simulation": "Simulation starten",
+    "info": "Erklärung",
+    "settings": "Einstellungen",
+    "exit": "Beenden"
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "language_group": "Spracheinstellungen",
+    "language_label": "Sprache:",
+    "save": "Speichern",
+    "cancel": "Abbrechen"
+  },
+  "info": {
+    "title": "Erklärung - Supermarkt Simulator",
+    "back": "Zurück zum Hauptmenü",
+    "content": "<h2>Willkommen zum Supermarkt Simulator!</h2>\n\n<p><b>Überblick:</b></p>\n<p>Der Supermarkt Simulator ist ein Werkzeug zur Simulation und Optimierung von Supermarkt-Abläufen. Sie können verschiedene Szenarien erstellen, die Kundenströme simulieren und die Effizienz Ihres virtuellen Supermarkts analysieren.</p>\n\n<p><b>Hauptfunktionen:</b></p>\n<ul>\n<li><b>Simulation:</b> Führen Sie realistische Supermarkt-Szenarien durch</li>\n<li><b>Editor:</b> Erstellen und bearbeiten Sie eigene Supermarkt-Layouts</li>\n<li><b>Statistiken:</b> Analysieren Sie Kundenströme und Warteschlangen</li>\n<li><b>Mehrsprachig:</b> Unterstützung für Deutsch und Englisch</li>\n</ul>\n\n<p><b>So funktioniert es:</b></p>\n<ol>\n<li>Wählen Sie eine vordefinierte Karte oder erstellen Sie Ihre eigene im Editor-Modus</li>\n<li>Stellen Sie die Simulationsparameter ein (Anzahl Kunden, Öffnungszeiten, etc.)</li>\n<li>Starten Sie die Simulation und beobachten Sie, wie die Kunden einkaufen</li>\n<li>Analysieren Sie die Ergebnisse und optimieren Sie Ihr Layout</li>\n</ol>\n\n<p><b>Tipps:</b></p>\n<ul>\n<li>Experimentieren Sie mit unterschiedlichen Kassen-Konfigurationen</li>\n<li>Beobachten Sie Warteschlangen während der Simulation</li>\n<li>Nutzen Sie den Editor, um neue Layouts zu erstellen</li>\n<li>Die Statistiken helfen bei der Optimierung</li>\n</ul>\n\n<p><i>Version 1.0 - Viel Spaß beim Simulieren!</i></p>"
   }
 }

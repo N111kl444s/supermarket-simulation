@@ -42,7 +42,7 @@ class CustomerItem(QGraphicsPixmapItem):
         super().__init__()
         self.model = model
         self.target_size = size
-        self.setZValue(20)
+        self.setZValue(30)
 
         self._load_images()
         self._load_icons()

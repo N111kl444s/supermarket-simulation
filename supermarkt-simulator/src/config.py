@@ -128,35 +128,35 @@ SCAN_TIME_PER_ITEM_MS = 1000
 
 # --- DYNAMIC IMAGE LISTS ---
 
-IMG_CUSTOMERS_NORMAL = get_image_files("kunde")
+IMG_CUSTOMERS_NORMAL = get_image_files("customer")
 if not IMG_CUSTOMERS_NORMAL:
     IMG_CUSTOMERS_NORMAL = ["customer.png"]
 
-IMG_CUSTOMERS_DISABLED = get_image_files("behindert")
+IMG_CUSTOMERS_DISABLED = get_image_files("disabled_customer")
 if not IMG_CUSTOMERS_DISABLED:
     IMG_CUSTOMERS_DISABLED = ["customer_disabled.png"]
 
-IMG_CUSTOMERS_HANDHELD = get_image_files("handheld_kunde")
+IMG_CUSTOMERS_HANDHELD = get_image_files("handheld_customer")
 if not IMG_CUSTOMERS_HANDHELD:
     IMG_CUSTOMERS_HANDHELD = IMG_CUSTOMERS_NORMAL
 
-IMG_CUSTOMERS_HANDHELD_DISABLED = get_image_files("handheld_behindert")
+IMG_CUSTOMERS_HANDHELD_DISABLED = get_image_files("handheld_disabled_customer")
 if not IMG_CUSTOMERS_HANDHELD_DISABLED:
     IMG_CUSTOMERS_HANDHELD_DISABLED = IMG_CUSTOMERS_DISABLED
 
-IMG_SHELVES = get_image_files("regal")
+IMG_SHELVES = get_image_files("shelf")
 if not IMG_SHELVES:
-    IMG_SHELVES = ["regal.png"]
+    IMG_SHELVES = ["shelf.png"]
 
-IMG_CHECKOUTS = ["kasse.png", "sb.png"]
+IMG_CHECKOUTS = ["cash_register.png", "self_service.png"]
 
-IMG_CASHIERS_AZUBI = get_image_files("azubi")
+IMG_CASHIERS_AZUBI = get_image_files("trainee")
 if not IMG_CASHIERS_AZUBI:
-    IMG_CASHIERS_AZUBI = ["azubi.png"]
+    IMG_CASHIERS_AZUBI = ["trainee.png"]
 
-IMG_CASHIERS_PRO = get_image_files("festangestellter")
+IMG_CASHIERS_PRO = get_image_files("professional")
 if not IMG_CASHIERS_PRO:
-    IMG_CASHIERS_PRO = ["festangestellter.png"]
+    IMG_CASHIERS_PRO = ["professional.png"]
 
 # --- DEFAULT SETTINGS DICT ---
 DEFAULT_SETTINGS = {

@@ -21,15 +21,8 @@ from config import (
     CASHIER_SIZE,
     CHECKOUT_WIDTH,
     CHECKOUT_HEIGHT,
+    COLOR_BG_MAIN,
 )
-
-DIALOG_STYLE = """
-    QDialog { background-color: #FFFFFF; font-family: "Segoe UI"; }
-    QLabel { color: #1F2937; font-weight: bold; }
-    QSpinBox, QDoubleSpinBox { padding: 4px; border: 1px solid #D1D5DB; border-radius: 4px; background: #F9FAFB; }
-    QGroupBox { border: 1px solid #D1D5DB; border-radius: 6px; margin-top: 10px; padding-top: 15px; font-weight: bold; color: #3B82F6; }
-    QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 5px; left: 10px; }
-"""
 
 
 class SizeConfigDialog(QDialog):
@@ -39,7 +32,8 @@ class SizeConfigDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Größen & Skalierung")
         self.resize(400, 700)
-        self.setStyleSheet(DIALOG_STYLE)
+        # Use global app background color for consistency
+        self.setStyleSheet(f"QDialog {{ background-color: {COLOR_BG_MAIN.name()}; }}")
         self.settings = current_settings.copy()
 
         layout = QVBoxLayout(self)

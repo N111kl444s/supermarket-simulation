@@ -10,95 +10,105 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QPixmap, QFont
 from pathlib import Path
-
-IMAGE_DIR = Path(__file__).parent.parent.parent / "assets" / "images"
+from config import IMAGE_DIR, COLOR_BG_MAIN, COLOR_ACCENT, COLOR_TEXT_MAIN, COLOR_BORDER
 
 
 class MainMenuScreen(QWidget):
     """Main menu screen displayed at application startup."""
 
-    def __init__(self):
+    def __init__(self, translator=None):
         super().__init__()
         self.on_start_clicked = None
         self.on_settings_clicked = None
         self.on_info_clicked = None
+        self.on_exit_clicked = None
+        self.translator = translator
         self.movie = None
 
         self.setup_ui()
 
     def setup_ui(self):
         """Setup the main menu UI."""
-        # Styles (buttons and labels). Background applied only when GIF missing.
-        base_styles = """
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 12px 24px;
+        # Get colors from config
+        bg_main = COLOR_BG_MAIN.name()
+        accent = COLOR_ACCENT.name()
+        border = COLOR_BORDER.name()
+        text_main = COLOR_TEXT_MAIN.name()
+        
+        # Styles matching application design
+        base_styles = f"""
+            QPushButton {{
+                background-color: #FFFFFF;
+                border: 1px solid {border};
+                border-radius: 6px;
+                padding: 0px 24px;
+                color: {text_main};
+                font-weight: 700;
                 font-size: 16px;
-                font-weight: bold;
+                min-height: 50px;
                 min-width: 300px;
-                min-height: 60px;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
-            QPushButton:pressed {
-                background-color: #1565C0;
-            }
-            QLabel {
-                color: white;
-            }
+            }}
+            QPushButton:hover {{
+                background-color: #F8FAFC;
+                border-color: {accent};
+                color: {accent};
+            }}
+            QPushButton:pressed {{
+                background-color: {accent};
+                color: #FFFFFF;
+            }}
         """
 
         fallback_styles = (
-            "QWidget { background-color: #1f1f1f; }" + base_styles
+            f"QWidget {{ background-color: {bg_main}; }}" + base_styles
         )
 
         # Apply fallback by default; if GIF loads successfully we'll replace stylesheet.
         self.setStyleSheet(fallback_styles)
 
-        # Main layout
+        # Main layout - center everything
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(50, 50, 50, 50)
-        main_layout.setSpacing(30)
-
-        # Title
-        title = QLabel("Supermarkt Simulator")
-        title_font = QFont()
-        title_font.setPointSize(48)
-        title_font.setBold(True)
-        title.setFont(title_font)
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(title)
-
-        main_layout.addSpacing(60)
+        main_layout.setSpacing(0)
+        
+        # Add stretch at top to center content vertically
+        main_layout.addStretch()
 
         # Buttons container (centered)
         button_layout = QVBoxLayout()
         button_layout.setSpacing(15)
         button_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.btn_start = QPushButton("▶ Simulation starten")
+        self.btn_start = QPushButton()
         self.btn_start.clicked.connect(self._on_start)
         button_layout.addWidget(
             self.btn_start, alignment=Qt.AlignmentFlag.AlignCenter
         )
 
-        self.btn_settings = QPushButton("⚙ Einstellungen")
-        self.btn_settings.clicked.connect(self._on_settings)
-        button_layout.addWidget(
-            self.btn_settings, alignment=Qt.AlignmentFlag.AlignCenter
-        )
-
-        self.btn_info = QPushButton("ℹ Erklärung")
+        self.btn_info = QPushButton()
         self.btn_info.clicked.connect(self._on_info)
         button_layout.addWidget(
             self.btn_info, alignment=Qt.AlignmentFlag.AlignCenter
         )
 
+        self.btn_settings = QPushButton()
+        self.btn_settings.clicked.connect(self._on_settings)
+        button_layout.addWidget(
+            self.btn_settings, alignment=Qt.AlignmentFlag.AlignCenter
+        )
+
+        self.btn_exit = QPushButton()
+        self.btn_exit.clicked.connect(self._on_exit)
+        button_layout.addWidget(
+            self.btn_exit, alignment=Qt.AlignmentFlag.AlignCenter
+        )
+
         main_layout.addLayout(button_layout)
+        
+        # Update button texts with translations
+        self.update_translations()
+        
+        # Add stretch at bottom to center content vertically
         main_layout.addStretch()
 
         # Try to load a static background image and display it as a full-widget background.
@@ -158,6 +168,19 @@ class MainMenuScreen(QWidget):
                 pass
         super().resizeEvent(event)
 
+    def update_translations(self):
+        """Update button texts with current translations."""
+        if self.translator:
+            self.btn_start.setText(self.translator.get("menu.start_simulation", "Simulation starten"))
+            self.btn_info.setText(self.translator.get("menu.info", "Erklärung"))
+            self.btn_settings.setText(self.translator.get("menu.settings", "Einstellungen"))
+            self.btn_exit.setText(self.translator.get("menu.exit", "Beenden"))
+        else:
+            self.btn_start.setText("Simulation starten")
+            self.btn_info.setText("Erklärung")
+            self.btn_settings.setText("Einstellungen")
+            self.btn_exit.setText("Beenden")
+
     def _on_start(self):
         if self.on_start_clicked:
             self.on_start_clicked()
@@ -169,3 +192,7 @@ class MainMenuScreen(QWidget):
     def _on_info(self):
         if self.on_info_clicked:
             self.on_info_clicked()
+    
+    def _on_exit(self):
+        if self.on_exit_clicked:
+            self.on_exit_clicked()
