@@ -12,8 +12,9 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QFrame,
     QButtonGroup,
+    QMenu,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QPoint
 from PyQt6.QtGui import QPainter, QColor, QBrush, QPen
 from config import COLOR_ACCENT, COLOR_BORDER
 
@@ -191,7 +192,120 @@ class TopToolbar(QWidget):
         layout.addStretch(1)
 
         # === FAR RIGHT: ZOOM ===
-        self.btn_reset_zoom = QPushButton("🔍 1:1")
+        self.btn_reset_zoom = QPushButton("�")
+        self.btn_reset_zoom.setToolTip("Kamera Position wechseln")
+        self.btn_reset_zoom.setFixedSize(90, 44)
+        self.btn_reset_zoom.clicked.connect(self.show_camera_menu)
         self.btn_reset_zoom.setToolTip("Zoom zurücksetzen")
         self.btn_reset_zoom.setFixedSize(90, 44)
         layout.addWidget(self.btn_reset_zoom)
+        
+        # Save Camera Position Button
+        self.btn_save_camera = QPushButton("💾")
+        self.btn_save_camera.setToolTip("Kamera Position speichern")
+        self.btn_save_camera.setFixedSize(60, 44)
+        self.btn_save_camera.clicked.connect(self.save_current_camera_position)
+        layout.addWidget(self.btn_save_camera)
+        
+        # Camera Menu Setup
+        self.camera_menu = QMenu(self)
+        self.camera_menu.addAction("Gesamter Laden", self.set_camera_full_store)
+        self.camera_menu.addAction("Eingangsbereich", self.set_camera_entrance)
+        self.camera_menu.addAction("Verkaufsfläche", self.set_camera_sales_area)
+        self.camera_menu.addSeparator()
+        self.camera_menu.addAction("Kassenbereich - Normal", self.set_camera_checkout_normal)
+        self.camera_menu.addAction("Kassenbereich - SB", self.set_camera_checkout_sb)
+
+    def show_camera_menu(self):
+        """Show the camera position menu."""
+        self.camera_menu.exec(self.btn_reset_zoom.mapToGlobal(QPoint(0, self.btn_reset_zoom.height())))
+
+    def set_camera_position(self, position_name):
+        """Set camera to a predefined position."""
+        from .camera_controls import load_camera_positions
+        
+        canvas = self.get_canvas()
+        if not canvas:
+            return
+        
+        current_map = self.get_current_map()
+        positions = load_camera_positions(current_map)
+        position = positions.get(position_name)
+        
+        if position:
+            canvas.zoom_level = position.get("zoom", 1.0)
+            canvas.resetTransform()
+            canvas.scale(canvas.zoom_level, canvas.zoom_level)
+            
+            center_x = position.get("x", 0)
+            center_y = position.get("y", 0)
+            canvas.centerOn(center_x, center_y)
+
+    def set_camera_full_store(self):
+        """Set camera to full store view."""
+        self.set_camera_position("full_store")
+
+    def set_camera_entrance(self):
+        """Set camera to entrance area."""
+        self.set_camera_position("entrance")
+
+    def set_camera_sales_area(self):
+        """Set camera to sales area."""
+        self.set_camera_position("sales_area")
+
+    def set_camera_checkout_normal(self):
+        """Set camera to checkout area - normal."""
+        self.set_camera_position("checkout_normal")
+
+    def set_camera_checkout_sb(self):
+        """Set camera to checkout area - self service."""
+        self.set_camera_position("checkout_sb")
+
+    def save_current_camera_position(self):
+        """Save current camera position and zoom."""
+        from .camera_controls import load_camera_positions, save_camera_positions
+        
+        canvas = self.get_canvas()
+        if not canvas:
+            return
+        
+        # Get current center position
+        scene_rect = canvas.sceneRect()
+        viewport_rect = canvas.mapToScene(canvas.viewport().rect()).boundingRect()
+        center_x = viewport_rect.center().x()
+        center_y = viewport_rect.center().y()
+        
+        current_map = self.get_current_map()
+        positions = load_camera_positions(current_map)
+        
+        # Update a generic "custom" position
+        positions["custom"] = {
+            "x": center_x,
+            "y": center_y,
+            "zoom": canvas.zoom_level
+        }
+        
+        if save_camera_positions(positions, current_map):
+            print(f"Camera position saved for map: {current_map}")
+        else:
+            print("Failed to save camera position")
+
+    def get_canvas(self):
+        """Get the canvas from main window."""
+        try:
+            mw = self.window()
+            if mw and hasattr(mw, 'canvas_component'):
+                return mw.canvas_component
+        except:
+            pass
+        return None
+
+    def get_current_map(self):
+        """Get the current map name."""
+        try:
+            mw = self.window()
+            if mw and hasattr(mw, 'map_combo'):
+                return mw.map_combo.currentText()
+        except:
+            pass
+        return "default"

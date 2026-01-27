@@ -599,6 +599,12 @@ class Sidebar(QWidget):
         l_view.addWidget(self.btn_config_sizes)
         l_areas.addWidget(gb_view)
 
+        gb_camera = QGroupBox("Kamera-Positionen")
+        l_camera = QVBoxLayout(gb_camera)
+        self.btn_config_camera = QPushButton("Kamera Positionen konfigurieren")
+        l_camera.addWidget(self.btn_config_camera)
+        l_areas.addWidget(gb_camera)
+
         self.editor_subtabs.addTab(sub_areas, "Bereiche")
 
         # Sub ROUTEN

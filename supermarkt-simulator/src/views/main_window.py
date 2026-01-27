@@ -138,6 +138,8 @@ class MainWindow(QMainWindow):
         self.btn_visibility = s.btn_visibility
         self.btn_offsets = s.btn_offsets
         self.btn_config_sizes = s.btn_config_sizes
+        self.btn_config_camera = s.btn_config_camera
+        self.btn_config_camera.clicked.connect(self.open_camera_config_dialog)
 
         self.btn_start_route = s.btn_start_route
         self.new_route_button = s.new_route_button
@@ -198,3 +200,8 @@ class MainWindow(QMainWindow):
     def reset_sim_zoom(self, target_center=None):
         if self.sim_view:
             self.sim_view.reset_zoom(target_center)
+
+    def open_camera_config_dialog(self):
+        """Open the camera positions configuration dialog."""
+        from .dialogs import CameraPositionsDialog
+        dialog.exec()

@@ -1,0 +1,61 @@
+{
+  "default": {
+    "full_store": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1.0
+    },
+    "entrance": {
+      "x": 400,
+      "y": 200,
+      "zoom": 2.0
+    },
+    "sales_area": {
+      "x": 800,
+      "y": 400,
+      "zoom": 2.5
+    },
+    "checkout_normal": {
+      "x": 1200,
+      "y": 600,
+      "zoom": 3.0
+    },
+    "checkout_sb": {
+      "x": 1200,
+      "y": 800,
+      "zoom": 3.0
+    }
+  },
+  "Standard (Einfach).json": {
+    "full_store": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1.0
+    },
+    "entrance": {
+      "x": 400,
+      "y": 200,
+      "zoom": 2.0
+    },
+    "sales_area": {
+      "x": 800,
+      "y": 400,
+      "zoom": 2.5
+    },
+    "checkout_normal": {
+      "x": 1200,
+      "y": 600,
+      "zoom": 3.0
+    },
+    "checkout_sb": {
+      "x": 1200,
+      "y": 800,
+      "zoom": 3.0
+    },
+    "custom": {
+      "x": 892.7564855573639,
+      "y": 402.58345731284135,
+      "zoom": 5.782651914062498
+    }
+  }
+}
