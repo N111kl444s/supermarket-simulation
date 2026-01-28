@@ -69,7 +69,7 @@ class MainController:
 
         self._setup_connections()
         self._init_ui_state()
-        
+
         # Preload customer images to avoid lag on first customer spawn
         self._preload_customer_images()
 
@@ -78,8 +78,10 @@ class MainController:
 
     def _setup_connections(self):
         # Back to main menu
-        self.view.sidebar_component.back_to_menu_requested.connect(self.on_back_to_menu)
-        
+        self.view.sidebar_component.back_to_menu_requested.connect(
+            self.on_back_to_menu
+        )
+
         self.view.mode_combo.currentTextChanged.connect(self.on_mode_changed)
         self.view.btn_play_pause.clicked.connect(self.toggle_simulation)
         self.view.btn_reset.clicked.connect(self.reset_simulation)
@@ -253,10 +255,11 @@ class MainController:
             self.sim_manager.sim_time.toString("HH:mm")
         )
         self.sim_manager.set_param_accessor(self._get_sim_params_from_ui)
-    
+
     def _preload_customer_images(self):
         """Preload customer images to avoid lag when first customer appears."""
         from views.items.customer_item import CustomerItem
+
         # Call class methods to load images into class variables
         CustomerItem._load_images()
         CustomerItem._load_icons()
@@ -318,7 +321,7 @@ class MainController:
         self.view.map_combo.blockSignals(True)
         self.view.map_combo.clear()
         maps = self.map_manager.get_available_maps()
-        
+
         # Filter and format map names
         display_maps = []
         for map_name in maps:
@@ -328,7 +331,7 @@ class MainController:
             # Remove .json extension for display
             display_name = map_name.replace(".json", "")
             display_maps.append((display_name, map_name))  # (display, actual)
-        
+
         # Add formatted names to combo
         for display_name, _ in display_maps:
             self.view.map_combo.addItem(display_name)
@@ -339,7 +342,7 @@ class MainController:
             target = self.map_manager.current_map_file.name
         if not target and preferred_map in maps:
             target = preferred_map
-        
+
         # Find and select the target map
         if target:
             # Remove .json for comparison
@@ -351,7 +354,7 @@ class MainController:
                 self.view.map_combo.setCurrentIndex(0)
         elif self.view.map_combo.count() > 0:
             self.view.map_combo.setCurrentIndex(0)
-        
+
         self.view.map_combo.blockSignals(False)
 
     def on_mode_changed(self, mode_text):
@@ -480,6 +483,7 @@ class MainController:
             self.sim_manager.pause()
             self.view.btn_play_pause.setChecked(False)
             self.view.btn_play_pause.setText("▶")
+            # Input is still blocked during pause
         else:
             if not self.sim_manager.is_initialized:
                 try:
@@ -497,6 +501,12 @@ class MainController:
             self.sim_manager.start()
             self.view.btn_play_pause.setChecked(True)
             self.view.btn_play_pause.setText("⏸")
+            # Preload all input tabs before blocking
+            self.view.sidebar_component.preload_all_input_tabs()
+            # Block input when simulation starts
+            self.view.sidebar_component.set_input_blocked(
+                True, self.translator
+            )
 
     def reset_simulation(self):
         ot = self.view.time_open.time()
@@ -511,6 +521,9 @@ class MainController:
         # Reset View auch hier
         center = self.visual_controller.get_map_center()
         self.view.reset_sim_zoom(center)
+
+        # Unblock input when simulation is reset
+        self.view.sidebar_component.set_input_blocked(False)
 
     def skip_day(self):
         if self.sim_manager.is_initialized:
@@ -555,8 +568,12 @@ class MainController:
                 fail_rate_sb = self.view.checkout_fail_rate_sb.value()
             customer_annoyance_rate = 0.0
             if hasattr(self.view, "customer_annoyance_rate"):
-                customer_annoyance_rate = self.view.customer_annoyance_rate.value()
-            print(f"DEBUG: Getting UI params - customer_annoyance_rate: {customer_annoyance_rate}")
+                customer_annoyance_rate = (
+                    self.view.customer_annoyance_rate.value()
+                )
+            print(
+                f"DEBUG: Getting UI params - customer_annoyance_rate: {customer_annoyance_rate}"
+            )
             return {
                 "walk": (
                     self.view.speed_walk_mean.value(),
@@ -654,6 +671,6 @@ class MainController:
             self.sim_manager.pause()
             self.view.btn_play_pause.setChecked(False)
             self.view.btn_play_pause.setText("▶")
-        
+
         # Emit signal to application launcher to switch to menu screen
         self.view.back_to_menu_requested.emit()

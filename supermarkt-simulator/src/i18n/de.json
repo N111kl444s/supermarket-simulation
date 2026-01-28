@@ -50,7 +50,9 @@
       "failure_normal": "Ausfall (Normal):",
       "failure_sb": "Ausfall (SB):",
       "customer_annoyance": "Verärgerung der Kunden",
-      "annoyance_rate": "Verärgerung:"
+      "annoyance_rate": "Verärgerung:",
+      "input_blocked_title": "⚠️ Eingabe gesperrt",
+      "input_blocked_message": "Während der Simulation können die Eingabeparameter nicht geändert werden. Bitte setzen Sie die Simulation zurück, um die Parameter zu ändern."
     },
     "stats": {
       "live_data": "Live Daten",

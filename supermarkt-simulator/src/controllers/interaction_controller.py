@@ -412,7 +412,7 @@ class InteractionController(QObject):
             )
             self.edit_object_position(spec)
         elif current_mode == "Simulation":
-            if self.sim_manager.is_running:
+            if self.sim_manager.is_running or self.sim_manager.is_initialized:
                 return
             c_data = next(
                 (
@@ -429,12 +429,12 @@ class InteractionController(QObject):
             if dlg.exec():
                 updated_data = dlg.get_data()
                 c_data.update(updated_data)
-                
+
                 # Ensure both 'skill' and 'cashier_skill' are synchronized
                 # to avoid inconsistencies with old map data
                 if "skill" in updated_data:
                     c_data["cashier_skill"] = updated_data["skill"]
-                
+
                 self.visual_controller.draw_map_elements(self.map_manager)
 
     def handle_shelf_click(self, index):

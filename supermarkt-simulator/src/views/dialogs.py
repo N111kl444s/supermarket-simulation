@@ -151,6 +151,13 @@ class CheckoutConfigDialog(QDialog):
             result["skill"] = self.combo_skill.currentText()
         return result
 
+    def set_blocked(self, blocked):
+        """Enable/disable all checkout controls."""
+        self.cb_open.setEnabled(not blocked)
+        self.spin_max_queue.setEnabled(not blocked)
+        if self.combo_skill is not None:
+            self.combo_skill.setEnabled(not blocked)
+
 
 class VisibilityDialog(QDialog):
     settings_changed = pyqtSignal(dict)

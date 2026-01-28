@@ -1,23 +1,59 @@
 - Pop-Up Style anpassen (Editor)
 
+- Fehlerhafte Buttons umfunktionieren zu Coming Soon (Kasse R und Skip Buttoneeeeeeeeeeeeeeeeeeeeeeeeeewee)
 
+- Klick auf Kasse während laufender Simulation (auch Pause) soll Live-Statistiken zeigen von der Kasse
+
+- Eingabeparameter blockieren während der Simulation (auch im Zustand: "Pause")
+- Kasse nicht mehr veränderbar während einer Simulation (auch im Zustand "Pause")
 
 - Tooltips überarbeiten
 
 - Eingabeparameter überprüfen und Logik anpassen
-- Statistiken!!!
+- Statistiken!!! (Siehe #STATISTIC_DESIGN)
+ - Kunde (jeweils im Laden, Warteschlange und Kassen):
+    - Min Zeit
+    - Max Zeit
+    - Durchschnittliche Zeit
+ - Gesamte Werte:
+    - Anzahl Kunden
+        - Normal
+        - Eingeschränkt
+    - Items (Anzahl gescannter Artikel)
+ - insgesamte Bezahlung (Verwendete Bezahlmethode):
+    - Verteilung
+    - Durchschnitt Barzahlung
+    - Durchschnitt Kartenzahlung
+ - je Kasse
+    - Service-Zeiten
+        - Scanning Dauer (avg, min, max)
+        - Bezahl Dauer (avg, min, max)
+    - Warteschlange (min, max, avg)
+    - Konflikte (Kreisdiagramm - Normal, Kassenstörung, Verärgerung)
+    - Uptime / Downtime (wie lange war Kasse verfügbar)
+        - Wie lange hatte Kasse Störung
+        - Wie lange gabs Verärgerungen an der Kasse
+    - Anzahl Kunden
+        - normal
+        - disabled
+        - mit handheld
+    - Anzahl gescannter Artikel
+    - Bezahlung
 
-- großes Refactoring
+- großes Refactoring (Wichtige Methoden auslagern - wie für Exponentialverteilung - für Unit-Tests)
 
 - Dokumentation
 - Diagramme
 - Benutzerhandbuch
 
-
-
+Bugs:
+- Wenn Abarbeitung der Kunden länger als 0:00 Uhr braucht, beginnt ein neuer Tag.
 
 
 Optional:
+- Klick auf Kunde zeigt Live-Statistiken vom Kunden
+- Standardkamera besser positionieren
+- Hintergrund auf Englisch
 - Unit-Tests
 - mart-Buttons für Überwachungskameras: Kameraperspektiven über Buttons einstellbar
 

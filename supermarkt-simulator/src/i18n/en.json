@@ -48,9 +48,11 @@
       "conflicts_tab": "Conflicts",
       "checkout_failures": "Checkout Failures",
       "failure_normal": "Failure (Normal):",
-      "failure_sb": "Failure (Self-Checkout):",
+      "failure_sb": "Failure (SB):",
       "customer_annoyance": "Customer Annoyance",
-      "annoyance_rate": "Annoyance:"
+      "annoyance_rate": "Annoyance:",
+      "input_blocked_title": "⚠️ Input Blocked",
+      "input_blocked_message": "Input parameters cannot be changed during simulation. Please reset the simulation to change the parameters."
     },
     "stats": {
       "live_data": "Live Data",

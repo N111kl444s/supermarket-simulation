@@ -253,6 +253,25 @@ class Sidebar(QWidget):
         l_input_main = QVBoxLayout(tab_input_container)
         l_input_main.setContentsMargins(0, 5, 0, 0)
 
+        # Blockierungs-Meldung (wird anfangs versteckt)
+        self.input_blocked_warning = QLabel()
+        self.input_blocked_warning.setStyleSheet(
+            """
+            QLabel {
+                background-color: #FEE2E2;
+                color: #991B1B;
+                padding: 10px;
+                border-radius: 4px;
+                border-left: 4px solid #DC2626;
+                font-weight: bold;
+                font-size: 11px;
+            }
+            """
+        )
+        self.input_blocked_warning.setWordWrap(True)
+        self.input_blocked_warning.setVisible(False)
+        l_input_main.addWidget(self.input_blocked_warning)
+
         self.input_sub_tabs = QTabWidget()
         l_input_main.addWidget(self.input_sub_tabs)
 
@@ -1487,3 +1506,65 @@ class Sidebar(QWidget):
         self.widget_refs[key] = widget
         self.widget_refs[f"{key}_trans_key"] = trans_key
         return widget
+
+    # ==========================================
+    # INPUT BLOCKING METHODS
+    # ==========================================
+    def set_input_blocked(self, blocked, translator=None):
+        """Enable/disable all input controls and show/hide warning message."""
+        if blocked:
+            # Show warning message
+            if translator:
+                title = translator.get(
+                    "sidebar.input.input_blocked_title", "⚠️ Eingabe gesperrt"
+                )
+                message = translator.get(
+                    "sidebar.input.input_blocked_message",
+                    "Während der Simulation können die Eingabeparameter nicht geändert werden. Bitte setzen Sie die Simulation zurück.",
+                )
+                self.input_blocked_warning.setText(f"{title}\n{message}")
+            else:
+                self.input_blocked_warning.setText(
+                    "⚠️ Eingabe gesperrt\nWährend der Simulation können die Eingabeparameter nicht geändert werden."
+                )
+            self.input_blocked_warning.setVisible(True)
+        else:
+            self.input_blocked_warning.setVisible(False)
+
+        # Disable/enable all input widgets recursively
+        self._set_widgets_enabled(self.input_sub_tabs, not blocked)
+
+    def _set_widgets_enabled(self, widget, enabled):
+        """Recursively enable/disable input widgets, but keep tabs clickable."""
+        from PyQt6.QtWidgets import QTabWidget, QTabBar
+
+        # Skip QTabWidget and QTabBar - we want tabs to remain clickable
+        if isinstance(widget, (QTabWidget, QTabBar)):
+            # Recursively process children but don't disable the tab itself
+            if hasattr(widget, "children"):
+                for child in widget.children():
+                    if child:
+                        self._set_widgets_enabled(child, enabled)
+            return
+
+        # Only call setEnabled if it's a QWidget
+        if hasattr(widget, "setEnabled"):
+            try:
+                widget.setEnabled(enabled)
+            except AttributeError:
+                pass
+
+        if hasattr(widget, "children"):
+            for child in widget.children():
+                if child:
+                    self._set_widgets_enabled(child, enabled)
+
+    def preload_all_input_tabs(self):
+        """Preload all input tabs to ensure they are rendered and visible."""
+        if hasattr(self, "input_sub_tabs"):
+            current_index = self.input_sub_tabs.currentIndex()
+            # Cycle through all tabs to force them to load
+            for i in range(self.input_sub_tabs.count()):
+                self.input_sub_tabs.setCurrentIndex(i)
+            # Return to the original tab
+            self.input_sub_tabs.setCurrentIndex(current_index)
