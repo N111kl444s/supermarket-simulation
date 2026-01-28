@@ -377,11 +377,16 @@ class Sidebar(QWidget):
             if self.translator
             else "Zeitabstände zwischen Kunden sind zufällig (Poisson-Prozess)."
         )
+        dist_exponential = (
+            self.translator.get("sidebar.input.dist_exponential")
+            if self.translator
+            else "(Exponentialverteilung)"
+        )
         gb_spawn = QGroupBox(cv_title)
         v_spawn = QVBoxLayout(gb_spawn)
         self._add_gb_header(
             v_spawn,
-            "(Exponentialverteilung)",
+            dist_exponential,
             cv_desc,
         )
         f_spawn = QFormLayout()
@@ -413,11 +418,16 @@ class Sidebar(QWidget):
             if self.translator
             else "Gauß-Verteilung mit Mittelwert (Ø) und Standardabweichung (σ)."
         )
+        dist_normal = (
+            self.translator.get("sidebar.input.dist_normal")
+            if self.translator
+            else "(Normalverteilung)"
+        )
         gb_speed = QGroupBox(speed_title)
         v_speed = QVBoxLayout(gb_speed)
         self._add_gb_header(
             v_speed,
-            "(Normalverteilung)",
+            dist_normal,
             speed_desc,
         )
         f_speed = QFormLayout()
@@ -451,9 +461,14 @@ class Sidebar(QWidget):
             if self.translator
             else "Anzahl der Artikel im Wagen."
         )
+        dist_normal = (
+            self.translator.get("sidebar.input.dist_normal")
+            if self.translator
+            else "(Normalverteilung)"
+        )
         gb_cart = QGroupBox(cart_title)
         v_cart = QVBoxLayout(gb_cart)
-        self._add_gb_header(v_cart, "(Normalverteilung)", cart_desc)
+        self._add_gb_header(v_cart, dist_normal, cart_desc)
         f_cart = QFormLayout()
         self.items_mean = self._create_spin(15, 1, 100)
         self.items_std = self._create_double_spin(5.0, 0, 50)
@@ -491,11 +506,16 @@ class Sidebar(QWidget):
             if self.translator
             else "Zufällige Zeit pro Artikel zwischen Min und Max."
         )
+        dist_uniform = (
+            self.translator.get("sidebar.input.dist_uniform")
+            if self.translator
+            else "(Gleichverteilung)"
+        )
         gb_scan = QGroupBox(scan_title)
         v_scan = QVBoxLayout(gb_scan)
         self._add_gb_header(
             v_scan,
-            "(Gleichverteilung)",
+            dist_uniform,
             scan_desc,
         )
         f_scan = QFormLayout()
@@ -529,9 +549,14 @@ class Sidebar(QWidget):
             if self.translator
             else "Muss sich auf 100% ergänzen."
         )
+        dist_percent = (
+            self.translator.get("sidebar.input.dist_percent")
+            if self.translator
+            else "(Verteilung in %)"
+        )
         gb_pay = QGroupBox(payment_title)
         v_pay = QVBoxLayout(gb_pay)
-        self._add_gb_header(v_pay, "(Verteilung in %)", payment_desc)
+        self._add_gb_header(v_pay, dist_percent, payment_desc)
         f_pay = QFormLayout()
         self.payment_cash = self._create_double_spin(30.0, 0, 100, " %")
         self.payment_card = self._create_double_spin(70.0, 0, 100, " %")
@@ -618,13 +643,23 @@ class Sidebar(QWidget):
             if self.translator
             else "Wie lange ein Techniker braucht."
         )
+        dist_uniform_sec_item = (
+            self.translator.get("sidebar.input.dist_uniform_sec_item")
+            if self.translator
+            else "(Sek/Artikel - Gleichverteilung)"
+        )
+        dist_uniform_seconds = (
+            self.translator.get("sidebar.input.dist_uniform_seconds")
+            if self.translator
+            else "(Sekunden - Gleichverteilung)"
+        )
 
         # 1. Cashier Scan
         gb_cashier = QGroupBox(cashier_title)
         v_cashier = QVBoxLayout(gb_cashier)
         self._add_gb_header(
             v_cashier,
-            "(Sek/Artikel - Gleichverteilung)",
+            dist_uniform_sec_item,
             cashier_desc,
         )
         f_cashier = QFormLayout()
@@ -642,7 +677,7 @@ class Sidebar(QWidget):
         v_paytime = QVBoxLayout(gb_paytime)
         self._add_gb_header(
             v_paytime,
-            "(Sekunden - Gleichverteilung)",
+            dist_uniform_seconds,
             paytime_desc,
         )
         f_paytime = QFormLayout()
@@ -660,7 +695,7 @@ class Sidebar(QWidget):
         v_maint = QVBoxLayout(gb_maint)
         self._add_gb_header(
             v_maint,
-            "(Sekunden - Gleichverteilung)",
+            dist_uniform_seconds,
             conflict_desc,
         )
         f_maint = QFormLayout()
@@ -719,13 +754,18 @@ class Sidebar(QWidget):
             if self.translator
             else "Chance, dass ein Kunde verärgert wird."
         )
+        dist_probability_percent = (
+            self.translator.get("sidebar.input.dist_probability_percent")
+            if self.translator
+            else "(Wahrscheinlichkeit in %)"
+        )
 
         # 1. Failures
         gb_co = QGroupBox(checkout_title)
         v_co = QVBoxLayout(gb_co)
         self._add_gb_header(
             v_co,
-            "(Wahrscheinlichkeit in %)",
+            dist_probability_percent,
             checkout_desc,
         )
         f_co = QFormLayout()
@@ -741,7 +781,7 @@ class Sidebar(QWidget):
         v_annoy = QVBoxLayout(gb_annoy)
         self._add_gb_header(
             v_annoy,
-            "(Wahrscheinlichkeit in %)",
+            dist_probability_percent,
             annoy_desc,
         )
         f_annoy = QFormLayout()

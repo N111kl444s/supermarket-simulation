@@ -186,11 +186,11 @@ class MapManager:
         maps = sorted([f.name for f in MAPS_DIR.glob("*.json")])
         if not maps:
             self._create_default_map()
-            maps = ["Standard (Einfach).json"]
+            maps = ["Standard 1.json"]
         return maps
 
     def _create_default_map(self):
-        default_name = "Standard (Einfach).json"
+        default_name = "Standard 1.json"
         default_data = {"routes": {}, "shelves": [], "checkouts": []}
         try:
             with open(MAPS_DIR / default_name, "w") as f:

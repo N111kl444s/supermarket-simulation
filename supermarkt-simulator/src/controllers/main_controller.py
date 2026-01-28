@@ -73,7 +73,7 @@ class MainController:
         # Preload customer images to avoid lag on first customer spawn
         self._preload_customer_images()
 
-        self.load_map("Standard (Einfach).json")
+        self.load_map("Standard 1.json")
         self.view.showMaximized()
 
     def _setup_connections(self):
@@ -215,21 +215,16 @@ class MainController:
     def _update_clock_ui(self, time_str):
         self.view.clock_widget.setText(time_str)
         current = self.sim_manager.sim_time
-        open_t = self.sim_manager.open_time
-        close_t = self.sim_manager.close_time
-        total_secs = open_t.secsTo(close_t)
-        elapsed = open_t.secsTo(current)
+        total_secs = self.sim_manager.get_open_duration_seconds()
+        elapsed = self.sim_manager.get_elapsed_open_seconds(current)
         if total_secs > 0:
             progress = elapsed / total_secs
             self.view.clock_widget.set_progress(progress)
-        is_past_closing = elapsed >= total_secs
-        if not is_past_closing:
+        if not self.sim_manager.store_is_closed_trigger:
             self.view.clock_widget.set_overtime(False)
 
     def _check_overtime(self, customers_in_store):
-        current = self.sim_manager.sim_time
-        close_t = self.sim_manager.close_time
-        if current >= close_t and customers_in_store > 0:
+        if self.sim_manager.store_is_closed_trigger and customers_in_store > 0:
             self.view.clock_widget.set_overtime(True)
         else:
             self.view.clock_widget.set_overtime(False)
@@ -336,7 +331,7 @@ class MainController:
         for display_name, _ in display_maps:
             self.view.map_combo.addItem(display_name)
 
-        preferred_map = "Standard (Einfach).json"
+        preferred_map = "Standard 1.json"
         target = None
         if self.map_manager.current_map_file:
             target = self.map_manager.current_map_file.name
@@ -486,6 +481,29 @@ class MainController:
             # Input is still blocked during pause
         else:
             if not self.sim_manager.is_initialized:
+                has_open_checkout = any(
+                    c.get("open", True)
+                    for c in self.map_manager.checkouts_data
+                )
+                if not has_open_checkout:
+                    title = (
+                        self.translator.get(
+                            "errors.no_open_checkout_title", "Fehler"
+                        )
+                        if self.translator
+                        else "Fehler"
+                    )
+                    message = (
+                        self.translator.get(
+                            "errors.no_open_checkout_message",
+                            "Mindestens eine Kasse (Normal oder SB) muss geöffnet sein, um die Simulation zu starten.",
+                        )
+                        if self.translator
+                        else "Mindestens eine Kasse (Normal oder SB) muss geöffnet sein, um die Simulation zu starten."
+                    )
+                    QMessageBox.warning(self.view, title, message)
+                    self.view.btn_play_pause.setChecked(False)
+                    return
                 try:
                     count = self.view.actor_count_input.value()
                     prob = self.view.disabled_prob_input.value()

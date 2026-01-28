@@ -93,9 +93,7 @@ class SimulationManager(QObject):
         self.time_accumulator_sec = 0.0
         self.total_customers_spawned = 0
         self.store_is_closed_trigger = False
-        seconds_open = self.open_time.secsTo(self.close_time)
-        if seconds_open <= 0:
-            seconds_open = 1
+        seconds_open = self._get_open_duration_seconds()
         self.average_spawn_interval = seconds_open / max(
             1, self.target_daily_customers
         )
@@ -116,6 +114,26 @@ class SimulationManager(QObject):
             f"Laden geöffnet. Erwarte ca. {self.target_daily_customers} Kunden.",
             "blue",
         )
+
+    def _get_open_duration_seconds(self):
+        """Return opening duration in seconds, supporting overnight and 24h."""
+        seconds_open = self.open_time.secsTo(self.close_time)
+        if seconds_open == 0:
+            return 24 * 60 * 60
+        if seconds_open < 0:
+            return seconds_open + 24 * 60 * 60
+        return seconds_open
+
+    def get_open_duration_seconds(self):
+        return self._get_open_duration_seconds()
+
+    def get_elapsed_open_seconds(self, current_time=None):
+        """Return seconds elapsed since open_time, supporting overnight/24h."""
+        current = current_time if current_time else self.sim_time
+        elapsed = self.open_time.secsTo(current)
+        if elapsed < 0:
+            elapsed += 24 * 60 * 60
+        return elapsed
 
     def skip_day(self):
         self.pause()

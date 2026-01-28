@@ -264,7 +264,7 @@ class VisualController:
         if is_selected:
             ci.setSelected(True)
 
-        if c_type == "Normal" and self.settings["show_cashiers"] and (is_open or is_malfunction):
+        if c_type == "Normal" and self.settings["show_cashiers"] and is_open:
             skill = cd.get("cashier_skill") or cd.get("skill") or "Azubi"
             checkout_id = cd.get("id", 1)
             variant = max(0, checkout_id - 1)

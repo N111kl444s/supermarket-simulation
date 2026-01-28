@@ -1,18 +1,13 @@
 - Pop-Up Style anpassen (End-POPUP)
-- Map-Namen umbenennen (Multi-Language Standard 1 und Standard 2 oder so)
 - Fehlerhafte Buttons umfunktionieren zu Coming Soon (Kasse R und Skip Buttoneeeeeeeeeeeeeeeeeeeeeeeeeewee)
 
 - Klick auf Kasse während laufender Simulation (auch Pause) soll Live-Statistiken zeigen von der Kasse
 
-Jetzt muss noch die logik für den rotblinkenden Timer überarbeitet werden, dass er nur dann erst blinkt, wenn der laden geschlossen hat.
-
-Kannst du mal überprüfen on auch 24 Stunde möglich wären, also von 08:00 bis 08:00 Uhr ohne das Fehler auftreten, es wäre schön wenn das klappen würde.
-
-- (Exponentialverteilung) -> Nicht übersetzt!
-
 - Tooltips überarbeiten
 
 - Eingabeparameter überprüfen und Logik anpassen
+
+
 - Statistiken!!! (Siehe #STATISTIC_DESIGN)
  - Kunde (jeweils im Laden, Warteschlange und Kassen):
     - Min Zeit
@@ -49,9 +44,6 @@ Kannst du mal überprüfen on auch 24 Stunde möglich wären, also von 08:00 bis
 - Diagramme
 - Benutzerhandbuch
 
-Bugs:
-- Wenn Abarbeitung der Kunden länger als 0:00 Uhr braucht, beginnt ein neuer Tag.
-- Konflikte an der SB-Kasse werden nicht behoben
 
 
 Optional:
