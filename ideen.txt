@@ -4,6 +4,12 @@
 
 - Klick auf Kasse während laufender Simulation (auch Pause) soll Live-Statistiken zeigen von der Kasse
 
+Jetzt muss noch die logik für den rotblinkenden Timer überarbeitet werden, dass er nur dann erst blinkt, wenn der laden geschlossen hat.
+
+Kannst du mal überprüfen on auch 24 Stunde möglich wären, also von 08:00 bis 08:00 Uhr ohne das Fehler auftreten, es wäre schön wenn das klappen würde.
+
+- (Exponentialverteilung) -> Nicht übersetzt!
+
 - Tooltips überarbeiten
 
 - Eingabeparameter überprüfen und Logik anpassen
