@@ -1,11 +1,8 @@
-- Pop-Up Style anpassen (Editor)
-
+- Pop-Up Style anpassen (End-POPUP)
+- Map-Namen umbenennen (Multi-Language Standard 1 und Standard 2 oder so)
 - Fehlerhafte Buttons umfunktionieren zu Coming Soon (Kasse R und Skip Buttoneeeeeeeeeeeeeeeeeeeeeeeeeewee)
 
 - Klick auf Kasse während laufender Simulation (auch Pause) soll Live-Statistiken zeigen von der Kasse
-
-- Eingabeparameter blockieren während der Simulation (auch im Zustand: "Pause")
-- Kasse nicht mehr veränderbar während einer Simulation (auch im Zustand "Pause")
 
 - Tooltips überarbeiten
 
@@ -48,6 +45,7 @@
 
 Bugs:
 - Wenn Abarbeitung der Kunden länger als 0:00 Uhr braucht, beginnt ein neuer Tag.
+- Konflikte an der SB-Kasse werden nicht behoben
 
 
 Optional:
