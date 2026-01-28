@@ -89,6 +89,12 @@ class CheckoutItem(QGraphicsObject):
         path.addRect(self.boundingRect())
         return path
 
+    def set_selectable(self, selectable: bool):
+        """Enable/disable selection capability."""
+        self.setFlag(
+            QGraphicsObject.GraphicsItemFlag.ItemIsSelectable, selectable
+        )
+
     def paint(self, painter: QPainter, option, widget=None):
         pixmap = (
             self._pixmap_sb if self.c_type == "SB" else self._pixmap_normal
@@ -114,10 +120,13 @@ class CheckoutItem(QGraphicsObject):
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.c_type)
             painter.restore()
 
+        # Draw red selection rectangle only in editor mode when selected
         if option.state & QStyle.StateFlag.State_Selected:
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.setPen(QPen(COLOR_SELECTION, 1.5))
-            painter.drawRect(rect.adjusted(1, 1, -1, -1))
+            scene = self.scene()
+            if scene is not None and scene.is_editor_mode:
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.setPen(QPen(COLOR_SELECTION, 1.5))
+                painter.drawRect(rect.adjusted(1, 1, -1, -1))
 
         # SCREEN IS DRAWN EXTERNALLY IN VISUAL CONTROLLER
 

@@ -19,9 +19,25 @@ class SimulationScene(QGraphicsScene):
         super().__init__(parent)
         self.temp_rect_item = None
         self.start_point = None
+        self.main_window = None  # Will be set by MainWindow
 
         # Hintergrund-Gitter oder ähnliches könnte man hier initen
         # self.setBackgroundBrush(QBrush(QColor("#F5F7FA")))
+
+    @property
+    def is_editor_mode(self):
+        """Get editor mode from main_window's mode_combo if available."""
+        if self.main_window and hasattr(self.main_window, "mode_combo"):
+            return self.main_window.mode_combo.currentText() == "Editor"
+        return True  # Default to editor mode if not set
+
+    @is_editor_mode.setter
+    def is_editor_mode(self, value: bool):
+        """Update all items' selectability based on editor mode."""
+        # Update all items that have set_selectable method
+        for item in self.items():
+            if hasattr(item, "set_selectable"):
+                item.set_selectable(value)
 
     def mousePressEvent(self, event):
         # Basis-Handling (Items selektieren etc.)
@@ -29,9 +45,7 @@ class SimulationScene(QGraphicsScene):
 
         # Linksklick auf leere Fläche -> Signal senden (für Regale/Kassen platzieren)
         if event.button() == Qt.MouseButton.LeftButton:
-            if not self.itemAt(
-                event.scenePos(), self.views()[0].transform()
-            ):
+            if not self.itemAt(event.scenePos(), self.views()[0].transform()):
                 self.clicked_point.emit(event.scenePos())
             else:
                 # Auch wenn Item da ist, wollen wir das Event für Logic nutzen (z.B. Kasse anklicken)

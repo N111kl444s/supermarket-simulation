@@ -137,22 +137,38 @@ class SimulationManager(QObject):
         self._handle_maintenance(game_dt)
         self._handle_conflicts(game_dt)
 
-        is_closing_time = self.sim_time >= self.close_time
-        if is_closing_time:
-            if not self.store_is_closed_trigger:
+        # Determine if store should be closed
+        # Once store_is_closed_trigger is set to True, it stays True
+        if not self.store_is_closed_trigger:
+            # Check if we've reached closing time
+            # Handle both normal hours (open < close) and overnight hours (open > close)
+            if self.open_time < self.close_time:
+                # Normal case: e.g., 08:00 - 20:00
+                is_closing_time = self.sim_time >= self.close_time
+            else:
+                # Overnight case: e.g., 22:00 - 06:00
+                # Store is open until it reaches close_time (next day)
+                is_closing_time = (
+                    self.sim_time >= self.close_time
+                    and self.sim_time < self.open_time
+                )
+
+            if is_closing_time:
                 self.log_message.emit(
                     "Ladenschluss! Eingang geschlossen...", "orange"
                 )
                 self.store_is_closed_trigger = True
-            if not self.customers_model:
-                self.pause()
-                self.time_updated.emit(self.sim_time.toString("HH:mm"))
-                self.log_message.emit(
-                    "Feierabend! Alle Kunden bedient.", "red"
-                )
-                self.day_finished.emit()
-                return
-        else:
+
+        # If store is closed and no customers left, end simulation
+        if self.store_is_closed_trigger and not self.customers_model:
+            self.pause()
+            self.time_updated.emit(self.sim_time.toString("HH:mm"))
+            self.log_message.emit("Feierabend! Alle Kunden bedient.", "red")
+            self.day_finished.emit()
+            return
+
+        # Only spawn new customers if store is still open (not yet closed)
+        if not self.store_is_closed_trigger:
             self._attempt_spawn(game_dt)
 
         # 2. Customers Logic
@@ -183,7 +199,10 @@ class SimulationManager(QObject):
                 if c_data and c_data.get("conflict", False):
                     is_stuck_due_to_conflict = True
 
-            if not is_stuck_due_to_malfunction and not is_stuck_due_to_conflict:
+            if (
+                not is_stuck_due_to_malfunction
+                and not is_stuck_due_to_conflict
+            ):
                 model.tick(game_dt)
 
             if model.state == "WAITING_AREA":
@@ -233,8 +252,10 @@ class SimulationManager(QObject):
 
             # Zufällige Störung
             if (
-                model.state == "SCANNING" or model.state == "PAYING"
-            ) and not is_stuck_due_to_malfunction and not is_stuck_due_to_conflict:
+                (model.state == "SCANNING" or model.state == "PAYING")
+                and not is_stuck_due_to_malfunction
+                and not is_stuck_due_to_conflict
+            ):
                 if current_global_params:
                     cid = model.assigned_checkout_id
                     c_data = next(
@@ -264,9 +285,13 @@ class SimulationManager(QObject):
 
             # Zufällige Verärgerung des Kunden
             if (
-                model.state in ("SCANNING", "PAYING")
-                and model.assigned_checkout_id is not None
-            ) and not is_stuck_due_to_malfunction and not is_stuck_due_to_conflict:
+                (
+                    model.state in ("SCANNING", "PAYING")
+                    and model.assigned_checkout_id is not None
+                )
+                and not is_stuck_due_to_malfunction
+                and not is_stuck_due_to_conflict
+            ):
                 if current_global_params:
                     cid = model.assigned_checkout_id
                     c_data = next(
@@ -284,12 +309,17 @@ class SimulationManager(QObject):
                         # Probability per frame, similar to malfunction logic
                         chance = (annoy_rate / 100.0) * game_dt
                         roll = random.random()
-                        print(f"DEBUG Annoyance: checkout {cid}, state {model.state}, rate {annoy_rate}%, chance {chance:.4f}, roll {roll:.4f}")
+                        print(
+                            f"DEBUG Annoyance: checkout {cid}, state {model.state}, rate {annoy_rate}%, chance {chance:.4f}, roll {roll:.4f}"
+                        )
                         if roll < chance:
                             c_data["conflict"] = True
-                            print(f"DEBUG: Conflict triggered at checkout {cid} with annoy_rate {annoy_rate}%")
+                            print(
+                                f"DEBUG: Conflict triggered at checkout {cid} with annoy_rate {annoy_rate}%"
+                            )
                             self.log_message.emit(
-                                f"😠 Verärgerter Kunde an Kasse {cid}!", "orange"
+                                f"😠 Verärgerter Kunde an Kasse {cid}!",
+                                "orange",
                             )
 
             elif (
@@ -328,7 +358,9 @@ class SimulationManager(QObject):
             if c_data.get("malfunction", False):
                 if "repair_timer" not in c_data:
                     # Start repair
-                    c_data["repair_duration"] = random.uniform(repair_min, repair_max)
+                    c_data["repair_duration"] = random.uniform(
+                        repair_min, repair_max
+                    )
                     c_data["repair_timer"] = 0.0
                     self.log_message.emit(
                         f"🔧 Kassierer repariert Kasse {c_data['id']}.", "blue"
@@ -349,7 +381,9 @@ class SimulationManager(QObject):
         params = (
             self.param_access_func(False) if self.param_access_func else {}
         )
-        conflict_min = params.get("worker_conflict_min", 2.0)  # Shorter than repairs
+        conflict_min = params.get(
+            "worker_conflict_min", 2.0
+        )  # Shorter than repairs
         conflict_max = params.get("worker_conflict_max", 8.0)
 
         for c_data in self.map_mgr.checkouts_data:
@@ -357,10 +391,13 @@ class SimulationManager(QObject):
                 print(f"DEBUG: Handling conflict at checkout {c_data['id']}")
                 if "conflict_timer" not in c_data:
                     # Start conflict resolution
-                    c_data["conflict_duration"] = random.uniform(conflict_min, conflict_max)
+                    c_data["conflict_duration"] = random.uniform(
+                        conflict_min, conflict_max
+                    )
                     c_data["conflict_timer"] = 0.0
                     self.log_message.emit(
-                        f"🗣️ Kassierer löst Konflikt an Kasse {c_data['id']}.", "blue"
+                        f"🗣️ Kassierer löst Konflikt an Kasse {c_data['id']}.",
+                        "blue",
                     )
                 else:
                     # Continue resolution
@@ -369,9 +406,12 @@ class SimulationManager(QObject):
                         c_data["conflict"] = False
                         del c_data["conflict_timer"]
                         del c_data["conflict_duration"]
-                        print(f"DEBUG: Conflict resolved at checkout {c_data['id']}")
+                        print(
+                            f"DEBUG: Conflict resolved at checkout {c_data['id']}"
+                        )
                         self.log_message.emit(
-                            f"✅ Konflikt an Kasse {c_data['id']} gelöst.", "green"
+                            f"✅ Konflikt an Kasse {c_data['id']} gelöst.",
+                            "green",
                         )
 
     def _attempt_spawn(self, dt_game_seconds):

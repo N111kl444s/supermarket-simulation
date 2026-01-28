@@ -1512,6 +1512,15 @@ class Sidebar(QWidget):
     # ==========================================
     def set_input_blocked(self, blocked, translator=None):
         """Enable/disable all input controls and show/hide warning message."""
+        # If we are about to block input, ensure all input tabs are preloaded so
+        # their layouts (spacing, group boxes) are properly initialized. This
+        # prevents missing spacing for tabs that haven't been shown yet.
+        if blocked and hasattr(self, "input_sub_tabs"):
+            try:
+                self.preload_all_input_tabs()
+            except Exception:
+                pass
+
         if blocked:
             # Show warning message
             if translator:
@@ -1538,13 +1547,22 @@ class Sidebar(QWidget):
         """Recursively enable/disable input widgets, but keep tabs clickable."""
         from PyQt6.QtWidgets import QTabWidget, QTabBar
 
-        # Skip QTabWidget and QTabBar - we want tabs to remain clickable
-        if isinstance(widget, (QTabWidget, QTabBar)):
-            # Recursively process children but don't disable the tab itself
-            if hasattr(widget, "children"):
-                for child in widget.children():
-                    if child:
-                        self._set_widgets_enabled(child, enabled)
+        # Special handling for QTabWidget: only enable/disable the pages
+        # (tab content widgets). Do NOT recurse into the QTabBar or its
+        # internal children (scroll buttons) because toggling those can
+        # cause the tab bar to show scroll arrows incorrectly.
+        if isinstance(widget, QTabWidget):
+            try:
+                for i in range(widget.count()):
+                    page = widget.widget(i)
+                    if page:
+                        self._set_widgets_enabled(page, enabled)
+            except Exception:
+                pass
+            return
+
+        # For the QTabBar itself, don't change anything — leave it alone.
+        if isinstance(widget, QTabBar):
             return
 
         # Only call setEnabled if it's a QWidget
