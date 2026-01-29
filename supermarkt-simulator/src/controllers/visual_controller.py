@@ -294,6 +294,8 @@ class VisualController:
                 size=self.settings.get("size_cashier", CASHIER_SIZE),
                 variant_index=variant,
             )
+            cai.setTransformOriginPoint(cai.boundingRect().center())
+            cai.setRotation(angle)
             cai.setData(0, cd["id"])  # Store checkout id
             cai.setParentItem(self.map_group)
             cai.setZValue(25)
@@ -448,6 +450,37 @@ class VisualController:
         draw(map_manager.shop_routes, QColor(100, 100, 100, 100))
         draw(map_manager.start_routes, COLOR_BLUE)
         draw(map_manager.exit_routes, COLOR_RED)
+
+    def highlight_route(self, map_manager, spec):
+        if not spec:
+            return
+        route_type = spec.get("type")
+        name = spec.get("name")
+        if not route_type or not name:
+            return
+
+        routes = {}
+        if route_type == "shop_route":
+            routes = map_manager.shop_routes
+        elif route_type == "start_route":
+            routes = map_manager.start_routes
+        elif route_type == "exit_route":
+            routes = map_manager.exit_routes
+
+        pts = routes.get(name)
+        if not pts or len(pts) < 2:
+            return
+
+        pp = QPainterPath()
+        pp.moveTo(pts[0])
+        [pp.lineTo(p) for p in pts[1:]]
+        pi = QGraphicsPathItem(pp)
+        pen = QPen(QColor(255, 165, 0, 220), 4, Qt.PenStyle.SolidLine)
+        pen.setCosmetic(True)
+        pi.setPen(pen)
+        pi.setZValue(6)
+        pi.setParentItem(self.map_group)
+        self.route_debug_items.append(pi)
 
     def sync_customers(self, models):
         # Sync Customers

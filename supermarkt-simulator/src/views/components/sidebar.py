@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QStyle,
 )
 from PyQt6.QtCore import QTime, Qt, pyqtSignal
+import random
 from config import COLOR_ACCENT, COLOR_ERROR, COLOR_SUCCESS, COLOR_BG_PANEL
 
 
@@ -66,10 +67,26 @@ class Sidebar(QWidget):
                 font-size: 14px;
                 height: 44px;
             }}
+            QPushButton.HeaderBtn:hover {{
+                background-color: #F8FAFC;
+                border-color: {accent};
+                color: {accent};
+            }}
+            QPushButton.HeaderBtn:pressed {{
+                background-color: {accent};
+                color: white;
+                border: 1px solid {accent};
+            }}
             QPushButton.HeaderBtn:checked {{
                 background-color: {accent};
                 color: white;
                 border: 1px solid {accent};
+            }}
+            QPushButton#BtnMainMenu {{
+                font-size: 18px;
+            }}
+            QPushButton#BtnRandomize {{
+                font-size: 18px;
             }}
             QPushButton#BtnLang {{
                 font-size: 26px;
@@ -117,6 +134,15 @@ class Sidebar(QWidget):
                 left: 10px;
                 padding: 0 5px;
                 color: #374151;
+            }}
+            /* Form labels + inputs symmetry */
+            QLabel {{
+                font-size: 14px;
+                color: #374151;
+            }}
+            QSpinBox, QDoubleSpinBox, QTimeEdit, QComboBox {{
+                min-height: 32px;
+                font-size: 14px;
             }}
         """
         )
@@ -178,6 +204,11 @@ class Sidebar(QWidget):
         self.btn_mode_sim.setCheckable(True)
         self.btn_mode_sim.setChecked(True)
         self.btn_mode_sim.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_mode_sim.setToolTip(
+            self.translator.get("tooltips.button_mode_sim")
+            if self.translator
+            else "Simulationmodus"
+        )
         self.btn_mode_sim.setStyleSheet(
             "border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none;"
         )
@@ -186,6 +217,11 @@ class Sidebar(QWidget):
         self.btn_mode_edit.setProperty("class", "HeaderBtn")
         self.btn_mode_edit.setCheckable(True)
         self.btn_mode_edit.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_mode_edit.setToolTip(
+            self.translator.get("tooltips.button_mode_edit")
+            if self.translator
+            else "Editormodus"
+        )
         self.btn_mode_edit.setStyleSheet(
             "border-top-left-radius: 0; border-bottom-left-radius: 0;"
         )
@@ -207,6 +243,22 @@ class Sidebar(QWidget):
         h_mode.addWidget(self.btn_mode_edit)
         h_layout.addLayout(h_mode, 1)
 
+        # Randomize Button (Shuffle)
+        rand_tooltip = (
+            self.translator.get("sidebar.input.randomize_tooltip")
+            if self.translator
+            else "Alle Eingabeparameter zufällig befüllen"
+        )
+        rand_tooltip = f"<span style=\"font-size:11px;\">{rand_tooltip}</span>"
+        self.btn_randomize = QPushButton("🔀")
+        self.btn_randomize.setObjectName("BtnRandomize")
+        self.btn_randomize.setProperty("class", "HeaderBtn")
+        self.btn_randomize.setCheckable(False)
+        self.btn_randomize.setFixedWidth(60)
+        self.btn_randomize.setToolTip(rand_tooltip)
+        self.btn_randomize.clicked.connect(self._randomize_input_params)
+        h_layout.addWidget(self.btn_randomize, 0)
+
         # Main Menu Button (Home)
         self.btn_main_menu = QPushButton("🏠")  # House emoji
         self.btn_main_menu.setObjectName("BtnMainMenu")
@@ -218,6 +270,7 @@ class Sidebar(QWidget):
             if self.translator
             else "Zurück zum Hauptmenü"
         )
+        tooltip_text = f"<span style=\"font-size:11px;\">{tooltip_text}</span>"
         self.btn_main_menu.setToolTip(tooltip_text)
         self.btn_main_menu.clicked.connect(self._go_to_main_menu)
         h_layout.addWidget(self.btn_main_menu, 0)
@@ -296,7 +349,15 @@ class Sidebar(QWidget):
 
     def _setup_shop_tab(self):
         sub_shop = QWidget()
-        l_shop = QVBoxLayout(sub_shop)
+        l_shop_root = QVBoxLayout(sub_shop)
+        l_shop_root.setContentsMargins(0, 0, 0, 0)
+        scroll_shop = QScrollArea()
+        scroll_shop.setWidgetResizable(True)
+        scroll_shop.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        content_shop = QWidget()
+        l_shop = QVBoxLayout(content_shop)
         l_shop.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         # 1. Map
@@ -307,7 +368,19 @@ class Sidebar(QWidget):
         )
         gb_map = QGroupBox(map_select_text)
         v_map = QVBoxLayout(gb_map)
+        dist_none = (
+            self.translator.get("sidebar.input.dist_none")
+            if self.translator
+            else "(keine Verteilungsform)"
+        )
+        map_desc = (
+            self.translator.get("tooltips.map_select")
+            if self.translator
+            else "Wechselt die Map (Layout, Routen, Bereiche)."
+        )
+        self._add_gb_header(v_map, dist_none, map_desc)
         self.map_combo = QComboBox()
+        self.map_combo.setToolTip(map_desc)
         v_map.addWidget(self.map_combo)
         l_shop.addWidget(gb_map)
 
@@ -319,6 +392,12 @@ class Sidebar(QWidget):
         )
         gb_time = QGroupBox(time_control_text)
         v_time = QVBoxLayout(gb_time)
+        time_desc = (
+            self.translator.get("tooltips.time_control")
+            if self.translator
+            else "Legt Öffnungs- und Schließzeit des Ladens fest."
+        )
+        self._add_gb_header(v_time, dist_none, time_desc)
         f_time = QFormLayout()
         self.time_open = QTimeEdit(QTime(8, 0))
         self.time_close = QTimeEdit(QTime(20, 0))
@@ -337,26 +416,7 @@ class Sidebar(QWidget):
         v_time.addLayout(f_time)
         l_shop.addWidget(gb_time)
 
-        shop_tab_text = (
-            self.translator.get("sidebar.input.shop_tab")
-            if self.translator
-            else "Laden"
-        )
-        self.input_sub_tabs.addTab(sub_shop, shop_tab_text)
-
-    def _setup_cust_tab(self):
-        # Setup Scroll Area Logic
-        tab_cust_container = QWidget()
-        l_cust_cont = QVBoxLayout(tab_cust_container)
-        l_cust_cont.setContentsMargins(0, 0, 0, 0)
-        scroll_cust = QScrollArea()
-        scroll_cust.setWidgetResizable(True)
-        content_cust = QWidget()
-        l_gb_cust = QVBoxLayout(content_cust)
-        l_gb_cust.setAlignment(Qt.AlignmentFlag.AlignTop)
-        l_gb_cust.setSpacing(15)
-
-        # 1. Spawn
+        # 3. Customer Volume (moved from Customers tab)
         cv_title = (
             self.translator.get("sidebar.input.customer_volume")
             if self.translator
@@ -375,29 +435,64 @@ class Sidebar(QWidget):
         cv_desc = (
             self.translator.get("tooltips.customer_volume")
             if self.translator
-            else "Zeitabstände zwischen Kunden sind zufällig (Poisson-Prozess)."
+            else "Zeitabstände zwischen Kunden folgen einer Exponentialverteilung."
         )
         dist_exponential = (
             self.translator.get("sidebar.input.dist_exponential")
             if self.translator
             else "(Exponentialverteilung)"
         )
+        disabled_desc = (
+            self.translator.get("tooltips.share_disabled")
+            if self.translator
+            else "Anteil an Kunden mit Beeinträchtigung (in %)."
+        )
         gb_spawn = QGroupBox(cv_title)
         v_spawn = QVBoxLayout(gb_spawn)
-        self._add_gb_header(
-            v_spawn,
-            dist_exponential,
-            cv_desc,
-        )
+        self._add_gb_header(v_spawn, dist_exponential, cv_desc)
         f_spawn = QFormLayout()
         self.actor_count_input = self._create_spin(50, 1, 10000)
         self.disabled_prob_input = self._create_spin(10, 0, 100, " %")
+        self.disabled_prob_input.setToolTip(disabled_desc)
         f_spawn.addRow(cv_day, self.actor_count_input)
         f_spawn.addRow(cv_share, self.disabled_prob_input)
         v_spawn.addLayout(f_spawn)
-        l_gb_cust.addWidget(gb_spawn)
+        l_shop.addWidget(gb_spawn)
 
-        # 2. Speed
+        checkout_hint = (
+            self.translator.get("sidebar.input.checkout_hint")
+            if self.translator
+            else "Tipp: Kasse anklicken, um Öffnungsstatus, Warteschlange und Kassierertyp zu ändern."
+        )
+        lbl_hint = QLabel(checkout_hint)
+        lbl_hint.setWordWrap(True)
+        lbl_hint.setStyleSheet(
+            "background-color: #EFF6FF; color: #1E40AF; padding: 8px; border-radius: 6px; font-size: 11px;"
+        )
+        l_shop.addWidget(lbl_hint)
+
+        shop_tab_text = (
+            self.translator.get("sidebar.input.shop_tab")
+            if self.translator
+            else "Laden"
+        )
+        scroll_shop.setWidget(content_shop)
+        l_shop_root.addWidget(scroll_shop)
+        self.input_sub_tabs.addTab(sub_shop, shop_tab_text)
+
+    def _setup_cust_tab(self):
+        # Setup Scroll Area Logic
+        tab_cust_container = QWidget()
+        l_cust_cont = QVBoxLayout(tab_cust_container)
+        l_cust_cont.setContentsMargins(0, 0, 0, 0)
+        scroll_cust = QScrollArea()
+        scroll_cust.setWidgetResizable(True)
+        content_cust = QWidget()
+        l_gb_cust = QVBoxLayout(content_cust)
+        l_gb_cust.setAlignment(Qt.AlignmentFlag.AlignTop)
+        l_gb_cust.setSpacing(15)
+
+        # 1. Speed
         speed_title = (
             self.translator.get("sidebar.input.speed")
             if self.translator
@@ -461,6 +556,11 @@ class Sidebar(QWidget):
             if self.translator
             else "Anzahl der Artikel im Wagen."
         )
+        handheld_desc = (
+            self.translator.get("tooltips.hand_scanner")
+            if self.translator
+            else "Kunde scannt mit Handscanner und muss an der Kasse nur einmal scannen."
+        )
         dist_normal = (
             self.translator.get("sidebar.input.dist_normal")
             if self.translator
@@ -471,7 +571,7 @@ class Sidebar(QWidget):
         self._add_gb_header(v_cart, dist_normal, cart_desc)
         f_cart = QFormLayout()
         self.items_mean = self._create_spin(15, 1, 100)
-        self.items_std = self._create_double_spin(5.0, 0, 50)
+        self.items_std = self._create_spin(5, 0, 50)
         # Custom Row for Items
         h_it = QHBoxLayout()
         h_it.addWidget(QLabel("Ø:"))
@@ -481,6 +581,7 @@ class Sidebar(QWidget):
         f_cart.addRow(cart_items, h_it)
 
         self.hand_scanner_prob = self._create_spin(20, 0, 100, " %")
+        self.hand_scanner_prob.setToolTip(handheld_desc)
         f_cart.addRow(cart_scanner, self.hand_scanner_prob)
         v_cart.addLayout(f_cart)
         l_gb_cust.addWidget(gb_cart)
@@ -489,7 +590,7 @@ class Sidebar(QWidget):
         scan_title = (
             self.translator.get("sidebar.input.scan_duration")
             if self.translator
-            else "Scan-Dauer (Kunde)"
+            else "Scan-Geschwindigkeit"
         )
         scan_normal = (
             self.translator.get("sidebar.input.scan_normal")
@@ -504,7 +605,7 @@ class Sidebar(QWidget):
         scan_desc = (
             self.translator.get("tooltips.scan")
             if self.translator
-            else "Zufällige Zeit pro Artikel zwischen Min und Max."
+            else "Zeit pro Artikel (gleichverteilt zwischen Min und Max)."
         )
         dist_uniform = (
             self.translator.get("sidebar.input.dist_uniform")
@@ -547,7 +648,7 @@ class Sidebar(QWidget):
         payment_desc = (
             self.translator.get("tooltips.payment")
             if self.translator
-            else "Muss sich auf 100% ergänzen."
+            else "Legt die Wahrscheinlichkeit für Bargeld/Karte fest (Summe 100%)."
         )
         dist_percent = (
             self.translator.get("sidebar.input.dist_percent")
@@ -558,19 +659,50 @@ class Sidebar(QWidget):
         v_pay = QVBoxLayout(gb_pay)
         self._add_gb_header(v_pay, dist_percent, payment_desc)
         f_pay = QFormLayout()
-        self.payment_cash = self._create_double_spin(30.0, 0, 100, " %")
-        self.payment_card = self._create_double_spin(70.0, 0, 100, " %")
+        self.payment_cash = self._create_spin(30, 0, 100, " %")
+        self.payment_card = self._create_spin(70, 0, 100, " %")
         # Auto-Balance Logic
         self.payment_cash.valueChanged.connect(
-            lambda v: self.payment_card.setValue(100.0 - v)
+            lambda v: self.payment_card.setValue(int(100 - v))
         )
         self.payment_card.valueChanged.connect(
-            lambda v: self.payment_cash.setValue(100.0 - v)
+            lambda v: self.payment_cash.setValue(int(100 - v))
         )
         f_pay.addRow(payment_cash, self.payment_cash)
         f_pay.addRow(payment_card, self.payment_card)
         v_pay.addLayout(f_pay)
         l_gb_cust.addWidget(gb_pay)
+
+        # 6. Payment Duration (SB)
+        sb_pay_title = (
+            self.translator.get("sidebar.input.payment_duration_sb")
+            if self.translator
+            else "Bezahldauer (SB)"
+        )
+        sb_pay_label = (
+            self.translator.get("sidebar.input.payment_duration_sb_label")
+            if self.translator
+            else "Dauer:"
+        )
+        sb_pay_desc = (
+            self.translator.get("tooltips.paytime_sb")
+            if self.translator
+            else "Dauer des Bezahlvorgangs an SB-Kassen."
+        )
+        dist_uniform_seconds = (
+            self.translator.get("sidebar.input.dist_uniform_seconds")
+            if self.translator
+            else "(Sekunden - Gleichverteilung)"
+        )
+        gb_pay_sb = QGroupBox(sb_pay_title)
+        v_pay_sb = QVBoxLayout(gb_pay_sb)
+        self._add_gb_header(v_pay_sb, dist_uniform_seconds, sb_pay_desc)
+        f_pay_sb = QFormLayout()
+        self.pay_duration_sb_min, self.pay_duration_sb_max = (
+            self._create_range_row(sb_pay_label, 2.0, 6.0, f_pay_sb)
+        )
+        v_pay_sb.addLayout(f_pay_sb)
+        l_gb_cust.addWidget(gb_pay_sb)
 
         scroll_cust.setWidget(content_cust)
         l_cust_cont.addWidget(scroll_cust)
@@ -583,7 +715,15 @@ class Sidebar(QWidget):
 
     def _setup_staff_tab(self):
         tab_staff = QWidget()
-        l_staff = QVBoxLayout(tab_staff)
+        l_staff_root = QVBoxLayout(tab_staff)
+        l_staff_root.setContentsMargins(0, 0, 0, 0)
+        scroll_staff = QScrollArea()
+        scroll_staff.setWidgetResizable(True)
+        scroll_staff.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        content_staff = QWidget()
+        l_staff = QVBoxLayout(content_staff)
         l_staff.setAlignment(Qt.AlignmentFlag.AlignTop)
         l_staff.setSpacing(15)
 
@@ -591,7 +731,7 @@ class Sidebar(QWidget):
         cashier_title = (
             self.translator.get("sidebar.input.cashier_speed")
             if self.translator
-            else "Kassierer Geschwindigkeit"
+            else "Scan-Geschwindigkeit"
         )
         cashier_newbie = (
             self.translator.get("sidebar.input.cashier_newbie")
@@ -710,11 +850,21 @@ class Sidebar(QWidget):
             if self.translator
             else "Personal"
         )
+        scroll_staff.setWidget(content_staff)
+        l_staff_root.addWidget(scroll_staff)
         self.input_sub_tabs.addTab(tab_staff, staff_tab)
 
     def _setup_conflicts_tab(self):
         tab_conflicts = QWidget()
-        l_conflicts = QVBoxLayout(tab_conflicts)
+        l_conflicts_root = QVBoxLayout(tab_conflicts)
+        l_conflicts_root.setContentsMargins(0, 0, 0, 0)
+        scroll_conflicts = QScrollArea()
+        scroll_conflicts.setWidgetResizable(True)
+        scroll_conflicts.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        content_conflicts = QWidget()
+        l_conflicts = QVBoxLayout(content_conflicts)
         l_conflicts.setAlignment(Qt.AlignmentFlag.AlignTop)
         l_conflicts.setSpacing(15)
 
@@ -795,6 +945,8 @@ class Sidebar(QWidget):
             if self.translator
             else "Konflikte"
         )
+        scroll_conflicts.setWidget(content_conflicts)
+        l_conflicts_root.addWidget(scroll_conflicts)
         self.input_sub_tabs.addTab(tab_conflicts, conflicts_tab)
 
     # ==========================================
@@ -899,7 +1051,7 @@ class Sidebar(QWidget):
         bg_title = (
             self.translator.get("sidebar.editor.background")
             if self.translator
-            else "Hintergrund"
+            else "Grundriss"
         )
         load_image = (
             self.translator.get("sidebar.editor.load_image")
@@ -926,17 +1078,27 @@ class Sidebar(QWidget):
             if self.translator
             else "Karte verschieben"
         )
-        exit_direction = (
-            self.translator.get("sidebar.editor.exit_direction")
-            if self.translator
-            else "Exit Richtung:"
-        )
 
         gb_map_file = QGroupBox(file_title)
         l_map_file = QVBoxLayout(gb_map_file)
         self.btn_new_map = QPushButton(new_map)
+        self.btn_new_map.setToolTip(
+            self.translator.get("tooltips.button_new_map")
+            if self.translator
+            else "Neue Karte anlegen"
+        )
         self.btn_save_map = QPushButton(save_map)
+        self.btn_save_map.setToolTip(
+            self.translator.get("tooltips.button_save_map")
+            if self.translator
+            else "Karte speichern"
+        )
         self.btn_delete_map = QPushButton(delete_map)
+        self.btn_delete_map.setToolTip(
+            self.translator.get("tooltips.button_delete_map")
+            if self.translator
+            else "Karte löschen"
+        )
         l_map_file.addWidget(self.btn_new_map)
         l_map_file.addWidget(self.btn_save_map)
         l_map_file.addWidget(self.btn_delete_map)
@@ -945,14 +1107,24 @@ class Sidebar(QWidget):
         gb_map_bg = QGroupBox(bg_title)
         l_map_bg = QVBoxLayout(gb_map_bg)
         self.btn_set_background = QPushButton(load_image)
+        self.btn_set_background.setToolTip(
+            self.translator.get("tooltips.button_load_background")
+            if self.translator
+            else "Grundriss laden"
+        )
         self.btn_remove_background = QPushButton(remove_image)
+        self.btn_remove_background.setToolTip(
+            self.translator.get("tooltips.button_remove_background")
+            if self.translator
+            else "Grundriss entfernen"
+        )
         h_scale = QHBoxLayout()
         h_scale.addWidget(QLabel(zoom_label))
         self.spin_bg_scale = QDoubleSpinBox()
         self.spin_bg_scale.setRange(0.01, 5.0)
         self.spin_bg_scale.setSingleStep(0.01)
         self.spin_bg_scale.setDecimals(2)
-        self.spin_bg_scale.setValue(1.0)
+        self.spin_bg_scale.setValue(0.09)
         h_scale.addWidget(self.spin_bg_scale)
         l_map_bg.addWidget(self.btn_set_background)
         l_map_bg.addWidget(self.btn_remove_background)
@@ -963,13 +1135,12 @@ class Sidebar(QWidget):
         l_map_opts = QVBoxLayout(gb_map_opts)
         self.btn_move_map = QPushButton(move_map_btn)
         self.btn_move_map.setCheckable(True)
-        h_exit = QHBoxLayout()
-        h_exit.addWidget(QLabel(exit_direction))
-        self.combo_global_exit = QComboBox()
-        self.combo_global_exit.addItems(["Rechts", "Links", "Oben", "Unten"])
-        h_exit.addWidget(self.combo_global_exit)
+        self.btn_move_map.setToolTip(
+            self.translator.get("tooltips.button_move_map")
+            if self.translator
+            else "Karte verschieben"
+        )
         l_map_opts.addWidget(self.btn_move_map)
-        l_map_opts.addLayout(h_exit)
         l_map.addWidget(gb_map_opts)
 
         map_tab = (
@@ -1030,24 +1201,29 @@ class Sidebar(QWidget):
         l_areas_btn = QVBoxLayout(gb_areas)
         self.start_area_button = QPushButton(start_area)
         self.start_area_button.setCheckable(True)
+        self.start_area_button.setToolTip(
+            self.translator.get("tooltips.button_start_area")
+            if self.translator
+            else "Startbereich zeichnen"
+        )
         self.waiting_area_button = QPushButton(waiting_area)
         self.waiting_area_button.setCheckable(True)
+        self.waiting_area_button.setToolTip(
+            self.translator.get("tooltips.button_waiting_area")
+            if self.translator
+            else "Wartebereich zeichnen"
+        )
         self.btn_exit_area = QPushButton(exit_area)
         self.btn_exit_area.setCheckable(True)
+        self.btn_exit_area.setToolTip(
+            self.translator.get("tooltips.button_exit_area")
+            if self.translator
+            else "Ausgangsbereich zeichnen"
+        )
         l_areas_btn.addWidget(self.start_area_button)
         l_areas_btn.addWidget(self.waiting_area_button)
         l_areas_btn.addWidget(self.btn_exit_area)
         l_areas.addWidget(gb_areas)
-
-        gb_view = QGroupBox(display_title)
-        l_view = QVBoxLayout(gb_view)
-        self.btn_visibility = QPushButton(visibility_btn)
-        self.btn_offsets = QPushButton(offsets_btn)
-        self.btn_config_sizes = QPushButton(sizes_btn)
-        l_view.addWidget(self.btn_visibility)
-        l_view.addWidget(self.btn_offsets)
-        l_view.addWidget(self.btn_config_sizes)
-        l_areas.addWidget(gb_view)
 
         areas_tab = (
             self.translator.get("sidebar.editor.areas_tab")
@@ -1107,10 +1283,25 @@ class Sidebar(QWidget):
         l_rt = QVBoxLayout(gb_route_tools)
         self.btn_start_route = QPushButton(route_entrance)
         self.btn_start_route.setCheckable(True)
+        self.btn_start_route.setToolTip(
+            self.translator.get("tooltips.button_route_start")
+            if self.translator
+            else "Route Eingang → Laden"
+        )
         self.new_route_button = QPushButton(route_shop)
         self.new_route_button.setCheckable(True)
+        self.new_route_button.setToolTip(
+            self.translator.get("tooltips.button_route_shop")
+            if self.translator
+            else "Route Shop-Loop"
+        )
         self.btn_exit_route = QPushButton(route_exit)
         self.btn_exit_route.setCheckable(True)
+        self.btn_exit_route.setToolTip(
+            self.translator.get("tooltips.button_route_exit")
+            if self.translator
+            else "Route Kasse → Ausgang"
+        )
         l_rt.addWidget(self.btn_start_route)
         l_rt.addWidget(self.new_route_button)
         l_rt.addWidget(self.btn_exit_route)
@@ -1124,7 +1315,17 @@ class Sidebar(QWidget):
         self.btn_save_admin.setStyleSheet(
             "background-color: #10B981; color: white; font-weight: bold;"
         )
+        self.btn_save_admin.setToolTip(
+            self.translator.get("tooltips.button_route_finish")
+            if self.translator
+            else "Route speichern"
+        )
         self.btn_cancel_route = QPushButton(cancel_btn)
+        self.btn_cancel_route.setToolTip(
+            self.translator.get("tooltips.button_route_cancel")
+            if self.translator
+            else "Routenmodus beenden"
+        )
         l_atb.addWidget(self.btn_save_admin)
         l_atb.addWidget(self.btn_cancel_route)
         l_routes.addWidget(self.admin_toolbar)
@@ -1133,6 +1334,11 @@ class Sidebar(QWidget):
         l_rl = QVBoxLayout(gb_route_list)
         self.route_list_widget = QListWidget()
         self.btn_del_route = QPushButton(delete_route)
+        self.btn_del_route.setToolTip(
+            self.translator.get("tooltips.button_route_delete")
+            if self.translator
+            else "Route löschen"
+        )
         l_rl.addWidget(self.route_list_widget)
         l_rl.addWidget(self.btn_del_route)
         l_routes.addWidget(gb_route_list)
@@ -1165,25 +1371,15 @@ class Sidebar(QWidget):
             if self.translator
             else "Kassen"
         )
-        checkout_nl = (
-            self.translator.get("sidebar.editor.checkout_normal_left")
+        checkout_normal = (
+            self.translator.get("sidebar.editor.checkout_normal")
             if self.translator
-            else "Normal (L)"
+            else "Normal"
         )
-        checkout_nr = (
-            self.translator.get("sidebar.editor.checkout_normal_right")
+        checkout_sb = (
+            self.translator.get("sidebar.editor.checkout_sb")
             if self.translator
-            else "Normal (R)"
-        )
-        checkout_sl = (
-            self.translator.get("sidebar.editor.checkout_sb_left")
-            if self.translator
-            else "SB (L)"
-        )
-        checkout_sr = (
-            self.translator.get("sidebar.editor.checkout_sb_right")
-            if self.translator
-            else "SB (R)"
+            else "SB"
         )
         obj_list_title = (
             self.translator.get("sidebar.editor.object_list")
@@ -1205,27 +1401,34 @@ class Sidebar(QWidget):
         l_sh = QVBoxLayout(gb_shelves)
         self.place_shelves_button = QPushButton(place_shelf)
         self.place_shelves_button.setCheckable(True)
+        self.place_shelves_button.setToolTip(
+            self.translator.get("tooltips.button_place_shelf")
+            if self.translator
+            else "Regal platzieren"
+        )
         l_sh.addWidget(self.place_shelves_button)
         l_objs.addWidget(gb_shelves)
 
         gb_checkouts = QGroupBox(checkouts_title)
         l_ch = QVBoxLayout(gb_checkouts)
         r1 = QHBoxLayout()
-        self.btn_kl = QPushButton(checkout_nl)
-        self.btn_kl.setCheckable(True)
-        self.btn_kr = QPushButton(checkout_nr)
-        self.btn_kr.setCheckable(True)
-        r1.addWidget(self.btn_kl)
-        r1.addWidget(self.btn_kr)
-        r2 = QHBoxLayout()
-        self.btn_sl = QPushButton(checkout_sl)
-        self.btn_sl.setCheckable(True)
-        self.btn_sr = QPushButton(checkout_sr)
-        self.btn_sr.setCheckable(True)
-        r2.addWidget(self.btn_sl)
-        r2.addWidget(self.btn_sr)
+        self.btn_checkout_normal = QPushButton(checkout_normal)
+        self.btn_checkout_normal.setCheckable(True)
+        self.btn_checkout_normal.setToolTip(
+            self.translator.get("tooltips.button_place_checkout_normal")
+            if self.translator
+            else "Normalkasse platzieren"
+        )
+        self.btn_checkout_sb = QPushButton(checkout_sb)
+        self.btn_checkout_sb.setCheckable(True)
+        self.btn_checkout_sb.setToolTip(
+            self.translator.get("tooltips.button_place_checkout_sb")
+            if self.translator
+            else "SB-Kasse platzieren"
+        )
+        r1.addWidget(self.btn_checkout_normal)
+        r1.addWidget(self.btn_checkout_sb)
         l_ch.addLayout(r1)
-        l_ch.addLayout(r2)
         l_objs.addWidget(gb_checkouts)
 
         gb_obj_list = QGroupBox(obj_list_title)
@@ -1234,6 +1437,16 @@ class Sidebar(QWidget):
         h_act = QHBoxLayout()
         self.btn_edit_obj = QPushButton(edit_btn)
         self.btn_del_obj = QPushButton(delete_btn)
+        self.btn_edit_obj.setToolTip(
+            self.translator.get("tooltips.button_edit_object")
+            if self.translator
+            else "Objekt bearbeiten"
+        )
+        self.btn_del_obj.setToolTip(
+            self.translator.get("tooltips.button_delete_object")
+            if self.translator
+            else "Objekt löschen"
+        )
         h_act.addWidget(self.btn_edit_obj)
         h_act.addWidget(self.btn_del_obj)
         l_ol.addWidget(self.object_list_widget)
@@ -1246,6 +1459,39 @@ class Sidebar(QWidget):
             else "Objekte"
         )
         self.editor_subtabs.addTab(sub_objs, objects_tab)
+
+        # Sub ANZEIGE (nach Objekte)
+        sub_display = QWidget()
+        l_display = QVBoxLayout(sub_display)
+        l_display.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        gb_view = QGroupBox(display_title)
+        l_view = QVBoxLayout(gb_view)
+        self.btn_visibility = QPushButton(visibility_btn)
+        self.btn_visibility.setToolTip(
+            self.translator.get("tooltips.button_visibility")
+            if self.translator
+            else "Sichtbarkeit einstellen"
+        )
+        self.btn_offsets = QPushButton(offsets_btn)
+        self.btn_offsets.setToolTip(
+            self.translator.get("tooltips.button_offsets")
+            if self.translator
+            else "Offsets einstellen"
+        )
+        self.btn_config_sizes = QPushButton(sizes_btn)
+        self.btn_config_sizes.setToolTip(
+            self.translator.get("tooltips.button_sizes")
+            if self.translator
+            else "Größen einstellen"
+        )
+        l_view.addWidget(self.btn_visibility)
+        l_view.addWidget(self.btn_offsets)
+        l_view.addWidget(self.btn_config_sizes)
+        l_display.addWidget(gb_view)
+
+        display_tab = display_title
+        self.editor_subtabs.addTab(sub_display, display_tab)
 
         editor_tab = (
             self.translator.get("sidebar.tabs.editor")
@@ -1302,6 +1548,96 @@ class Sidebar(QWidget):
 
         row.addStretch()
         layout.addLayout(row)
+
+    def _randomize_input_params(self):
+        def rand_spin(sb: QSpinBox):
+            sb.setValue(random.randint(sb.minimum(), sb.maximum()))
+
+        def rand_double(dsb: QDoubleSpinBox):
+            min_v = dsb.minimum()
+            max_v = dsb.maximum()
+            val = random.uniform(min_v, max_v)
+            step = dsb.singleStep() or 0.1
+            decimals = dsb.decimals()
+            val = round(round(val / step) * step, decimals)
+            dsb.setValue(val)
+
+        def rand_time(te: QTimeEdit):
+            h = random.randint(0, 23)
+            m = random.randint(0, 59)
+            te.setTime(QTime(h, m))
+
+        # Shop
+        if hasattr(self, "time_open"):
+            rand_time(self.time_open)
+        if hasattr(self, "time_close"):
+            rand_time(self.time_close)
+        if hasattr(self, "actor_count_input"):
+            rand_spin(self.actor_count_input)
+        if hasattr(self, "disabled_prob_input"):
+            rand_spin(self.disabled_prob_input)
+
+        # Customer
+        if hasattr(self, "speed_walk_mean"):
+            rand_double(self.speed_walk_mean)
+        if hasattr(self, "speed_walk_std"):
+            rand_double(self.speed_walk_std)
+        if hasattr(self, "speed_roll_mean"):
+            rand_double(self.speed_roll_mean)
+        if hasattr(self, "speed_roll_std"):
+            rand_double(self.speed_roll_std)
+        if hasattr(self, "items_mean"):
+            rand_spin(self.items_mean)
+        if hasattr(self, "items_std"):
+            rand_spin(self.items_std)
+        if hasattr(self, "hand_scanner_prob"):
+            rand_spin(self.hand_scanner_prob)
+        if hasattr(self, "scan_speed_normal_min"):
+            rand_double(self.scan_speed_normal_min)
+        if hasattr(self, "scan_speed_normal_max"):
+            rand_double(self.scan_speed_normal_max)
+        if hasattr(self, "scan_speed_disabled_min"):
+            rand_double(self.scan_speed_disabled_min)
+        if hasattr(self, "scan_speed_disabled_max"):
+            rand_double(self.scan_speed_disabled_max)
+        if hasattr(self, "payment_cash") and hasattr(self, "payment_card"):
+            cash = random.randint(0, 100)
+            self.payment_cash.setValue(cash)
+            self.payment_card.setValue(100 - cash)
+        if hasattr(self, "pay_duration_sb_min"):
+            rand_double(self.pay_duration_sb_min)
+        if hasattr(self, "pay_duration_sb_max"):
+            rand_double(self.pay_duration_sb_max)
+
+        # Staff
+        if hasattr(self, "scan_speed_newbie_min"):
+            rand_double(self.scan_speed_newbie_min)
+        if hasattr(self, "scan_speed_newbie_max"):
+            rand_double(self.scan_speed_newbie_max)
+        if hasattr(self, "scan_speed_pro_min"):
+            rand_double(self.scan_speed_pro_min)
+        if hasattr(self, "scan_speed_pro_max"):
+            rand_double(self.scan_speed_pro_max)
+        if hasattr(self, "pay_duration_cash_min"):
+            rand_double(self.pay_duration_cash_min)
+        if hasattr(self, "pay_duration_cash_max"):
+            rand_double(self.pay_duration_cash_max)
+        if hasattr(self, "pay_duration_card_min"):
+            rand_double(self.pay_duration_card_min)
+        if hasattr(self, "pay_duration_card_max"):
+            rand_double(self.pay_duration_card_max)
+        if hasattr(self, "worker_repair_min"):
+            rand_double(self.worker_repair_min)
+        if hasattr(self, "worker_repair_max"):
+            rand_double(self.worker_repair_max)
+
+        # Conflicts
+        if hasattr(self, "checkout_fail_rate_normal"):
+            rand_spin(self.checkout_fail_rate_normal)
+        if hasattr(self, "checkout_fail_rate_sb"):
+            rand_spin(self.checkout_fail_rate_sb)
+        if hasattr(self, "customer_annoyance_rate"):
+            rand_spin(self.customer_annoyance_rate)
 
     def _create_dist_row(self, label, val_mean, val_std, layout):
         h = QHBoxLayout()
@@ -1464,6 +1800,7 @@ class Sidebar(QWidget):
             "Artikel:": "sidebar.input.items",
             "Handscanner:": "sidebar.input.hand_scanner",
             "Scan-Dauer (Kunde)": "sidebar.input.scan_duration",
+            "Scan-Geschwindigkeit": "sidebar.input.scan_duration",
             "Normal:": "sidebar.input.scan_normal",
             "Einges.:": "sidebar.input.scan_disabled",
             "Zahlungsmethoden": "sidebar.input.payment_methods",
@@ -1471,9 +1808,11 @@ class Sidebar(QWidget):
             "Karte:": "sidebar.input.payment_card",
             # Staff Tab
             "Kassierer Geschwindigkeit": "sidebar.input.cashier_speed",
+            "Scan-Geschwindigkeit": "sidebar.input.cashier_speed",
             "Azubi:": "sidebar.input.cashier_newbie",
             "Profi:": "sidebar.input.cashier_pro",
             "Bezahldauer": "sidebar.input.payment_duration",
+            "Bezahldauer (SB)": "sidebar.input.payment_duration_sb",
             "Bargeld (Bezahlung):": "sidebar.input.payment_cash_label",
             "Karte (Bezahlung):": "sidebar.input.payment_card_label",
             "Konfliktbewältigung": "sidebar.input.conflict_resolution",
@@ -1492,7 +1831,7 @@ class Sidebar(QWidget):
             "Neue Karte": "sidebar.editor.new_map",
             "Karte Speichern": "sidebar.editor.save_map",
             "Karte Löschen": "sidebar.editor.delete_map",
-            "Hintergrund": "sidebar.editor.background",
+            "Grundriss": "sidebar.editor.background",
             "Bild laden...": "sidebar.editor.load_image",
             "Bild entfernen": "sidebar.editor.remove_image",
             "Zoom:": "sidebar.editor.zoom",
@@ -1521,10 +1860,8 @@ class Sidebar(QWidget):
             "Regale": "sidebar.editor.shelves",
             "+ Regal platzieren": "sidebar.editor.place_shelf",
             "Kassen": "sidebar.editor.checkouts",
-            "Normal (L)": "sidebar.editor.checkout_normal_left",
-            "Normal (R)": "sidebar.editor.checkout_normal_right",
-            "SB (L)": "sidebar.editor.checkout_sb_left",
-            "SB (R)": "sidebar.editor.checkout_sb_right",
+            "Normal": "sidebar.editor.checkout_normal",
+            "SB": "sidebar.editor.checkout_sb",
             "Objekt Liste": "sidebar.editor.object_list",
             "Bearbeiten": "sidebar.editor.edit",
             "Löschen": "sidebar.editor.delete",

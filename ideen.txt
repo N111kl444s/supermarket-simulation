@@ -1,11 +1,6 @@
-- Pop-Up Style anpassen (End-POPUP)
-- Fehlerhafte Buttons umfunktionieren zu Coming Soon (Kasse R und Skip Buttoneeeeeeeeeeeeeeeeeeeeeeeeeewee)
-
-- Klick auf Kasse während laufender Simulation (auch Pause) soll Live-Statistiken zeigen von der Kasse
+- Logik für Skip-Button (mit Statisk-Berechnung)
 
 - Tooltips überarbeiten
-
-- Eingabeparameter überprüfen und Logik anpassen
 
 
 - Statistiken!!! (Siehe #STATISTIC_DESIGN)
@@ -38,19 +33,23 @@
     - Anzahl gescannter Artikel
     - Bezahlung
 
+- Klick auf Kasse während laufender Simulation (auch Pause) soll Live-Statistiken zeigen von der Kasse
+
 - großes Refactoring (Wichtige Methoden auslagern - wie für Exponentialverteilung - für Unit-Tests)
 
 - Dokumentation
 - Diagramme
 - Benutzerhandbuch
 
-
+- realistische Standard-Eingabeparameter und Grenzen
 
 Optional:
+- Meldung aus Log entfernen
 - Klick auf Kunde zeigt Live-Statistiken vom Kunden
-- Standardkamera besser positionieren
 - Hintergrund auf Englisch
 - Unit-Tests
-- mart-Buttons für Überwachungskameras: Kameraperspektiven über Buttons einstellbar
+- Smart-Buttons für Überwachungskameras: Kameraperspektiven über Buttons einstellbar
+- Editor überarbeiten (Benutzerfreundlicher machen)
+- neuer Eingabeparameter (intelligenter realistischer Modus: Boolean - Wenn an, dann ist nur eine Kasse auf, außer die Max Warteschlange ist erreicht dann mehrere)
 
 

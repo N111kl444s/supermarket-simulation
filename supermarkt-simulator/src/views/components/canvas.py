@@ -7,9 +7,10 @@ Refactored:
 """
 
 from PyQt6.QtWidgets import QGraphicsView
-from PyQt6.QtCore import Qt, QPoint, QRectF
+from PyQt6.QtCore import Qt, QPoint, QRectF, QPointF
 from PyQt6.QtGui import QPainter, QMouseEvent, QCursor
 from views.scene import SimulationScene
+from config import CAMERA_DEFAULT_CENTER, CAMERA_DEFAULT_ZOOM
 
 
 class SimulationCanvas(QGraphicsView):
@@ -98,8 +99,8 @@ class SimulationCanvas(QGraphicsView):
 
         min_zoom = self._get_min_zoom_level()
 
-        # HIER DIE ÄNDERUNG: Standard ist jetzt 2.5 (viel näher)
-        target_zoom = max(2.5, min_zoom)
+        # Standard-Zoom
+        target_zoom = max(CAMERA_DEFAULT_ZOOM, min_zoom)
 
         self.scale(target_zoom, target_zoom)
         self.zoom_level = target_zoom
@@ -107,8 +108,7 @@ class SimulationCanvas(QGraphicsView):
         if center_point:
             self.centerOn(center_point)
         else:
-            sr = self.scene().sceneRect()
-            self.centerOn(sr.center())
+            self.centerOn(QPointF(*CAMERA_DEFAULT_CENTER))
 
     # --- MOUSE EVENTS ---
 
@@ -184,3 +184,4 @@ class SimulationCanvas(QGraphicsView):
                 return
 
         super().mouseReleaseEvent(event)
+

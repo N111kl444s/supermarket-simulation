@@ -8,6 +8,7 @@ Refactored:
 
 import math
 import random
+from utils.distributions import sample_normal, sample_uniform
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QVector2D
 from config import SHELF_SIZE
@@ -47,6 +48,8 @@ class CustomerModel:
         self.uses_handheld = uses_handheld
         self.payment_method = payment_method
         self.payment_speed_range = payment_speed_range
+        self.malfunction_checked = False
+        self.conflict_checked = False
 
         self.pos = QPointF(0, 0)
         self.angle = 0.0
@@ -65,12 +68,12 @@ class CustomerModel:
             mu, sigma = speed_roll_params
         else:
             mu, sigma = speed_walk_params
-        val = random.normalvariate(mu, sigma)
+        val = sample_normal(mu, sigma)
         self.speed = max(0.1, val)
 
         # --- ARTIKELANZAHL ---
         mu_items, sigma_items = items_params
-        item_val = int(random.normalvariate(mu_items, sigma_items))
+        item_val = int(sample_normal(mu_items, sigma_items))
 
         self.item_count = 0
         self.target_item_count = max(1, item_val)
@@ -79,11 +82,11 @@ class CustomerModel:
 
         # --- SCAN LOGIC ---
         self.scan_speed_range = scan_speed_range
-        self.current_scan_duration = random.uniform(*self.scan_speed_range)
+        self.current_scan_duration = sample_uniform(*self.scan_speed_range)
         self.scan_time_elapsed = 0.0
         
         # --- PAYMENT LOGIC (NEU) ---
-        self.current_payment_duration = random.uniform(*self.payment_speed_range)
+        self.current_payment_duration = sample_uniform(*self.payment_speed_range)
         self.payment_time_elapsed = 0.0
 
         self.trigger_scan_anim = False
@@ -95,7 +98,11 @@ class CustomerModel:
 
     def set_scan_speed_range(self, min_s, max_s):
         self.scan_speed_range = (min_s, max_s)
-        self.current_scan_duration = random.uniform(min_s, max_s)
+        self.current_scan_duration = sample_uniform(min_s, max_s)
+
+    def set_payment_speed_range(self, min_s, max_s):
+        self.payment_speed_range = (min_s, max_s)
+        self.current_payment_duration = sample_uniform(min_s, max_s)
 
     def _get_shelf_pos(self, shelf_data):
         if isinstance(shelf_data, dict):
@@ -268,7 +275,10 @@ class CustomerModel:
         if r < 0.50: count = 1
         elif r < 0.90: count = 2
         else: count = 3
-        self.item_count += count
+        remaining = max(0, self.target_item_count - self.item_count)
+        if remaining <= 0:
+            return
+        self.item_count += min(count, remaining)
 
     def _update_scanning(self, dt):
         self.scan_time_elapsed += dt

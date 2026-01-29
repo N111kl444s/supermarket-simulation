@@ -27,7 +27,7 @@ class InfoScreen(QWidget):
         # Title
         self.title_label = QLabel()
         title_font = QFont()
-        title_font.setPointSize(32)
+        title_font.setPixelSize(32)
         title_font.setBold(True)
         self.title_label.setFont(title_font)
         main_layout.addWidget(self.title_label)
@@ -97,9 +97,13 @@ class InfoScreen(QWidget):
             self.title_label.setText(self.translator.get("info.title", "Erklärung - Supermarkt Simulator"))
             self.info_text.setText(self.translator.get("info.content", ""))
             self.btn_back.setText(self.translator.get("info.back", "Zurück zum Hauptmenü"))
+            self.btn_back.setToolTip(
+                self.translator.get("tooltips.button_info_back", "Zum Hauptmenü")
+            )
         else:
             self.title_label.setText("Erklärung - Supermarkt Simulator")
             self.btn_back.setText("Zurück zum Hauptmenü")
+            self.btn_back.setToolTip("Zum Hauptmenü")
             # Default German content
             self.info_text.setText("""
 <h2>Willkommen zum Supermarkt Simulator!</h2>

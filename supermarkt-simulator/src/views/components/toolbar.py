@@ -12,8 +12,9 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QFrame,
     QButtonGroup,
+    QStyle,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QPainter, QColor, QBrush, QPen
 from config import COLOR_ACCENT, COLOR_BORDER
 
@@ -89,7 +90,7 @@ class TopToolbar(QWidget):
     def __init__(self, parent=None, translator=None):
         super().__init__(parent)
         self.translator = translator
-        self.setFixedHeight(80)
+        self.setFixedHeight(60)
         self.setup_ui()
         self.apply_styles()
 
@@ -113,6 +114,11 @@ class TopToolbar(QWidget):
                 background-color: #EFF6FF;
                 border-color: {accent};
                 color: {accent};
+            }}
+            QPushButton:pressed {{
+                background-color: {accent};
+                color: white;
+                border: 1px solid {accent};
             }}
             QPushButton:checked {{
                 background-color: {accent};
@@ -140,16 +146,20 @@ class TopToolbar(QWidget):
         center_layout = QHBoxLayout()
         center_layout.setSpacing(20)
 
+        icon_size = QSize(20, 20)
+
         # 1. Sim Controls
-        self.btn_reset = QPushButton("↺")
+        self.btn_reset = QPushButton()
         self.btn_reset.setToolTip(
             self.translator.get("toolbar.reset_tooltip")
             if self.translator
             else "Reset"
         )
         self.btn_reset.setFixedSize(60, 44)
+        self.btn_reset.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
+        self.btn_reset.setIconSize(icon_size)
 
-        self.btn_play_pause = QPushButton("▶")
+        self.btn_play_pause = QPushButton()
         self.btn_play_pause.setCheckable(True)
         self.btn_play_pause.setToolTip(
             self.translator.get("toolbar.play_pause_tooltip")
@@ -157,14 +167,18 @@ class TopToolbar(QWidget):
             else "Start / Pause"
         )
         self.btn_play_pause.setFixedSize(70, 44)
+        self.btn_play_pause.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        self.btn_play_pause.setIconSize(icon_size)
 
-        self.btn_skip = QPushButton("⏭")
+        self.btn_skip = QPushButton()
         self.btn_skip.setToolTip(
             self.translator.get("toolbar.skip_tooltip")
             if self.translator
             else "Tag überspringen"
         )
         self.btn_skip.setFixedSize(60, 44)
+        self.btn_skip.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSkipForward))
+        self.btn_skip.setIconSize(icon_size)
 
         center_layout.addWidget(self.btn_reset)
         center_layout.addWidget(self.btn_play_pause)
@@ -181,14 +195,29 @@ class TopToolbar(QWidget):
         self.btn_speed_1.setCheckable(True)
         self.btn_speed_1.setChecked(True)
         self.btn_speed_1.setFixedSize(60, 44)
+        self.btn_speed_1.setToolTip(
+            self.translator.get("toolbar.speed_1x_tooltip")
+            if self.translator
+            else "Tempo 1x"
+        )
 
         self.btn_speed_2 = QPushButton("4x")
         self.btn_speed_2.setCheckable(True)
         self.btn_speed_2.setFixedSize(60, 44)
+        self.btn_speed_2.setToolTip(
+            self.translator.get("toolbar.speed_4x_tooltip")
+            if self.translator
+            else "Tempo 4x"
+        )
 
         self.btn_speed_3 = QPushButton("16x")
         self.btn_speed_3.setCheckable(True)
         self.btn_speed_3.setFixedSize(60, 44)
+        self.btn_speed_3.setToolTip(
+            self.translator.get("toolbar.speed_16x_tooltip")
+            if self.translator
+            else "Tempo 16x"
+        )
 
         self.speed_group.addButton(self.btn_speed_1)
         self.speed_group.addButton(self.btn_speed_2)
@@ -209,6 +238,11 @@ class TopToolbar(QWidget):
             if self.translator
             else "Ansicht ausrichten"
         )
+        self.btn_reset_zoom.setToolTip(
+            self.translator.get("toolbar.reset_zoom_tooltip")
+            if self.translator
+            else "Ansicht zentrieren"
+        )
         layout.addWidget(self.btn_reset_zoom)
 
     def refresh_translations(self, translator):
@@ -220,3 +254,9 @@ class TopToolbar(QWidget):
         )
         self.btn_skip.setToolTip(translator.get("toolbar.skip_tooltip"))
         self.btn_reset_zoom.setText(translator.get("toolbar.reset_zoom"))
+        self.btn_reset_zoom.setToolTip(
+            translator.get("toolbar.reset_zoom_tooltip")
+        )
+        self.btn_speed_1.setToolTip(translator.get("toolbar.speed_1x_tooltip"))
+        self.btn_speed_2.setToolTip(translator.get("toolbar.speed_4x_tooltip"))
+        self.btn_speed_3.setToolTip(translator.get("toolbar.speed_16x_tooltip"))

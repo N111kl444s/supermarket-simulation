@@ -28,16 +28,26 @@ from config import (
 class SizeConfigDialog(QDialog):
     settings_changed = pyqtSignal(dict)
 
-    def __init__(self, current_settings, parent=None):
+    def __init__(self, current_settings, parent=None, translator=None):
         super().__init__(parent)
-        self.setWindowTitle("Größen & Skalierung")
+        self.translator = translator
+        self.setWindowTitle(
+            self.translator.get("dialogs.sizes")
+            if self.translator
+            else "Größen & Skalierung"
+        )
         self.resize(400, 700)
         # Use global app background color for consistency
         self.setStyleSheet(f"QDialog {{ background-color: {COLOR_BG_MAIN.name()}; }}")
         self.settings = current_settings.copy()
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Werte werden sofort übernommen."))
+        note_text = (
+            self.translator.get("dialogs.sizes_note")
+            if self.translator
+            else "Werte werden sofort übernommen."
+        )
+        layout.addWidget(QLabel(note_text))
 
         # --- OBJETS ---
         gb_obj = QGroupBox("Objekt Größen")
@@ -121,6 +131,12 @@ class SizeConfigDialog(QDialog):
         layout.addWidget(gb_screen)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        ok_label = (
+            self.translator.get("dialogs.ok")
+            if self.translator
+            else "OK"
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(ok_label)
         buttons.accepted.connect(self.accept)
         layout.addWidget(buttons)
 

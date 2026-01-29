@@ -29,18 +29,17 @@ class ObjectPositionDialog(QDialog):
     # ... (Code beibehalten) ...
     position_changed = pyqtSignal(float, float)
     angle_changed = pyqtSignal(float)
-    orientation_changed = pyqtSignal(str)
     variant_changed = pyqtSignal(int)
 
     def __init__(
-        self, title, x, y, orientation=None, angle=0, variant=None, parent=None
+        self, title, x, y, angle=0, variant=None, parent=None, translator=None
     ):
         super().__init__(parent)
+        self.translator = translator
         self.setWindowTitle(title)
         self.setStyleSheet(f"QDialog {{ background-color: {COLOR_BG_MAIN.name()}; }}")
         self.x = x
         self.y = y
-        self.orientation = orientation
         self.angle = angle
         self.variant = variant
         self._init_ui()
@@ -70,15 +69,6 @@ class ObjectPositionDialog(QDialog):
         )
         form.addRow("Winkel:", self.spin_angle)
 
-        if self.orientation is not None:
-            self.combo_ori = QComboBox()
-            self.combo_ori.addItems(["Left", "Right"])
-            self.combo_ori.setCurrentText(self.orientation)
-            self.combo_ori.currentTextChanged.connect(
-                lambda t: self.orientation_changed.emit(t)
-            )
-            form.addRow("Ausrichtung:", self.combo_ori)
-
         if self.variant is not None:
             self.spin_var = QSpinBox()
             self.spin_var.setRange(1, 5)  # Annahme
@@ -90,6 +80,12 @@ class ObjectPositionDialog(QDialog):
 
         layout.addLayout(form)
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        close_label = (
+            self.translator.get("dialogs.close")
+            if self.translator
+            else "Schließen"
+        )
+        btns.button(QDialogButtonBox.StandardButton.Close).setText(close_label)
         btns.rejected.connect(self.accept)
         layout.addWidget(btns)
 
@@ -99,9 +95,16 @@ class ObjectPositionDialog(QDialog):
 
 class CheckoutConfigDialog(QDialog):
     # ... (Code beibehalten) ...
-    def __init__(self, data, parent=None):
+    def __init__(self, data, parent=None, translator=None):
         super().__init__(parent)
-        self.setWindowTitle(f"Kasse #{data['id']} Konfigurieren")
+        self.translator = translator
+        if self.translator:
+            title_tpl = self.translator.get(
+                "dialogs.checkout_config", "Kasse #{id} Konfigurieren"
+            )
+            self.setWindowTitle(title_tpl.format(id=data["id"]))
+        else:
+            self.setWindowTitle(f"Kasse #{data['id']} Konfigurieren")
         self.setStyleSheet(f"QDialog {{ background-color: {COLOR_BG_MAIN.name()}; }}")
         self.data = data
         self._init_ui()
@@ -137,6 +140,18 @@ class CheckoutConfigDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok
             | QDialogButtonBox.StandardButton.Cancel
         )
+        ok_label = (
+            self.translator.get("dialogs.ok")
+            if self.translator
+            else "OK"
+        )
+        cancel_label = (
+            self.translator.get("dialogs.cancel")
+            if self.translator
+            else "Abbrechen"
+        )
+        btns.button(QDialogButtonBox.StandardButton.Ok).setText(ok_label)
+        btns.button(QDialogButtonBox.StandardButton.Cancel).setText(cancel_label)
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)
@@ -162,9 +177,14 @@ class CheckoutConfigDialog(QDialog):
 class VisibilityDialog(QDialog):
     settings_changed = pyqtSignal(dict)
 
-    def __init__(self, current_settings, parent=None):
+    def __init__(self, current_settings, parent=None, translator=None):
         super().__init__(parent)
-        self.setWindowTitle("Sichtbarkeit & Ebenen")
+        self.translator = translator
+        self.setWindowTitle(
+            self.translator.get("dialogs.visibility")
+            if self.translator
+            else "Sichtbarkeit & Ebenen"
+        )
         self.setStyleSheet(f"QDialog {{ background-color: {COLOR_BG_MAIN.name()}; }}")
         self.settings = current_settings.copy()
         self._init_ui()
@@ -197,6 +217,12 @@ class VisibilityDialog(QDialog):
         layout.addWidget(gb)
 
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        close_label = (
+            self.translator.get("dialogs.close")
+            if self.translator
+            else "Schließen"
+        )
+        btns.button(QDialogButtonBox.StandardButton.Close).setText(close_label)
         btns.rejected.connect(self.accept)
         layout.addWidget(btns)
 
@@ -215,9 +241,14 @@ class VisibilityDialog(QDialog):
 class OffsetDialog(QDialog):
     settings_changed = pyqtSignal(dict)
 
-    def __init__(self, current_settings, parent=None):
+    def __init__(self, current_settings, parent=None, translator=None):
         super().__init__(parent)
-        self.setWindowTitle("Offsets Konfigurieren")
+        self.translator = translator
+        self.setWindowTitle(
+            self.translator.get("dialogs.offsets")
+            if self.translator
+            else "Offsets Konfigurieren"
+        )
         self.setStyleSheet(f"QDialog {{ background-color: {COLOR_BG_MAIN.name()}; }}")
         self.settings = current_settings.copy()
         self.setMinimumWidth(400)
@@ -263,6 +294,12 @@ class OffsetDialog(QDialog):
         layout.addWidget(tabs)
 
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        close_label = (
+            self.translator.get("dialogs.close")
+            if self.translator
+            else "Schließen"
+        )
+        btns.button(QDialogButtonBox.StandardButton.Close).setText(close_label)
         btns.rejected.connect(self.accept)
         layout.addWidget(btns)
 

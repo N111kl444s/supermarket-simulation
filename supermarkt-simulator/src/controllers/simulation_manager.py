@@ -7,6 +7,7 @@ import math
 from PyQt6.QtCore import QTimer, QTime, QObject, pyqtSignal, QPointF
 from PyQt6.QtGui import QVector2D
 from models.customer import CustomerModel
+from utils.distributions import sample_exponential
 from config import (
     DEFAULT_OPEN_TIME,
     DEFAULT_CLOSE_TIME,
@@ -44,6 +45,8 @@ class SimulationManager(QObject):
         self.spawn_timer_acc = 0.0
         self.next_spawn_interval = 0.0
         self.average_spawn_interval = 10.0
+        self.spawn_schedule = []
+        self.spawn_index = 0
         self.prob_disabled = 0.1
         self.param_access_func = None
 
@@ -81,6 +84,8 @@ class SimulationManager(QObject):
         self.sim_time = open_time_val
         self.open_time = open_time_val
         self.time_accumulator_sec = 0.0
+        self.spawn_schedule = []
+        self.spawn_index = 0
         self.time_updated.emit(self.sim_time.toString("HH:mm"))
         self.stats_updated.emit(0, 0, 0)
 
@@ -98,16 +103,15 @@ class SimulationManager(QObject):
             1, self.target_daily_customers
         )
         self.spawn_timer_acc = 0.0
-        self._calc_next_spawn()
+        self.spawn_schedule = self._build_spawn_schedule(
+            self.target_daily_customers, seconds_open
+        )
+        self.spawn_index = 0
 
         # Reset Malfunctions
         for c_data in self.map_mgr.checkouts_data:
             c_data["malfunction"] = False
             c_data["conflict"] = False
-
-        # TEMP: Set first checkout to malfunction for testing
-        if self.map_mgr.checkouts_data:
-            self.map_mgr.checkouts_data[0]["malfunction"] = True
 
         self.is_initialized = True
         self.log_message.emit(
@@ -155,6 +159,10 @@ class SimulationManager(QObject):
         self._handle_maintenance(game_dt)
         self._handle_conflicts(game_dt)
 
+        # Only spawn new customers if store is still open (not yet closed)
+        if not self.store_is_closed_trigger:
+            self._attempt_spawn(game_dt)
+
         # Determine if store should be closed
         # Once store_is_closed_trigger is set to True, it stays True
         if not self.store_is_closed_trigger:
@@ -184,10 +192,6 @@ class SimulationManager(QObject):
             self.log_message.emit("Feierabend! Alle Kunden bedient.", "red")
             self.day_finished.emit()
             return
-
-        # Only spawn new customers if store is still open (not yet closed)
-        if not self.store_is_closed_trigger:
-            self._attempt_spawn(game_dt)
 
         # 2. Customers Logic
         active_models = []
@@ -268,77 +272,68 @@ class SimulationManager(QObject):
                                         min_s, max_s = staff_rng
                         model.set_scan_speed_range(min_s, max_s)
 
-            # Zufällige Störung
-            if (
-                (model.state == "SCANNING" or model.state == "PAYING")
-                and not is_stuck_due_to_malfunction
-                and not is_stuck_due_to_conflict
-            ):
-                if current_global_params:
-                    cid = model.assigned_checkout_id
-                    c_data = next(
-                        (
-                            x
-                            for x in self.map_mgr.checkouts_data
-                            if x["id"] == cid
-                        ),
-                        None,
-                    )
-                    if c_data:
-                        if c_data.get("type") == "SB":
-                            fail_rate = current_global_params.get(
-                                "checkout_fail_rate_sb", 0.0
-                            )
-                        else:
-                            fail_rate = current_global_params.get(
-                                "checkout_fail_rate_normal", 0.0
-                            )
+                        # Update payment duration based on checkout type
+                        if current_global_params and c_data:
+                            if c_data.get("type") == "SB":
+                                pay_sb = current_global_params.get(
+                                    "pay_sb_speed"
+                                )
+                                if pay_sb:
+                                    model.set_payment_speed_range(*pay_sb)
+                            else:
+                                if model.payment_method == "cash":
+                                    pay_rng = current_global_params.get(
+                                        "pay_cash_speed"
+                                    )
+                                else:
+                                    pay_rng = current_global_params.get(
+                                        "pay_card_speed"
+                                    )
+                                if pay_rng:
+                                    model.set_payment_speed_range(*pay_rng)
 
-                        chance = (fail_rate / 100.0) * game_dt
-                        if random.random() < chance:
-                            c_data["malfunction"] = True
-                            self.log_message.emit(
-                                f"⚠️ STÖRUNG an Kasse {cid}!", "red"
-                            )
+                        # One-time malfunction/annoyance checks per customer
+                        if current_global_params and c_data:
+                            if not model.malfunction_checked:
+                                if c_data.get("type") == "SB":
+                                    fail_rate = current_global_params.get(
+                                        "checkout_fail_rate_sb", 0.0
+                                    )
+                                else:
+                                    fail_rate = current_global_params.get(
+                                        "checkout_fail_rate_normal", 0.0
+                                    )
+                                if (
+                                    not c_data.get("malfunction", False)
+                                    and random.random()
+                                    < (fail_rate / 100.0)
+                                ):
+                                    c_data["malfunction"] = True
+                                    self.log_message.emit(
+                                        f"⚠️ STÖRUNG an Kasse {cid}!", "red"
+                                    )
+                                model.malfunction_checked = True
 
-            # Zufällige Verärgerung des Kunden
-            if (
-                (
-                    model.state in ("SCANNING", "PAYING")
-                    and model.assigned_checkout_id is not None
-                )
-                and not is_stuck_due_to_malfunction
-                and not is_stuck_due_to_conflict
-            ):
-                if current_global_params:
-                    cid = model.assigned_checkout_id
-                    c_data = next(
-                        (
-                            x
-                            for x in self.map_mgr.checkouts_data
-                            if x["id"] == cid
-                        ),
-                        None,
-                    )
-                    if c_data and not c_data.get("conflict", False):
-                        annoy_rate = current_global_params.get(
-                            "customer_annoyance_rate", 0.0
-                        )
-                        # Probability per frame, similar to malfunction logic
-                        chance = (annoy_rate / 100.0) * game_dt
-                        roll = random.random()
-                        print(
-                            f"DEBUG Annoyance: checkout {cid}, state {model.state}, rate {annoy_rate}%, chance {chance:.4f}, roll {roll:.4f}"
-                        )
-                        if roll < chance:
-                            c_data["conflict"] = True
-                            print(
-                                f"DEBUG: Conflict triggered at checkout {cid} with annoy_rate {annoy_rate}%"
-                            )
-                            self.log_message.emit(
-                                f"😠 Verärgerter Kunde an Kasse {cid}!",
-                                "orange",
-                            )
+                            if not model.conflict_checked:
+                                annoy_rate = current_global_params.get(
+                                    "customer_annoyance_rate", 0.0
+                                )
+                                if (
+                                    not c_data.get("conflict", False)
+                                    and random.random()
+                                    < (annoy_rate / 100.0)
+                                ):
+                                    if c_data.get("malfunction", False):
+                                        c_data["pending_conflict"] = True
+                                    else:
+                                        c_data["conflict"] = True
+                                        self.log_message.emit(
+                                            f"😠 Verärgerter Kunde an Kasse {cid}!",
+                                            "orange",
+                                        )
+                                model.conflict_checked = True
+
+            # Störung/Verärgerung werden einmalig pro Kunde beim Start des Scanvorgangs geprüft
 
             elif (
                 model.state == "LEAVING"
@@ -393,6 +388,13 @@ class SimulationManager(QObject):
                         self.log_message.emit(
                             f"✅ Kasse {c_data['id']} repariert.", "green"
                         )
+                        if c_data.get("pending_conflict", False):
+                            c_data["conflict"] = True
+                            del c_data["pending_conflict"]
+                            self.log_message.emit(
+                                f"😠 Verärgerter Kunde an Kasse {c_data['id']}!",
+                                "orange",
+                            )
 
     def _handle_conflicts(self, dt):
         """Handles customer conflicts by cashiers."""
@@ -405,6 +407,8 @@ class SimulationManager(QObject):
         conflict_max = params.get("worker_conflict_max", 8.0)
 
         for c_data in self.map_mgr.checkouts_data:
+            if c_data.get("malfunction", False):
+                continue
             if c_data.get("conflict", False):
                 print(f"DEBUG: Handling conflict at checkout {c_data['id']}")
                 if "conflict_timer" not in c_data:
@@ -433,15 +437,40 @@ class SimulationManager(QObject):
                         )
 
     def _attempt_spawn(self, dt_game_seconds):
-        self.spawn_timer_acc += dt_game_seconds
-        if self.spawn_timer_acc >= self.next_spawn_interval:
-            self.spawn_timer_acc = 0
+        if not self.spawn_schedule:
+            return
+        elapsed = self.get_elapsed_open_seconds()
+        while (
+            self.spawn_index < len(self.spawn_schedule)
+            and elapsed >= self.spawn_schedule[self.spawn_index]
+        ):
+            if self.total_customers_spawned >= self.target_daily_customers:
+                break
             self._spawn_single_customer()
-            self._calc_next_spawn()
+            self.spawn_index += 1
 
     def _calc_next_spawn(self):
-        variance = random.uniform(0.7, 1.3)
-        self.next_spawn_interval = self.average_spawn_interval * variance
+        avg = max(0.1, self.average_spawn_interval)
+        self.next_spawn_interval = random.expovariate(1.0 / avg)
+
+    def _build_spawn_schedule(self, count, duration_sec):
+        if count <= 0:
+            return []
+        if duration_sec <= 0:
+            return [0.0] * count
+        avg = max(0.1, duration_sec / count)
+        intervals = [sample_exponential(avg) for _ in range(count)]
+        total = sum(intervals)
+        if total <= 0:
+            step = duration_sec / count
+            return [step * (i + 1) for i in range(count)]
+        scale = duration_sec / total
+        schedule = []
+        acc = 0.0
+        for dt in intervals:
+            acc += dt * scale
+            schedule.append(acc)
+        return schedule
 
     def _spawn_single_customer(self):
         is_disabled = random.random() < self.prob_disabled
@@ -499,7 +528,7 @@ class SimulationManager(QObject):
             items_params=params["items"],
             scan_speed_range=params["scan"],
         )
-        total_seconds_today = self.open_time.secsTo(self.sim_time)
+        total_seconds_today = self.get_elapsed_open_seconds()
         model.entry_time_sec = total_seconds_today
         self.customers_model.append(model)
         self.total_customers_spawned += 1

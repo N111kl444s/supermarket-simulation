@@ -52,6 +52,14 @@ class InteractionController(QObject):
         if button_ref:
             self._reset_ui_buttons(exclude_btn=button_ref)
 
+        # If switching away from route drawing, hide admin toolbar
+        if self.active_tool and "route" in self.active_tool and (
+            not tool_name or "route" not in tool_name
+        ):
+            self.view.is_drawing_mode = False
+            self.view.admin_toolbar.hide()
+            self._clear_temp_drawing()
+
         if tool_name is None:
             self._reset_internal_state()
             return
@@ -138,10 +146,8 @@ class InteractionController(QObject):
             self.view.btn_start_route,
             self.view.btn_exit_route,
             self.view.btn_exit_area,
-            self.view.btn_kl,
-            self.view.btn_kr,
-            self.view.btn_sl,
-            self.view.btn_sr,
+            self.view.btn_checkout_normal,
+            self.view.btn_checkout_sb,
             self.view.btn_move_map,
         ]
         for b in btns:
@@ -229,7 +235,7 @@ class InteractionController(QObject):
                 "x": local_pos.x(),
                 "y": local_pos.y(),
                 "type": self.active_tool_params.get("type"),
-                "orientation": self.active_tool_params.get("ori"),
+                "orientation": self.active_tool_params.get("ori") or "Right",
                 "open": True,
                 "skill": "Azubi",
                 "max_queue": 5,
@@ -291,7 +297,7 @@ class InteractionController(QObject):
     def edit_object_position(self, obj_spec):
         if not obj_spec:
             return
-        cx, cy, name, cur_ori, cur_ang, cur_var = 0, 0, "Objekt", None, 0, 1
+        cx, cy, name, cur_ang, cur_var = 0, 0, "Objekt", 0, 1
         obj_type = obj_spec["type"]
 
         if obj_type == "shelf":
@@ -312,16 +318,16 @@ class InteractionController(QObject):
             if not c:
                 return
             cx, cy, name = c["x"], c["y"], f"Kasse #{cid}"
-            cur_ori, cur_ang = c.get("orientation", "Right"), c.get("angle", 0)
+            cur_ang = c.get("angle", 0)
 
         dlg = ObjectPositionDialog(
             name,
             cx,
             cy,
-            orientation=cur_ori,
             angle=cur_ang,
             variant=cur_var if obj_type == "shelf" else None,
             parent=self.view,
+            translator=self.view.translator if hasattr(self.view, "translator") else None,
         )
 
         def update_pos(nx, ny):
@@ -339,23 +345,6 @@ class InteractionController(QObject):
                 )
                 if c:
                     c["x"], c["y"] = nx, ny
-            self.visual_controller.draw_map_elements(
-                self.map_manager, selected_spec=obj_spec
-            )
-
-        def update_ori(no):
-            if obj_type != "checkout":
-                return
-            c = next(
-                (
-                    x
-                    for x in self.map_manager.checkouts_data
-                    if x["id"] == obj_spec["id"]
-                ),
-                None,
-            )
-            if c:
-                c["orientation"] = no
             self.visual_controller.draw_map_elements(
                 self.map_manager, selected_spec=obj_spec
             )
@@ -387,8 +376,6 @@ class InteractionController(QObject):
             )
 
         dlg.position_changed.connect(update_pos)
-        if cur_ori is not None:
-            dlg.orientation_changed.connect(update_ori)
         dlg.angle_changed.connect(update_ang)
         if obj_type == "shelf":
             dlg.variant_changed.connect(update_var)
@@ -425,7 +412,11 @@ class InteractionController(QObject):
             if not c_data:
                 return
 
-            dlg = CheckoutConfigDialog(c_data, self.view)
+            dlg = CheckoutConfigDialog(
+                c_data,
+                self.view,
+                translator=self.view.translator if hasattr(self.view, "translator") else None,
+            )
             if dlg.exec():
                 updated_data = dlg.get_data()
                 c_data.update(updated_data)

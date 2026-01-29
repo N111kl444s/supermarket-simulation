@@ -32,7 +32,7 @@ class SettingsScreen(QWidget):
         # Title
         self.title_label = QLabel()
         title_font = QFont()
-        title_font.setPointSize(32)
+        title_font.setPixelSize(32)
         title_font.setBold(True)
         self.title_label.setFont(title_font)
         main_layout.addWidget(self.title_label)
@@ -171,12 +171,20 @@ class SettingsScreen(QWidget):
             self.lang_label.setText(self.translator.get("settings.language_label", "Sprache:"))
             self.btn_save.setText(self.translator.get("settings.save", "Speichern"))
             self.btn_cancel.setText(self.translator.get("settings.cancel", "Abbrechen"))
+            self.btn_save.setToolTip(
+                self.translator.get("tooltips.button_settings_save", "Einstellungen speichern")
+            )
+            self.btn_cancel.setToolTip(
+                self.translator.get("tooltips.button_settings_cancel", "Änderungen verwerfen")
+            )
         else:
             self.title_label.setText("Einstellungen")
             self.settings_group.setTitle("Spracheinstellungen")
             self.lang_label.setText("Sprache:")
             self.btn_save.setText("Speichern")
             self.btn_cancel.setText("Abbrechen")
+            self.btn_save.setToolTip("Einstellungen speichern")
+            self.btn_cancel.setToolTip("Änderungen verwerfen")
     
     def set_translator(self, translator):
         """Update translator reference."""

@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QListWidgetItem,
     QGraphicsView,
+    QStyle,
 )
 from PyQt6.QtCore import Qt
 
@@ -99,9 +100,7 @@ class MainController:
 
         # Reset Zoom mit Center-Berechnung
         self.view.btn_reset_zoom.clicked.connect(
-            lambda: self.view.reset_sim_zoom(
-                self.visual_controller.get_map_center()
-            )
+            lambda: self.view.reset_sim_zoom()
         )
 
         self.sim_manager.time_updated.connect(self._update_clock_ui)
@@ -176,26 +175,16 @@ class MainController:
             )
         )
 
-        self.view.btn_kl.clicked.connect(
-            lambda: ic.set_tool(
-                "checkout", {"type": "Normal", "ori": "Left"}, self.view.btn_kl
-            )
-        )
-        self.view.btn_kr.clicked.connect(
+        self.view.btn_checkout_normal.clicked.connect(
             lambda: ic.set_tool(
                 "checkout",
-                {"type": "Normal", "ori": "Right"},
-                self.view.btn_kr,
+                {"type": "Normal"},
+                self.view.btn_checkout_normal,
             )
         )
-        self.view.btn_sl.clicked.connect(
+        self.view.btn_checkout_sb.clicked.connect(
             lambda: ic.set_tool(
-                "checkout", {"type": "SB", "ori": "Left"}, self.view.btn_sl
-            )
-        )
-        self.view.btn_sr.clicked.connect(
-            lambda: ic.set_tool(
-                "checkout", {"type": "SB", "ori": "Right"}, self.view.btn_sr
+                "checkout", {"type": "SB"}, self.view.btn_checkout_sb
             )
         )
         self.view.btn_move_map.clicked.connect(
@@ -240,7 +229,7 @@ class MainController:
     def _on_day_finished(self):
         QMessageBox.information(self.view, "Info", "Tag beendet.")
         self.view.btn_play_pause.setChecked(False)
-        self.view.btn_play_pause.setText("▶")
+        self._set_play_pause_icon(False)
         self.view.clock_widget.set_overtime(False)
 
     def _init_ui_state(self):
@@ -276,7 +265,11 @@ class MainController:
             json.dump(self.settings, f, indent=4)
 
     def open_size_config(self):
-        dlg = SizeConfigDialog(self.settings, self.view)
+        dlg = SizeConfigDialog(
+            self.settings,
+            self.view,
+            translator=self.translator,
+        )
         if dlg.exec():
             self.settings.update(dlg.get_values())
             self._save_settings()
@@ -286,7 +279,7 @@ class MainController:
         self.visual_controller.draw_map_elements(
             self.map_manager, highlight_queues=True
         )
-        dlg = OffsetDialog(self.settings, self.view)
+        dlg = OffsetDialog(self.settings, self.view, translator=self.translator)
         dlg.settings_changed.connect(
             lambda ns: (
                 self.settings.update(ns),
@@ -302,7 +295,7 @@ class MainController:
         )
 
     def open_visibility_dialog(self):
-        dlg = VisibilityDialog(self.settings, self.view)
+        dlg = VisibilityDialog(self.settings, self.view, translator=self.translator)
         dlg.settings_changed.connect(
             lambda ns: (
                 self.settings.update(ns),
@@ -361,14 +354,14 @@ class MainController:
             self.view.btn_reset.setEnabled(True)
             if self.sim_manager.is_running:
                 self.view.btn_play_pause.setChecked(True)
-                self.view.btn_play_pause.setText("⏸")
+                self._set_play_pause_icon(True)
             else:
                 self.view.btn_play_pause.setChecked(False)
-                self.view.btn_play_pause.setText("▶")
+                self._set_play_pause_icon(False)
         else:
             self.sim_manager.pause()
             self.view.btn_play_pause.setChecked(False)
-            self.view.btn_play_pause.setText("▶")
+            self._set_play_pause_icon(False)
             self.view.canvas_component.set_drawing_cursor(True)
         self.visual_controller.draw_map_elements(self.map_manager)
 
@@ -392,6 +385,8 @@ class MainController:
             display_name = name.replace(".json", "")
             self.view.map_combo.setCurrentText(display_name)
             self.visual_controller.draw_map_elements(self.map_manager)
+            self._refresh_object_list()
+            self._refresh_route_list()
             self.view.add_log_entry(f"Karte '{name}' erstellt.", "green")
 
     def load_map(self, filename):
@@ -412,13 +407,10 @@ class MainController:
             self._refresh_route_list()
 
             # WICHTIG: Hier wieder mit Center aufrufen für "Näher beim Start"
-            center = self.visual_controller.get_map_center()
-            self.view.reset_sim_zoom(center)
+            self.view.reset_sim_zoom()
 
     def save_current_map(self):
-        if self.map_manager.save_map(
-            self.view.combo_global_exit.currentText()
-        ):
+        if self.map_manager.save_map():
             self.view.add_log_entry(f"Karte gespeichert.", "green")
             QMessageBox.information(
                 self.view, "Info", "Karte erfolgreich gespeichert."
@@ -465,9 +457,13 @@ class MainController:
             )
 
     def remove_map_background(self):
-        self.map_manager.background_image_path = None
+        self.map_manager._apply_default_background()
         self.map_manager.save_map()
-        self.visual_controller.update_background(None, 1.0, MAPS_DIR)
+        self.visual_controller.update_background(
+            self.map_manager.background_image_path,
+            self.map_manager.background_scale,
+            MAPS_DIR,
+        )
 
     def update_bg_scale(self, val):
         self.map_manager.background_scale = val
@@ -477,7 +473,7 @@ class MainController:
         if self.sim_manager.is_running:
             self.sim_manager.pause()
             self.view.btn_play_pause.setChecked(False)
-            self.view.btn_play_pause.setText("▶")
+            self._set_play_pause_icon(False)
             # Input is still blocked during pause
         else:
             if not self.sim_manager.is_initialized:
@@ -518,7 +514,7 @@ class MainController:
                     return
             self.sim_manager.start()
             self.view.btn_play_pause.setChecked(True)
-            self.view.btn_play_pause.setText("⏸")
+            self._set_play_pause_icon(True)
             # Preload all input tabs before blocking
             self.view.sidebar_component.preload_all_input_tabs()
             # Block input when simulation starts
@@ -530,15 +526,14 @@ class MainController:
         ot = self.view.time_open.time()
         self.sim_manager.reset(ot)
         self.view.btn_play_pause.setChecked(False)
-        self.view.btn_play_pause.setText("▶")
+        self._set_play_pause_icon(False)
         self.view.clock_widget.set_progress(0)
         self.view.clock_widget.set_overtime(False)
         self.visual_controller.sync_customers([])
         self.visual_controller.draw_map_elements(self.map_manager)
 
         # Reset View auch hier
-        center = self.visual_controller.get_map_center()
-        self.view.reset_sim_zoom(center)
+        self.view.reset_sim_zoom()
 
         # Unblock input when simulation is reset
         self.view.sidebar_component.set_input_blocked(False)
@@ -547,7 +542,7 @@ class MainController:
         if self.sim_manager.is_initialized:
             self.sim_manager.skip_day()
             self.view.btn_play_pause.setChecked(False)
-            self.view.btn_play_pause.setText("▶")
+            self._set_play_pause_icon(False)
 
     def set_speed(self, factor):
         self.sim_manager.set_time_factor(factor)
@@ -578,6 +573,24 @@ class MainController:
                     self.view.scan_speed_pro_max.value(),
                 ),
             }
+            pay_ratio = (
+                self.view.payment_cash.value(),
+                self.view.payment_card.value(),
+            )
+            pay_cash_speed = (
+                self.view.pay_duration_cash_min.value(),
+                self.view.pay_duration_cash_max.value(),
+            )
+            pay_card_speed = (
+                self.view.pay_duration_card_min.value(),
+                self.view.pay_duration_card_max.value(),
+            )
+            pay_sb_speed = None
+            if hasattr(self.view, "pay_duration_sb_min"):
+                pay_sb_speed = (
+                    self.view.pay_duration_sb_min.value(),
+                    self.view.pay_duration_sb_max.value(),
+                )
             fail_rate_normal = 0.0
             if hasattr(self.view, "checkout_fail_rate_normal"):
                 fail_rate_normal = self.view.checkout_fail_rate_normal.value()
@@ -608,9 +621,17 @@ class MainController:
                 "scan": scan,
                 "staff": staff,
                 "handheld": handheld_val,
+                "pay_ratio": pay_ratio,
+                "pay_cash_speed": pay_cash_speed,
+                "pay_card_speed": pay_card_speed,
+                "pay_sb_speed": pay_sb_speed,
                 "checkout_fail_rate_normal": fail_rate_normal,
                 "checkout_fail_rate_sb": fail_rate_sb,
                 "customer_annoyance_rate": customer_annoyance_rate,
+                "worker_repair_min": self.view.worker_repair_min.value(),
+                "worker_repair_max": self.view.worker_repair_max.value(),
+                "worker_conflict_min": self.view.worker_repair_min.value(),
+                "worker_conflict_max": self.view.worker_repair_max.value(),
             }
         except Exception as e:
             print(f"UI Params Error: {e}")
@@ -627,11 +648,18 @@ class MainController:
         self._highlight_list_item(self.view.object_list_widget, idx)
 
     def on_route_selected(self, item):
-        name = item.text().split(" ")[0]
+        spec = item.data(Qt.ItemDataRole.UserRole)
+        if not spec:
+            return
+        self.visual_controller.draw_map_elements(self.map_manager)
+        self.visual_controller.highlight_route(self.map_manager, spec)
 
     def on_object_selected(self, item):
         spec = item.data(Qt.ItemDataRole.UserRole)
-        self.interaction_controller.edit_object_position(spec)
+        if spec:
+            self.visual_controller.draw_map_elements(
+                self.map_manager, selected_spec=spec
+            )
 
     def delete_selected_route(self):
         self._refresh_route_list()
@@ -654,23 +682,69 @@ class MainController:
 
     def _refresh_route_list(self):
         self.view.route_list_widget.clear()
+        suffix_points = (
+            self.translator.get("sidebar.editor.route_points_suffix")
+            if self.translator
+            else "Pkt"
+        )
+        label_start = (
+            self.translator.get("sidebar.editor.route_label_start")
+            if self.translator
+            else "Start"
+        )
+        label_exit = (
+            self.translator.get("sidebar.editor.route_label_exit")
+            if self.translator
+            else "Exit"
+        )
         for name, pts in self.map_manager.shop_routes.items():
-            self.view.route_list_widget.addItem(f"{name} ({len(pts)} Pkt)")
+            item = QListWidgetItem(
+                f"{name} ({len(pts)} {suffix_points})"
+            )
+            item.setData(
+                Qt.ItemDataRole.UserRole,
+                {"type": "shop_route", "name": name},
+            )
+            self.view.route_list_widget.addItem(item)
         for name, pts in self.map_manager.start_routes.items():
-            self.view.route_list_widget.addItem(f"{name} (Start)")
+            item = QListWidgetItem(f"{name} ({label_start})")
+            item.setData(
+                Qt.ItemDataRole.UserRole,
+                {"type": "start_route", "name": name},
+            )
+            self.view.route_list_widget.addItem(item)
         for name, pts in self.map_manager.exit_routes.items():
-            self.view.route_list_widget.addItem(f"{name} (Exit)")
+            item = QListWidgetItem(f"{name} ({label_exit})")
+            item.setData(
+                Qt.ItemDataRole.UserRole,
+                {"type": "exit_route", "name": name},
+            )
+            self.view.route_list_widget.addItem(item)
 
     def _refresh_object_list(self):
         self.view.object_list_widget.clear()
+        shelf_label = (
+            self.translator.get("sidebar.editor.object_shelf")
+            if self.translator
+            else "Regal"
+        )
+        checkout_label = (
+            self.translator.get("sidebar.editor.object_checkout")
+            if self.translator
+            else "Kasse"
+        )
         for i, s in enumerate(self.map_manager.all_shelves):
-            item = QListWidgetItem(f"Regal #{i} ({s.get('variant',0)})")
+            item = QListWidgetItem(
+                f"{shelf_label} #{i} ({s.get('variant',0)})"
+            )
             item.setData(
                 Qt.ItemDataRole.UserRole, {"type": "shelf", "index": i}
             )
             self.view.object_list_widget.addItem(item)
         for c in self.map_manager.checkouts_data:
-            item = QListWidgetItem(f"Kasse #{c['id']} ({c['type']})")
+            item = QListWidgetItem(
+                f"{checkout_label} #{c['id']} ({c['type']})"
+            )
             item.setData(
                 Qt.ItemDataRole.UserRole, {"type": "checkout", "id": c["id"]}
             )
@@ -688,7 +762,17 @@ class MainController:
         if self.sim_manager.is_running:
             self.sim_manager.pause()
             self.view.btn_play_pause.setChecked(False)
-            self.view.btn_play_pause.setText("▶")
+            self._set_play_pause_icon(False)
 
         # Emit signal to application launcher to switch to menu screen
         self.view.back_to_menu_requested.emit()
+
+    def _set_play_pause_icon(self, is_running: bool):
+        icon = (
+            self.view.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause)
+            if is_running
+            else self.view.style().standardIcon(
+                QStyle.StandardPixmap.SP_MediaPlay
+            )
+        )
+        self.view.btn_play_pause.setIcon(icon)

@@ -113,6 +113,8 @@ class MainWindow(QMainWindow):
         self.items_mean = s.items_mean
         self.items_std = s.items_std
         self.hand_scanner_prob = s.hand_scanner_prob
+        self.payment_cash = s.payment_cash
+        self.payment_card = s.payment_card
         self.scan_speed_normal_min = s.scan_speed_normal_min
         self.scan_speed_normal_max = s.scan_speed_normal_max
         self.scan_speed_disabled_min = s.scan_speed_disabled_min
@@ -121,6 +123,14 @@ class MainWindow(QMainWindow):
         self.scan_speed_newbie_max = s.scan_speed_newbie_max
         self.scan_speed_pro_min = s.scan_speed_pro_min
         self.scan_speed_pro_max = s.scan_speed_pro_max
+        self.pay_duration_cash_min = s.pay_duration_cash_min
+        self.pay_duration_cash_max = s.pay_duration_cash_max
+        self.pay_duration_card_min = s.pay_duration_card_min
+        self.pay_duration_card_max = s.pay_duration_card_max
+        self.pay_duration_sb_min = s.pay_duration_sb_min
+        self.pay_duration_sb_max = s.pay_duration_sb_max
+        self.worker_repair_min = s.worker_repair_min
+        self.worker_repair_max = s.worker_repair_max
         self.checkout_fail_rate_normal = s.checkout_fail_rate_normal
         self.checkout_fail_rate_sb = s.checkout_fail_rate_sb
         self.customer_annoyance_rate = s.customer_annoyance_rate
@@ -138,7 +148,6 @@ class MainWindow(QMainWindow):
         self.btn_set_background = s.btn_set_background
         self.btn_remove_background = s.btn_remove_background
         self.spin_bg_scale = s.spin_bg_scale
-        self.combo_global_exit = s.combo_global_exit
         self.btn_move_map = s.btn_move_map
 
         self.start_area_button = s.start_area_button
@@ -158,10 +167,8 @@ class MainWindow(QMainWindow):
         self.btn_del_route = s.btn_del_route
 
         self.place_shelves_button = s.place_shelves_button
-        self.btn_kl = s.btn_kl
-        self.btn_kr = s.btn_kr
-        self.btn_sl = s.btn_sl
-        self.btn_sr = s.btn_sr
+        self.btn_checkout_normal = s.btn_checkout_normal
+        self.btn_checkout_sb = s.btn_checkout_sb
         self.object_list_widget = s.object_list_widget
         self.btn_edit_obj = s.btn_edit_obj
         self.btn_del_obj = s.btn_del_obj
@@ -254,6 +261,44 @@ class MainWindow(QMainWindow):
             s.disabled_prob_input
             if hasattr(s, "disabled_prob_input")
             else None
+        )
+        self.payment_cash = s.payment_cash if hasattr(s, "payment_cash") else None
+        self.payment_card = s.payment_card if hasattr(s, "payment_card") else None
+        self.pay_duration_cash_min = (
+            s.pay_duration_cash_min
+            if hasattr(s, "pay_duration_cash_min")
+            else None
+        )
+        self.pay_duration_cash_max = (
+            s.pay_duration_cash_max
+            if hasattr(s, "pay_duration_cash_max")
+            else None
+        )
+        self.pay_duration_card_min = (
+            s.pay_duration_card_min
+            if hasattr(s, "pay_duration_card_min")
+            else None
+        )
+        self.pay_duration_card_max = (
+            s.pay_duration_card_max
+            if hasattr(s, "pay_duration_card_max")
+            else None
+        )
+        self.pay_duration_sb_min = (
+            s.pay_duration_sb_min
+            if hasattr(s, "pay_duration_sb_min")
+            else None
+        )
+        self.pay_duration_sb_max = (
+            s.pay_duration_sb_max
+            if hasattr(s, "pay_duration_sb_max")
+            else None
+        )
+        self.worker_repair_min = (
+            s.worker_repair_min if hasattr(s, "worker_repair_min") else None
+        )
+        self.worker_repair_max = (
+            s.worker_repair_max if hasattr(s, "worker_repair_max") else None
         )
 
     def keyPressEvent(self, event):

@@ -29,7 +29,8 @@ class MapManager:
         self.worker_spawn_rect = None  # NEU: Spawn-Bereich für Arbeiter
 
         self.background_image_path = None
-        self.background_scale = 0.5
+        self.background_scale = 0.09
+        self.default_background_image = self._get_default_background_image()
 
         self.map_pos_x = 0.0
         self.map_pos_y = 0.0
@@ -113,7 +114,9 @@ class MapManager:
             )
 
             self.background_image_path = data.get("background_image", None)
-            self.background_scale = data.get("background_scale", 0.5)
+            self.background_scale = data.get("background_scale", 0.09)
+            if not self.background_image_path:
+                self._apply_default_background()
 
             self.map_pos_x = data.get("map_pos_x", 0.0)
             self.map_pos_y = data.get("map_pos_y", 0.0)
@@ -164,7 +167,14 @@ class MapManager:
         if not name.endswith(".json"):
             name += ".json"
         path = MAPS_DIR / name
-        default_data = {"routes": {}, "shelves": [], "checkouts": []}
+        default_bg = self._get_default_background_image()
+        default_data = {
+            "routes": {},
+            "shelves": [],
+            "checkouts": [],
+            "background_image": default_bg,
+            "background_scale": 0.09,
+        }
         try:
             with open(path, "w") as f:
                 json.dump(default_data, f, indent=4)
@@ -208,7 +218,8 @@ class MapManager:
         self.start_area_rect = None
         self.exit_area_rect = None
         self.worker_spawn_rect = None
-        self.background_image_path = None
+        self.background_image_path = self._get_default_background_image()
+        self.background_scale = 0.09
 
     def set_background(self, source_path):
         if not self.current_map_file:
@@ -219,7 +230,21 @@ class MapManager:
         try:
             shutil.copy(src, dest_path)
             self.background_image_path = dest_name
-            self.background_scale = 0.5
+            self.background_scale = 0.09
             return True
         except Exception:
             return False
+
+    def _get_default_background_image(self):
+        preferred = MAPS_DIR / "bg_Standard 1.png"
+        if preferred.exists():
+            return preferred.name
+        for p in MAPS_DIR.glob("bg_*.png"):
+            return p.name
+        return None
+
+    def _apply_default_background(self):
+        default_bg = self._get_default_background_image()
+        if default_bg:
+            self.background_image_path = default_bg
+            self.background_scale = 0.09
