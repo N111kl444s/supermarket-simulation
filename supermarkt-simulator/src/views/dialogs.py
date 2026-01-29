@@ -16,9 +16,26 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QWidget,
     QTabWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QPushButton,
+    QFileDialog,
+    QProgressBar,
+    QHeaderView,
+    QAbstractScrollArea,
+    QSizePolicy,
 )
-from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtCore import pyqtSignal, Qt, QTimer, QTime
 from config import COLOR_BG_MAIN
+
+try:
+    from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+    from matplotlib.figure import Figure
+    HAS_MATPLOTLIB = True
+except Exception:
+    FigureCanvas = None
+    Figure = None
+    HAS_MATPLOTLIB = False
 
 # ... (ObjectPositionDialog und CheckoutConfigDialog bleiben unverändert, hier weggelassen zur Kürze) ...
 # Bitte den Code für ObjectPositionDialog und CheckoutConfigDialog aus deiner bestehenden Datei beibehalten.
@@ -204,6 +221,13 @@ class VisibilityDialog(QDialog):
         self.cb_c_nums = self._add_cb(
             "Kassen Nummern", "show_checkout_numbers", form
         )
+        self.cb_c_nums.setEnabled(False)
+        self.cb_c_nums.setToolTip(
+            self._t(
+                "dialogs.checkout_numbers_report_only",
+                "Kassen-IDs werden nur im Statistikbericht angezeigt.",
+            )
+        )
         self.cb_cashiers = self._add_cb("Kassierer", "show_cashiers", form)
         self.cb_queues = self._add_cb(
             "Warteschlangen (Punkte)", "show_queues", form
@@ -330,3 +354,5 @@ class OffsetDialog(QDialog):
         h.addWidget(sb_x)
         h.addWidget(sb_y)
         layout.addRow(label, container)
+
+

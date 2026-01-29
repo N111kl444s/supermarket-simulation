@@ -964,6 +964,26 @@ class Sidebar(QWidget):
             if self.translator
             else "Live Daten"
         )
+        overview_title = (
+            self.translator.get("sidebar.stats.overview")
+            if self.translator
+            else "Überblick"
+        )
+        queue_title = (
+            self.translator.get("sidebar.stats.queue_section")
+            if self.translator
+            else "Warteschlange"
+        )
+        performance_title = (
+            self.translator.get("sidebar.stats.performance_section")
+            if self.translator
+            else "Leistung"
+        )
+        time_title = (
+            self.translator.get("sidebar.stats.time_section")
+            if self.translator
+            else "Zeit"
+        )
         queue_label = (
             self.translator.get("sidebar.stats.queue_count")
             if self.translator
@@ -979,6 +999,56 @@ class Sidebar(QWidget):
             if self.translator
             else "Kunden Gesamt:"
         )
+        longest_queue_label = (
+            self.translator.get("sidebar.stats.longest_queue")
+            if self.translator
+            else "Längste Queue:"
+        )
+        avg_wait_label = (
+            self.translator.get("sidebar.stats.avg_wait")
+            if self.translator
+            else "Ø Wartezeit:"
+        )
+        throughput_label = (
+            self.translator.get("sidebar.stats.throughput")
+            if self.translator
+            else "Durchsatz:"
+        )
+        available_checkouts_label = (
+            self.translator.get("sidebar.stats.available_checkouts")
+            if self.translator
+            else "Kassen verfügbar:"
+        )
+        satisfaction_label = (
+            self.translator.get("sidebar.stats.satisfaction")
+            if self.translator
+            else "Zufriedenheit:"
+        )
+        elapsed_open_label = (
+            self.translator.get("sidebar.stats.elapsed_open")
+            if self.translator
+            else "Geöffnet (bisher):"
+        )
+        scheduled_open_label = (
+            self.translator.get("sidebar.stats.scheduled_open")
+            if self.translator
+            else "Geplant geöffnet:"
+        )
+        overtime_label = (
+            self.translator.get("sidebar.stats.overtime")
+            if self.translator
+            else "Überzeit:"
+        )
+        report_button_label = (
+            self.translator.get("sidebar.stats.open_report")
+            if self.translator
+            else "Bericht öffnen"
+        )
+        report_button_tooltip = (
+            self.translator.get("sidebar.stats.open_report_tooltip")
+            if self.translator
+            else "Öffnet die ausführliche Statistikübersicht"
+        )
         event_log_title = (
             self.translator.get("sidebar.stats.event_log")
             if self.translator
@@ -989,11 +1059,47 @@ class Sidebar(QWidget):
         self.lbl_queue_count = QLabel("0")
         self.lbl_customers_in_store = QLabel("0")
         self.lbl_total_customers = QLabel("0")
+        self.lbl_longest_queue = QLabel("0")
+        self.lbl_avg_wait = QLabel("0.0 min")
+        self.lbl_throughput = QLabel("0.0 /h")
+        self.lbl_available_checkouts = QLabel("0/0")
+        self.lbl_satisfaction_score = QLabel("0%")
+        self.lbl_elapsed_open = QLabel("0:00")
+        self.lbl_scheduled_open = QLabel("0:00")
+        self.lbl_overtime = QLabel("0:00")
 
-        f_stats_grid = QFormLayout(self.gb_stats)
-        f_stats_grid.addRow(queue_label, self.lbl_queue_count)
-        f_stats_grid.addRow(store_label, self.lbl_customers_in_store)
-        f_stats_grid.addRow(total_label, self.lbl_total_customers)
+        f_stats_grid = QVBoxLayout(self.gb_stats)
+
+        gb_overview = QGroupBox(overview_title)
+        f_overview = QFormLayout(gb_overview)
+        f_overview.addRow(store_label, self.lbl_customers_in_store)
+        f_overview.addRow(total_label, self.lbl_total_customers)
+
+        gb_queue = QGroupBox(queue_title)
+        f_queue = QFormLayout(gb_queue)
+        f_queue.addRow(queue_label, self.lbl_queue_count)
+        f_queue.addRow(longest_queue_label, self.lbl_longest_queue)
+        f_queue.addRow(avg_wait_label, self.lbl_avg_wait)
+
+        gb_perf = QGroupBox(performance_title)
+        f_perf = QFormLayout(gb_perf)
+        f_perf.addRow(throughput_label, self.lbl_throughput)
+        f_perf.addRow(available_checkouts_label, self.lbl_available_checkouts)
+        f_perf.addRow(satisfaction_label, self.lbl_satisfaction_score)
+
+        gb_time = QGroupBox(time_title)
+        f_time = QFormLayout(gb_time)
+        f_time.addRow(elapsed_open_label, self.lbl_elapsed_open)
+        f_time.addRow(scheduled_open_label, self.lbl_scheduled_open)
+        f_time.addRow(overtime_label, self.lbl_overtime)
+
+        f_stats_grid.addWidget(gb_overview)
+        f_stats_grid.addWidget(gb_queue)
+        f_stats_grid.addWidget(gb_perf)
+        f_stats_grid.addWidget(gb_time)
+        self.btn_open_report = QPushButton(report_button_label)
+        self.btn_open_report.setToolTip(report_button_tooltip)
+        f_stats_grid.addWidget(self.btn_open_report)
         l_stats.addWidget(self.gb_stats)
 
         gb_log = QGroupBox(event_log_title)

@@ -697,7 +697,7 @@
             "orientation": "Right",
             "open": true,
             "skill": "Azubi",
-            "max_queue": 5,
+            "max_queue": 3,
             "angle": 0.0,
             "malfunction": false,
             "conflict": false
@@ -710,7 +710,7 @@
             "orientation": "Right",
             "open": true,
             "skill": "Azubi",
-            "max_queue": 5,
+            "max_queue": 3,
             "angle": 0,
             "malfunction": false,
             "conflict": false
@@ -723,7 +723,7 @@
             "orientation": "Left",
             "open": true,
             "skill": "Azubi",
-            "max_queue": 5,
+            "max_queue": 3,
             "angle": 180.0,
             "malfunction": false,
             "conflict": false
@@ -736,7 +736,7 @@
             "orientation": "Left",
             "open": true,
             "skill": "Azubi",
-            "max_queue": 5,
+            "max_queue": 3,
             "angle": 180.0,
             "malfunction": false,
             "conflict": false
@@ -748,11 +748,12 @@
             "type": "Normal",
             "orientation": "Right",
             "open": true,
-            "skill": "Azubi",
-            "max_queue": 5,
+            "skill": "Festangestellter",
+            "max_queue": 6,
             "angle": 0,
             "malfunction": false,
-            "conflict": false
+            "conflict": false,
+            "cashier_skill": "Festangestellter"
         },
         {
             "id": 6,
@@ -762,10 +763,11 @@
             "orientation": "Right",
             "open": true,
             "skill": "Azubi",
-            "max_queue": 5,
+            "max_queue": 6,
             "angle": 0,
             "malfunction": false,
-            "conflict": false
+            "conflict": false,
+            "cashier_skill": "Azubi"
         }
     ],
     "waiting_area": [

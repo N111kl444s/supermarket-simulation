@@ -821,10 +821,10 @@
             "type": "Normal",
             "orientation": "Right",
             "open": true,
-            "skill": "Azubi",
+            "skill": "Festangestellter",
             "max_queue": 5,
             "angle": 0,
-            "cashier_skill": "Azubi",
+            "cashier_skill": "Festangestellter",
             "malfunction": true
         },
         {
@@ -837,7 +837,8 @@
             "skill": "Azubi",
             "max_queue": 5,
             "angle": 0,
-            "malfunction": true
+            "malfunction": true,
+            "cashier_skill": "Azubi"
         },
         {
             "id": 3,
@@ -845,7 +846,7 @@
             "y": 80.0,
             "type": "SB",
             "orientation": "Right",
-            "open": false,
+            "open": true,
             "skill": "Azubi",
             "max_queue": 5,
             "angle": 0,
@@ -858,7 +859,7 @@
             "y": 80.0,
             "type": "SB",
             "orientation": "Right",
-            "open": false,
+            "open": true,
             "skill": "Azubi",
             "max_queue": 5,
             "angle": 0,
@@ -871,7 +872,7 @@
             "y": 107.0,
             "type": "SB",
             "orientation": "Left",
-            "open": false,
+            "open": true,
             "skill": "Azubi",
             "max_queue": 5,
             "angle": 180,
@@ -884,7 +885,7 @@
             "y": 107.0,
             "type": "SB",
             "orientation": "Left",
-            "open": false,
+            "open": true,
             "skill": "Azubi",
             "max_queue": 5,
             "angle": 180,
@@ -898,10 +899,10 @@
             "type": "Normal",
             "orientation": "Right",
             "open": true,
-            "skill": "Azubi",
+            "skill": "Festangestellter",
             "max_queue": 5,
             "angle": 0,
-            "cashier_skill": "Azubi",
+            "cashier_skill": "Festangestellter",
             "malfunction": true
         },
         {
@@ -914,7 +915,8 @@
             "skill": "Azubi",
             "max_queue": 5,
             "angle": 0,
-            "malfunction": true
+            "malfunction": true,
+            "cashier_skill": "Azubi"
         }
     ],
     "waiting_area": [

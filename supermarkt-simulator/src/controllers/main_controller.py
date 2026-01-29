@@ -36,6 +36,7 @@ from controllers.interaction_controller import InteractionController
 from views.main_window import MainWindow
 from views.size_config_dialog import SizeConfigDialog
 from views.dialogs import VisibilityDialog, OffsetDialog
+from views.statistics_dialogs import StatisticsReportDialog
 
 
 class MainController:
@@ -67,6 +68,9 @@ class MainController:
             self.view,
             self.sim_manager,
         )
+
+        self.stats_dialog = None
+        self.settings["show_checkout_numbers"] = False
 
         self._setup_connections()
         self._init_ui_state()
@@ -112,6 +116,10 @@ class MainController:
                 self._check_overtime(c),
             )
         )
+        self.sim_manager.live_stats_updated.connect(
+            self._on_live_stats_updated
+        )
+        self.sim_manager.stats_ready.connect(self._on_stats_ready)
         self.sim_manager.log_message.connect(self.view.add_log_entry)
         self.sim_manager.day_finished.connect(self._on_day_finished)
         self.sim_manager.sim_timer.timeout.connect(self._on_sim_tick)
@@ -131,6 +139,7 @@ class MainController:
         self.view.btn_config_sizes.clicked.connect(self.open_size_config)
         self.view.btn_offsets.clicked.connect(self.open_offsets_dialog)
         self.view.btn_visibility.clicked.connect(self.open_visibility_dialog)
+        self.view.btn_open_report.clicked.connect(self._open_stats_report)
 
         self.interaction_controller.map_data_changed.connect(
             self.on_map_data_changed
@@ -212,6 +221,36 @@ class MainController:
         if not self.sim_manager.store_is_closed_trigger:
             self.view.clock_widget.set_overtime(False)
 
+    def _on_live_stats_updated(self, stats):
+        max_len = stats.get("longest_queue", 0)
+        checkout_ids = stats.get("longest_queue_checkouts", [])
+        if max_len > 0 and checkout_ids:
+            ids_text = ", ".join(str(cid) for cid in checkout_ids)
+            self.view.lbl_longest_queue.setText(f"{max_len} (Kasse {ids_text})")
+        else:
+            self.view.lbl_longest_queue.setText(str(max_len))
+        avg_wait = stats.get("avg_wait_time_min", 0.0)
+        self.view.lbl_avg_wait.setText(f"{avg_wait:.1f} min")
+        throughput = stats.get("throughput_per_hour", 0.0)
+        self.view.lbl_throughput.setText(f"{throughput:.1f} /h")
+        open_c = stats.get("checkouts_open", 0)
+        avail_c = stats.get("checkouts_available", 0)
+        self.view.lbl_available_checkouts.setText(f"{avail_c}/{open_c}")
+        satisfaction = stats.get("satisfaction_score", 0.0)
+        self.view.lbl_satisfaction_score.setText(f"{satisfaction:.0f}%")
+        elapsed = stats.get("elapsed_open_seconds", 0.0)
+        scheduled = stats.get("scheduled_open_seconds", 0.0)
+        overtime = stats.get("overtime_seconds", 0.0)
+        self.view.lbl_elapsed_open.setText(self._format_duration(elapsed))
+        self.view.lbl_scheduled_open.setText(self._format_duration(scheduled))
+        self.view.lbl_overtime.setText(self._format_duration(overtime))
+
+    def _format_duration(self, seconds):
+        total = int(round(seconds))
+        h = total // 3600
+        m = (total % 3600) // 60
+        return f"{h}:{m:02d}"
+
     def _check_overtime(self, customers_in_store):
         if self.sim_manager.store_is_closed_trigger and customers_in_store > 0:
             self.view.clock_widget.set_overtime(True)
@@ -231,6 +270,53 @@ class MainController:
         self.view.btn_play_pause.setChecked(False)
         self._set_play_pause_icon(False)
         self.view.clock_widget.set_overtime(False)
+
+    def _on_stats_ready(self, stats):
+        if self.stats_dialog and self.stats_dialog.isVisible():
+            self.stats_dialog.raise_()
+            self.stats_dialog.activateWindow()
+            return
+        dlg = StatisticsReportDialog(
+            stats,
+            parent=self.view,
+            translator=self.translator,
+            sim_manager=None,
+        )
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        self._attach_report_checkout_ids(dlg)
+        dlg.show()
+
+    def _open_stats_report(self):
+        if self.stats_dialog and self.stats_dialog.isVisible():
+            self.stats_dialog.raise_()
+            self.stats_dialog.activateWindow()
+            return
+        stats = self.sim_manager.get_statistics_snapshot()
+        dlg = StatisticsReportDialog(
+            stats,
+            parent=self.view,
+            translator=self.translator,
+            sim_manager=self.sim_manager,
+        )
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        dlg.show()
+        self.stats_dialog = dlg
+        self._attach_report_checkout_ids(dlg)
+        dlg.destroyed.connect(lambda: setattr(self, "stats_dialog", None))
+
+    def _attach_report_checkout_ids(self, dlg):
+        self._set_checkout_numbers_visible(True)
+        dlg.destroyed.connect(self._restore_report_checkout_ids)
+
+    def _restore_report_checkout_ids(self):
+        self._set_checkout_numbers_visible(False)
+
+    def _set_checkout_numbers_visible(self, visible):
+        self.settings["show_checkout_numbers"] = visible
+        try:
+            self.visual_controller.draw_map_elements(self.map_manager)
+        except RuntimeError:
+            return
 
     def _init_ui_state(self):
         self._refresh_map_list()

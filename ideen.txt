@@ -2,6 +2,17 @@
 
 - Tooltips überarbeiten
 
+- Zufallsbutton sperren bei laufender oder pausierter Simulation. 
+ - Zufällig der Öffnungstatus. Maximale Anzahl der Kunden und Kassiertyp zufällig gemacht werden auf der Map 
+
+- Live Update der Uhrzeit (oben und bei Statistiken wenn sich Eingabeparameter verändern)
+- IDs der Kassen ändern
+
+- Anwendung ruckelt in der Bewegung des Live-Berichts.
+
+- Einträge der Liste limitieren und Seitenanzahl machen.
+- Infoboxen verkleinen bei Kunde (Zeiten...)
+
 
 - Statistiken!!! (Siehe #STATISTIC_DESIGN)
  - Kunde (jeweils im Laden, Warteschlange und Kassen):

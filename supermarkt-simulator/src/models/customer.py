@@ -93,6 +93,16 @@ class CustomerModel:
         self.picking_timer = 0.0
         self.is_picking = False
 
+        # --- STATISTICS TIMESTAMPS ---
+        self.entry_time_sec = None
+        self.queue_join_time_sec = None
+        self.service_start_time_sec = None
+        self.payment_start_time_sec = None
+        self.service_end_time_sec = None
+        self.exit_time_sec = None
+        self.last_checkout_id = None
+        self.last_state = self.state
+
         self._init_position()
         self._plan_shopping_trip()
 

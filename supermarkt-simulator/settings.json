@@ -61,6 +61,8 @@
         11.63,
         3.25
     ],
+    "satisfaction_store_target_min": 84.0,
+    "satisfaction_queue_target_min": 19.5,
     "language": "de",
     "show_worker_area": false,
     "size_checkout_light": 2,

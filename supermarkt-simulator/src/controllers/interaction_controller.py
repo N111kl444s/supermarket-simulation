@@ -12,6 +12,7 @@ from PyQt6.QtGui import QPen, QBrush, QPainterPath
 from PyQt6.QtCore import Qt, QPointF, QObject, pyqtSignal, QRectF
 from config import COLOR_ORANGE, COLOR_BLUE, COLOR_RED, COLOR_DARK_TEXT
 from views.dialogs import ObjectPositionDialog, CheckoutConfigDialog
+from views.statistics_dialogs import CheckoutStatsDialog
 
 
 class InteractionController(QObject):
@@ -400,6 +401,17 @@ class InteractionController(QObject):
             self.edit_object_position(spec)
         elif current_mode == "Simulation":
             if self.sim_manager.is_running or self.sim_manager.is_initialized:
+                dlg = CheckoutStatsDialog(
+                    checkout_id,
+                    self.sim_manager,
+                    parent=self.view,
+                    translator=self.view.translator
+                    if hasattr(self.view, "translator")
+                    else None,
+                )
+                dlg.setWindowModality(Qt.WindowModality.NonModal)
+                dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+                dlg.show()
                 return
             c_data = next(
                 (

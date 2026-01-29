@@ -1,8 +1,8 @@
 """Settings Screen for application configuration."""
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, 
-    QPushButton, QGroupBox, QFormLayout
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
+    QPushButton, QGroupBox, QFormLayout, QDoubleSpinBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -56,6 +56,29 @@ class SettingsScreen(QWidget):
         
         form_layout.addRow(self.lang_label, self.lang_combo)
         main_layout.addWidget(self.settings_group)
+
+        # Satisfaction Group
+        self.satisfaction_group = QGroupBox()
+        sat_layout = QFormLayout(self.satisfaction_group)
+        self.sat_store_label = QLabel()
+        self.sat_queue_label = QLabel()
+        self.sat_store_spin = QDoubleSpinBox()
+        self.sat_store_spin.setRange(1.0, 240.0)
+        self.sat_store_spin.setSingleStep(1.0)
+        self.sat_store_spin.setSuffix(" min")
+        self.sat_queue_spin = QDoubleSpinBox()
+        self.sat_queue_spin.setRange(0.5, 120.0)
+        self.sat_queue_spin.setSingleStep(0.5)
+        self.sat_queue_spin.setSuffix(" min")
+        self.sat_store_spin.setValue(
+            float(self.settings.get("satisfaction_store_target_min", 20.0))
+        )
+        self.sat_queue_spin.setValue(
+            float(self.settings.get("satisfaction_queue_target_min", 5.0))
+        )
+        sat_layout.addRow(self.sat_store_label, self.sat_store_spin)
+        sat_layout.addRow(self.sat_queue_label, self.sat_queue_spin)
+        main_layout.addWidget(self.satisfaction_group)
         
         main_layout.addStretch()
         
@@ -145,8 +168,12 @@ class SettingsScreen(QWidget):
         """Save settings and emit signal."""
         lang_text = self.lang_combo.currentText()
         language = "de" if "Deutsch" in lang_text else "en"
-        
-        settings = {"language": language}
+
+        settings = {
+            "language": language,
+            "satisfaction_store_target_min": self.sat_store_spin.value(),
+            "satisfaction_queue_target_min": self.sat_queue_spin.value(),
+        }
         self.settings_changed.emit(settings)
         self.back_requested.emit()
     
@@ -169,6 +196,21 @@ class SettingsScreen(QWidget):
             self.title_label.setText(self.translator.get("settings.title", "Einstellungen"))
             self.settings_group.setTitle(self.translator.get("settings.language_group", "Spracheinstellungen"))
             self.lang_label.setText(self.translator.get("settings.language_label", "Sprache:"))
+            self.satisfaction_group.setTitle(
+                self.translator.get("settings.satisfaction_group", "Zufriedenheit")
+            )
+            self.sat_store_label.setText(
+                self.translator.get(
+                    "settings.satisfaction_store",
+                    "Verweildauer Grenzwert (min):",
+                )
+            )
+            self.sat_queue_label.setText(
+                self.translator.get(
+                    "settings.satisfaction_queue",
+                    "Wartezeit Grenzwert (min):",
+                )
+            )
             self.btn_save.setText(self.translator.get("settings.save", "Speichern"))
             self.btn_cancel.setText(self.translator.get("settings.cancel", "Abbrechen"))
             self.btn_save.setToolTip(
@@ -181,6 +223,9 @@ class SettingsScreen(QWidget):
             self.title_label.setText("Einstellungen")
             self.settings_group.setTitle("Spracheinstellungen")
             self.lang_label.setText("Sprache:")
+            self.satisfaction_group.setTitle("Zufriedenheit")
+            self.sat_store_label.setText("Verweildauer Grenzwert (min):")
+            self.sat_queue_label.setText("Wartezeit Grenzwert (min):")
             self.btn_save.setText("Speichern")
             self.btn_cancel.setText("Abbrechen")
             self.btn_save.setToolTip("Einstellungen speichern")

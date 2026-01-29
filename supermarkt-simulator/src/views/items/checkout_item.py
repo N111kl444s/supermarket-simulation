@@ -4,7 +4,7 @@ Refactored: Renamed light parameters to screen.
 """
 
 from PyQt6.QtWidgets import QGraphicsObject, QStyle
-from PyQt6.QtCore import Qt, QRectF, pyqtSignal
+from PyQt6.QtCore import Qt, QRectF, pyqtSignal, QPointF
 from PyQt6.QtGui import (
     QPen,
     QBrush,
@@ -132,23 +132,25 @@ class CheckoutItem(QGraphicsObject):
 
         if self.data_id is not None and self.show_id:
             painter.save()
-            if self.orientation == "Left":
-                painter.translate(self.width / 2, self.height / 2)
-                painter.scale(-1, 1)
-                painter.translate(-self.width / 2, -self.height / 2)
             font = QFont()
-            font.setPixelSize(12)
+            font.setPixelSize(10)
             font.setBold(True)
             painter.setFont(font)
+            painter.translate(self.width / 2, self.height / 2)
+            painter.rotate(-self.angle)
+            if self.orientation == "Left":
+                painter.scale(-1, 1)
+            painter.translate(-self.width / 2, -self.height / 2)
+            text_rect = rect.adjusted(2, 2, 2, 2)
             painter.setPen(QPen(Qt.GlobalColor.black))
             painter.drawText(
-                rect.adjusted(2, 2, 2, 2),
+                text_rect,
                 Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
                 f"#{self.data_id}",
             )
             painter.setPen(QPen(Qt.GlobalColor.white))
             painter.drawText(
-                rect.adjusted(1, 1, 1, 1),
+                text_rect.translated(-1, -1),
                 Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
                 f"#{self.data_id}",
             )

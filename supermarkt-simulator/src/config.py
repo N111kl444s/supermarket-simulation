@@ -166,7 +166,7 @@ DEFAULT_SETTINGS = {
     "show_shelves": True,
     "show_shelf_numbers": True,
     "show_checkouts": True,
-    "show_checkout_numbers": True,
+    "show_checkout_numbers": False,
     "show_cashiers": True,
     "show_queues": False,
     "show_waiting_area": True,
@@ -194,6 +194,8 @@ DEFAULT_SETTINGS = {
     "offset_screen_normal_right": [0, 0],
     "offset_screen_sb_left": [0, 0],
     "offset_screen_sb_right": [0, 0],
+    "satisfaction_store_target_min": 20.0,
+    "satisfaction_queue_target_min": 5.0,
     "language": "de",
 }
 

@@ -139,6 +139,15 @@ class MainWindow(QMainWindow):
         self.lbl_queue_count = s.lbl_queue_count
         self.lbl_customers_in_store = s.lbl_customers_in_store
         self.lbl_total_customers = s.lbl_total_customers
+        self.lbl_longest_queue = s.lbl_longest_queue
+        self.lbl_avg_wait = s.lbl_avg_wait
+        self.lbl_throughput = s.lbl_throughput
+        self.lbl_available_checkouts = s.lbl_available_checkouts
+        self.lbl_satisfaction_score = s.lbl_satisfaction_score
+        self.lbl_elapsed_open = s.lbl_elapsed_open
+        self.lbl_scheduled_open = s.lbl_scheduled_open
+        self.lbl_overtime = s.lbl_overtime
+        self.btn_open_report = s.btn_open_report
         self.gb_stats = s.gb_stats
         self.plot_widget = s.plot_widget
 
