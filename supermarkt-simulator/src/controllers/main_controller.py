@@ -56,7 +56,7 @@ class MainController:
         self.view.set_controller(self)
 
         self.map_manager = MapManager(self.settings)
-        self.sim_manager = SimulationManager(self.map_manager, self.settings)
+        self.sim_manager = SimulationManager(self.map_manager, self.settings, translator=self.translator)
         self.visual_controller = VisualController(
             self.view.sim_scene, self.settings, translator=self.translator
         )
@@ -272,13 +272,14 @@ class MainController:
         # Longest queue
         max_len = stats.get("longest_queue", 0)
         checkout_ids = stats.get("longest_queue_checkouts", [])
+        checkout_label = self.translator.get("dialogs.checkout_label", "Kasse")
         if max_len > 0 and checkout_ids:
             ids_text = ", ".join(str(cid) for cid in checkout_ids)
             if hasattr(sb, 'lbl_longest_queue'):
-                sb.lbl_longest_queue.setText(f"Kasse #{ids_text} ({max_len})")
+                sb.lbl_longest_queue.setText(f"{checkout_label} #{ids_text} ({max_len})")
         else:
             if hasattr(sb, 'lbl_longest_queue'):
-                sb.lbl_longest_queue.setText(f"Kasse #0 ({max_len})")
+                sb.lbl_longest_queue.setText(f"{checkout_label} #0 ({max_len})")
         
         # Average wait time
         avg_wait = stats.get("avg_wait_time_min", 0.0)
@@ -364,13 +365,16 @@ class MainController:
         
         if hasattr(sb, 'lbl_satisfaction_status'):
             if satisfaction >= 80:
-                sb.lbl_satisfaction_status.setText("Status: SEHR GUT")
+                status_text = self.translator.get("dialogs.status_very_good", "SEHR GUT")
+                sb.lbl_satisfaction_status.setText(f"{self.translator.get('sidebar.stats.status_prefix', 'Status:')} {status_text}")
                 sb.lbl_satisfaction_status.setStyleSheet("font-size: 13px; color: #10B981; font-weight: 700; text-align: center;")
             elif satisfaction >= 60:
-                sb.lbl_satisfaction_status.setText("Status: GUT")
+                status_text = self.translator.get("dialogs.status_good", "GUT")
+                sb.lbl_satisfaction_status.setText(f"{self.translator.get('sidebar.stats.status_prefix', 'Status:')} {status_text}")
                 sb.lbl_satisfaction_status.setStyleSheet("font-size: 13px; color: #F59E0B; font-weight: 700; text-align: center;")
             else:
-                sb.lbl_satisfaction_status.setText("Status: KRITISCH")
+                status_text = self.translator.get("dialogs.status_critical", "KRITISCH")
+                sb.lbl_satisfaction_status.setText(f"{self.translator.get('sidebar.stats.status_prefix', 'Status:')} {status_text}")
                 sb.lbl_satisfaction_status.setStyleSheet("font-size: 11px; color: #EF4444; font-weight: 700; text-align: center;")
         
         # Time tracking
@@ -442,7 +446,9 @@ class MainController:
         )
 
     def _on_day_finished(self):
-        QMessageBox.information(self.view, "Info", "Tag beendet.")
+        title = self.translator.get("messages.day_finished_title", "Info")
+        message = self.translator.get("messages.day_finished_message", "Tag beendet.")
+        QMessageBox.information(self.view, title, message)
         self.view.btn_play_pause.setChecked(False)
         self._set_play_pause_icon(False)
         self.view.clock_widget.set_overtime(False)
@@ -675,39 +681,44 @@ class MainController:
 
     def save_current_map(self):
         if self.map_manager.save_map():
-            self.view.add_log_entry(f"Karte gespeichert.", "green")
-            QMessageBox.information(
-                self.view, "Info", "Karte erfolgreich gespeichert."
-            )
+            log_message = self.translator.get("messages.map_saved_log", "Karte gespeichert.")
+            self.view.add_log_entry(log_message, "green")
+            title = self.translator.get("messages.map_saved_title", "Info")
+            message = self.translator.get("messages.map_saved_message", "Karte erfolgreich gespeichert.")
+            QMessageBox.information(self.view, title, message)
         else:
-            QMessageBox.warning(
-                self.view, "Fehler", "Speichern fehlgeschlagen."
-            )
+            title = self.translator.get("messages.map_save_error_title", "Fehler")
+            message = self.translator.get("messages.map_save_error_message", "Speichern fehlgeschlagen.")
+            QMessageBox.warning(self.view, title, message)
 
     def delete_current_map(self):
+        title = self.translator.get("messages.map_delete_title", "Löschen")
+        message = self.translator.get("messages.map_delete_message", "Karte wirklich löschen?")
         res = QMessageBox.question(
             self.view,
-            "Löschen",
-            "Karte wirklich löschen?",
+            title,
+            message,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if res == QMessageBox.StandardButton.Yes:
             if self.map_manager.delete_current_map():
-                self.view.add_log_entry("Karte gelöscht.", "red")
+                log_message = self.translator.get("messages.map_deleted_log", "Karte gelöscht.")
+                self.view.add_log_entry(log_message, "red")
                 self._refresh_map_list()
                 if self.view.map_combo.count() > 0:
                     self.load_map(self.view.map_combo.itemText(0))
                 else:
                     self.visual_controller.draw_map_elements(self.map_manager)
             else:
-                QMessageBox.warning(
-                    self.view, "Fehler", "Konnte Karte nicht löschen."
-                )
+                error_title = self.translator.get("messages.map_delete_error_title", "Fehler")
+                error_message = self.translator.get("messages.map_delete_error_message", "Konnte Karte nicht löschen.")
+                QMessageBox.warning(self.view, error_title, error_message)
 
     def select_map_background(self):
+        dialog_title = self.translator.get("errors.file_dialog_background", "Hintergrund wählen")
         path, _ = QFileDialog.getOpenFileName(
             self.view,
-            "Hintergrund wählen",
+            dialog_title,
             str(MAPS_DIR),
             "Images (*.png *.jpg)",
         )
@@ -769,6 +780,8 @@ class MainController:
                     prob = self.view.disabled_prob_input.value()
                     ot = self.view.time_open.time()
                     ct = self.view.time_close.time()
+                    # Set clock display to opening time
+                    self.view.clock_widget.setText(ot.toString("HH:mm"))
                     self.sim_manager.init_day(count, prob, ot, ct)
                 except Exception as e:
                     QMessageBox.warning(
@@ -800,6 +813,9 @@ class MainController:
 
         # Reset View auch hier
         self.view.reset_sim_zoom()
+
+        # Clear event log
+        self.view.sidebar_component.stats_log_tab.clear_log()
 
         # Unblock input when simulation is reset
         self.view.sidebar_component.set_input_blocked(False)

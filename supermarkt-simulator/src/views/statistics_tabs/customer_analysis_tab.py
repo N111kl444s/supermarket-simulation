@@ -248,7 +248,7 @@ class CustomerAnalysisTab(QWidget):
         # Info label
         info = QLabel(self._t(
             "stats.customer_list_desc",
-            "Alle Kunden mit Zeiten, Zahlung und Kasse. Klicken Sie auf die Spaltenüberschriften zum Sortieren."
+            "Alle Kunden mit Zeiten, Zahlung und Kasse."
         ))
         info.setStyleSheet("color: #64748B; font-size: 12px; font-weight: 500; padding: 4px 0;")
         info.setWordWrap(True)
@@ -316,7 +316,7 @@ class CustomerAnalysisTab(QWidget):
             value.setObjectName(f"val_{label_text.replace('Ø', 'avg')}")
             col_layout.addWidget(value)
             
-            unit = QLabel("Minuten")
+            unit = QLabel(self._t("stats.unit_minutes", "Minuten"))
             unit.setAlignment(Qt.AlignmentFlag.AlignCenter)
             unit.setStyleSheet("font-size: 12px; color: #94A3B8; font-weight: 500;")
             col_layout.addWidget(unit)

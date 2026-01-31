@@ -62,7 +62,11 @@ class StatsDetailsTab(QWidget):
 
     def _create_items_card(self, layout, card_style):
         """Create items statistics card."""
-        card = QGroupBox("ARTIKEL-STATISTIKEN")
+        card = QGroupBox(
+            self.translator.get("sidebar.stats.card_item_stats", "ARTIKEL-STATISTIKEN")
+            if self.translator
+            else "ARTIKEL-STATISTIKEN"
+        )
         card.setStyleSheet(card_style)
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(10)
@@ -97,7 +101,11 @@ class StatsDetailsTab(QWidget):
 
     def _create_customers_served_card(self, layout, card_style):
         """Create customers served today card."""
-        card = QGroupBox("HEUTE BEDIENT")
+        card = QGroupBox(
+            self.translator.get("sidebar.stats.card_served_today", "HEUTE BEDIENT")
+            if self.translator
+            else "HEUTE BEDIENT"
+        )
         card.setStyleSheet(card_style)
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(8)
@@ -107,7 +115,11 @@ class StatsDetailsTab(QWidget):
         self.lbl_total_customers.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(self.lbl_total_customers)
 
-        customers_label = QLabel("Kunden")
+        customers_label = QLabel(
+            self.translator.get("sidebar.stats.unit_customers", "Kunden")
+            if self.translator
+            else "Kunden"
+        )
         customers_label.setStyleSheet("font-size: 13px; color: #6B7280; text-align: center;")
         customers_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(customers_label)
@@ -116,7 +128,11 @@ class StatsDetailsTab(QWidget):
 
     def _create_payment_card(self, layout, card_style):
         """Create payment methods card."""
-        card = QGroupBox("ZAHLUNGSMETHODEN")
+        card = QGroupBox(
+            self.translator.get("sidebar.stats.card_payment_methods", "ZAHLUNGSMETHODEN")
+            if self.translator
+            else "ZAHLUNGSMETHODEN"
+        )
         card.setStyleSheet(card_style)
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(10)
@@ -151,7 +167,11 @@ class StatsDetailsTab(QWidget):
 
     def _create_issues_card(self, layout, card_style):
         """Create checkout issues card."""
-        card = QGroupBox("KASSEN-PROBLEME")
+        card = QGroupBox(
+            self.translator.get("sidebar.stats.card_checkout_issues", "KASSEN-PROBLEME")
+            if self.translator
+            else "KASSEN-PROBLEME"
+        )
         card.setStyleSheet(card_style)
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(10)
@@ -171,7 +191,11 @@ class StatsDetailsTab(QWidget):
         issues_grid.addRow(malfunctions_lbl, self.lbl_malfunctions)
 
         # Annoyance
-        annoyance_lbl = QLabel("Verärgerungen:")
+        annoyance_lbl = QLabel(
+            self.translator.get("sidebar.stats.label_annoyance", "Verärgerungen:")
+            if self.translator
+            else "Verärgerungen:"
+        )
         annoyance_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
         self.lbl_annoyance = QLabel("0")
         self.lbl_annoyance.setStyleSheet("font-size: 18px; color: #F59E0B; font-weight: 700;")
@@ -193,7 +217,11 @@ class StatsDetailsTab(QWidget):
 
     def _create_time_card(self, layout, card_style):
         """Create opening hours card."""
-        card = QGroupBox("ÖFFNUNGSZEITEN")
+        card = QGroupBox(
+            self.translator.get("sidebar.stats.card_opening_hours", "ÖFFNUNGSZEITEN")
+            if self.translator
+            else "ÖFFNUNGSZEITEN"
+        )
         card.setStyleSheet(card_style)
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(10)
@@ -202,21 +230,33 @@ class StatsDetailsTab(QWidget):
         time_grid.setSpacing(8)
 
         # Elapsed
-        elapsed_lbl = QLabel("Verstrichen:")
+        elapsed_lbl = QLabel(
+            self.translator.get("sidebar.stats.label_elapsed", "Verstrichen:")
+            if self.translator
+            else "Verstrichen:"
+        )
         elapsed_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
         self.lbl_elapsed_open = QLabel("0:00")
         self.lbl_elapsed_open.setStyleSheet("font-size: 16px; color: #374151; font-weight: 600;")
         time_grid.addRow(elapsed_lbl, self.lbl_elapsed_open)
 
         # Scheduled
-        scheduled_lbl = QLabel("Geplant:")
+        scheduled_lbl = QLabel(
+            self.translator.get("sidebar.stats.label_scheduled", "Geplant:")
+            if self.translator
+            else "Geplant:"
+        )
         scheduled_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
         self.lbl_scheduled_open = QLabel("0:00")
         self.lbl_scheduled_open.setStyleSheet("font-size: 16px; color: #374151; font-weight: 600;")
         time_grid.addRow(scheduled_lbl, self.lbl_scheduled_open)
 
         # Overtime
-        overtime_lbl = QLabel("Überzeit:")
+        overtime_lbl = QLabel(
+            self.translator.get("sidebar.stats.label_overtime", "Überzeit:")
+            if self.translator
+            else "Überzeit:"
+        )
         overtime_lbl.setStyleSheet("font-size: 13px; color: #F59E0B; font-weight: 600;")
         self.lbl_overtime = QLabel("+0:00")
         self.lbl_overtime.setStyleSheet("font-size: 16px; color: #F59E0B; font-weight: 700;")

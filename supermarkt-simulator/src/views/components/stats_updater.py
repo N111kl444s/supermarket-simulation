@@ -8,16 +8,18 @@ Splits large update methods into smaller, themed components.
 class StatsUpdater:
     """Manages updating statistics UI components with live data."""
 
-    def __init__(self, live_tab, details_tab):
+    def __init__(self, live_tab, details_tab, translator=None):
         """
         Initialize the stats updater.
         
         Args:
             live_tab: StatsLiveTab instance
             details_tab: StatsDetailsTab instance
+            translator: TranslationManager instance (optional)
         """
         self.live_tab = live_tab
         self.details_tab = details_tab
+        self.translator = translator
 
     def update_all(self, stats):
         """
@@ -108,11 +110,16 @@ class StatsUpdater:
         if hasattr(self.live_tab, 'lbl_longest_queue'):
             max_len = stats.get("longest_queue", 0)
             checkout_ids = stats.get("longest_queue_checkouts", [])
+            checkout_label = (
+                self.translator.get("sidebar.stats.checkout_label", "Kasse")
+                if self.translator
+                else "Kasse"
+            )
             if max_len > 0 and checkout_ids:
                 ids_text = ", ".join(str(cid) for cid in checkout_ids)
-                self.live_tab.lbl_longest_queue.setText(f"Kasse #{ids_text} ({max_len})")
+                self.live_tab.lbl_longest_queue.setText(f"{checkout_label} #{ids_text} ({max_len})")
             else:
-                self.live_tab.lbl_longest_queue.setText(f"Kasse #0 ({max_len})")
+                self.live_tab.lbl_longest_queue.setText(f"{checkout_label} #0 ({max_len})")
 
         # Satisfaction score
         if hasattr(self.live_tab, 'lbl_satisfaction_score'):
@@ -126,13 +133,13 @@ class StatsUpdater:
                 # Color based on score
                 if satisfaction >= 80:
                     color = "#10B981"
-                    status = "SEHR GUT"
+                    status = self.translator.get("dialogs.status_very_good", "SEHR GUT") if self.translator else "SEHR GUT"
                 elif satisfaction >= 60:
                     color = "#F59E0B"
-                    status = "GUT"
+                    status = self.translator.get("dialogs.status_good", "GUT") if self.translator else "GUT"
                 else:
                     color = "#EF4444"
-                    status = "KRITISCH"
+                    status = self.translator.get("dialogs.status_critical", "KRITISCH") if self.translator else "KRITISCH"
 
                 self.live_tab.satisfaction_progress.setStyleSheet(f"""
                     QProgressBar {{

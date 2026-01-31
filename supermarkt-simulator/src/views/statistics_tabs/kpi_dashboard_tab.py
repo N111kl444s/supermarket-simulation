@@ -147,7 +147,7 @@ class KPIDashboardTab(QWidget):
         self.kpi_basket_size = KPICard(
             title=self._t("stats.kpi_basket_size_title", "Ø Warenkorbgröße"),
             value="0.0",
-            unit="Artikel",
+            unit=self._t("stats.unit_items", "Artikel"),
             status="neutral",
             show_progress=False,
         )
@@ -167,7 +167,7 @@ class KPIDashboardTab(QWidget):
         self.kpi_throughput = KPICard(
             title=self._t("stats.kpi_throughput_title", "Durchsatz"),
             value="0.0",
-            unit="Kunden/h",
+            unit=self._t("stats.customers_per_hour", "Kunden/h"),
             status="good",
             show_progress=False,
         )
@@ -304,23 +304,24 @@ class KPIDashboardTab(QWidget):
         
         # If no data yet, show "Keine Daten"
         if customers_served == 0:
+            no_data_text = self._t("stats.no_data_available", "Keine Daten")
             self.kpi_customers.update_value(value="–", status="neutral")
-            self.kpi_customers.set_subtitle("Keine Daten")
+            self.kpi_customers.set_subtitle(no_data_text)
             
             self.kpi_satisfaction.update_value(value="–", status="neutral", progress_value=0)
-            self.kpi_satisfaction.set_subtitle("Keine Daten")
+            self.kpi_satisfaction.set_subtitle(no_data_text)
             
             self.kpi_basket_size.update_value(value="–", status="neutral")
-            self.kpi_basket_size.set_subtitle("Keine Daten")
+            self.kpi_basket_size.set_subtitle(no_data_text)
             
             self.kpi_throughput.update_value(value="–", status="neutral")
-            self.kpi_throughput.set_subtitle("Keine Daten")
+            self.kpi_throughput.set_subtitle(no_data_text)
             
             self.kpi_wait_time.update_value(value="–", status="neutral", progress_value=0)
-            self.kpi_wait_time.set_subtitle("Keine Daten")
+            self.kpi_wait_time.set_subtitle(no_data_text)
             
             self.kpi_overtime.update_value(value="–", status="neutral", progress_value=0)
-            self.kpi_overtime.set_subtitle("Keine Daten")
+            self.kpi_overtime.set_subtitle(no_data_text)
             return
         
         # 1. Customers Served
@@ -331,7 +332,7 @@ class KPIDashboardTab(QWidget):
         
         self.kpi_customers.update_value(value=str(customers_served), status=customers_status)
         self.kpi_customers.set_subtitle(
-            f"{'✅' if customers_diff >= 0 else '⚠️'} {customers_diff:+d} vs. Ziel ({customers_target})"
+            f"{'✅' if customers_diff >= 0 else '⚠️'} {customers_diff:+d} {self._t('stats.vs_target', 'vs. Ziel')} ({customers_target})"
         )
         
         # 2. Satisfaction
@@ -343,8 +344,8 @@ class KPIDashboardTab(QWidget):
             status=sat_status,
             progress_value=satisfaction
         )
-        sat_text = "GUT" if satisfaction >= sat_good else ("AKZEPTABEL" if satisfaction >= sat_warning else "KRITISCH")
-        self.kpi_satisfaction.set_subtitle(f"Status: {sat_text}")
+        sat_text = self._t("stats.good", "GUT") if satisfaction >= sat_good else (self._t("stats.acceptable", "AKZEPTABEL") if satisfaction >= sat_warning else self._t("stats.critical", "KRITISCH"))
+        self.kpi_satisfaction.set_subtitle(f"{self._t('stats.status', 'Status')}: {sat_text}")
         
         # 3. Basket Size (Average items per customer)
         basket_size = global_stats.get("avg_items_per_customer", 0.0)
@@ -352,7 +353,7 @@ class KPIDashboardTab(QWidget):
         basket_status = "good" if basket_size >= 10 else ("warning" if basket_size >= 5 else "neutral")
         
         self.kpi_basket_size.update_value(value=f"{basket_size:.1f}", status=basket_status)
-        self.kpi_basket_size.set_subtitle(f"{total_items} Artikel gesamt")
+        self.kpi_basket_size.set_subtitle(f"{total_items} {self._t('stats.items_total', 'Artikel gesamt')}")
         
         # 4. Throughput (from stats - wie in Sidebar)
         actual_throughput = global_stats.get("throughput_per_hour", 0.0)
@@ -366,7 +367,7 @@ class KPIDashboardTab(QWidget):
         throughput_status = "good" if throughput_ratio >= 0.9 else ("warning" if throughput_ratio >= 0.7 else "critical")
         
         self.kpi_throughput.update_value(value=f"{actual_throughput:.1f}", status=throughput_status)
-        self.kpi_throughput.set_subtitle(f"Ziel: {target_throughput:.1f} Kunden/h")
+        self.kpi_throughput.set_subtitle(f"{self._t('stats.target', 'Ziel')}: {target_throughput:.1f} {self._t('stats.customers_per_hour', 'Kunden/h')}")
         
         # 5. Wait Time
         wait_time = times.get("queue_wait_avg", 0.0) / 60.0
@@ -377,8 +378,9 @@ class KPIDashboardTab(QWidget):
             status=wait_status,
             progress_value=min(wait_time, 10.0)
         )
+        target_label = self._t("stats.target_label", "Ziel:")
         self.kpi_wait_time.set_subtitle(
-            f"Ziel: ≤ {wait_good:.0f} min"
+            f"{target_label} ≤ {wait_good:.0f} min"
         )
         
         # 6. Overtime
@@ -387,8 +389,8 @@ class KPIDashboardTab(QWidget):
         overtime_status = "good" if overtime_min <= overtime_good else ("warning" if overtime_min <= overtime_warning else "critical")
         
         self.kpi_overtime.update_value(value=f"{overtime_min:.0f}", status=overtime_status)
-        overtime_text = "Niedrig" if overtime_min <= overtime_good else ("Moderat" if overtime_min <= overtime_warning else "Hoch")
-        self.kpi_overtime.set_subtitle(f"Status: {overtime_text}")
+        overtime_text = self._t("stats.low", "Niedrig") if overtime_min <= overtime_good else (self._t("stats.moderate", "Moderat") if overtime_min <= overtime_warning else self._t("stats.high", "Hoch"))
+        self.kpi_overtime.set_subtitle(f"{self._t('stats.status', 'Status')}: {overtime_text}")
     
     def update_trend_chart(self, stats):
         """Update the trend analysis chart."""
@@ -477,25 +479,25 @@ class KPIDashboardTab(QWidget):
         
         satisfaction = global_stats.get("satisfaction_score", 0.0)
         if satisfaction >= sat_good:
-            recommendations.append(" Zufriedenheit im grünen Bereich (" + f"{satisfaction:.0f}%)")
+            recommendations.append(f"✅ {self._t('stats.satisfaction_green', 'Zufriedenheit im grünen Bereich')} ({satisfaction:.0f}%)")
         elif satisfaction >= sat_warning:
-            recommendations.append(" Zufriedenheit akzeptabel (" + f"{satisfaction:.0f}%) - Verbesserungspotenzial vorhanden")
+            recommendations.append(f"⚠️ {self._t('stats.satisfaction_acceptable', 'Zufriedenheit akzeptabel')} ({satisfaction:.0f}%) - {self._t('stats.satisfaction_improvement', 'Verbesserungspotenzial vorhanden')}")
         else:
-            recommendations.append(" KRITISCH: Zufriedenheit sehr niedrig (" + f"{satisfaction:.0f}%) - Sofortmaßnahmen erforderlich!")
+            recommendations.append(f"🚨 {self._t('stats.satisfaction_critical', 'KRITISCH: Zufriedenheit sehr niedrig')} ({satisfaction:.0f}%) - {self._t('stats.satisfaction_action_required', 'Sofortmaßnahmen erforderlich!')}")
         
         wait_time = times.get("queue_wait_avg", 0.0) / 60.0
         if wait_time <= wait_good:
-            recommendations.append(" Wartezeiten optimal (Ø " + f"{wait_time:.1f} min)")
+            recommendations.append(f"✅ {self._t('stats.wait_times_optimal', 'Wartezeiten optimal')} (Ø {wait_time:.1f} min)")
         elif wait_time <= wait_warning:
-            recommendations.append(" Wartezeiten erhöht (Ø " + f"{wait_time:.1f} min) - Weitere Kasse öffnen?")
+            recommendations.append(f"⚠️ {self._t('stats.wait_times_elevated', 'Wartezeiten erhöht')} (Ø {wait_time:.1f} min) - {self._t('stats.wait_times_open_checkout', 'Weitere Kasse öffnen?')}")
         else:
-            recommendations.append(" Wartezeiten zu hoch (Ø " + f"{wait_time:.1f} min) - Dringend mehr Kassen öffnen!")
+            recommendations.append(f"🚨 {self._t('stats.wait_times_too_high', 'Wartezeiten zu hoch')} (Ø {wait_time:.1f} min) - {self._t('stats.wait_times_urgent', 'Dringend mehr Kassen öffnen!')}")
         
         overtime_min = global_stats.get("overtime_seconds", 0.0) / 60.0
         if overtime_min > overtime_warning:
-            recommendations.append(f" Hohe Überzeit: {overtime_min:.0f} Minuten - Kassenöffnung/Schließung prüfen")
+            recommendations.append(f"🚨 {self._t('stats.overtime_high', 'Hohe Überzeit')}: {overtime_min:.0f} {self._t('stats.unit_minutes', 'Minuten')} - {self._t('stats.overtime_check_schedule', 'Kassenöffnung/Schließung prüfen')}")
         elif overtime_min > overtime_good:
-            recommendations.append(f" Moderate Überzeit: {overtime_min:.0f} Minuten - Planung optimieren")
+            recommendations.append(f"⚠️ {self._t('stats.overtime_moderate', 'Moderate Überzeit')}: {overtime_min:.0f} {self._t('stats.unit_minutes', 'Minuten')} - {self._t('stats.overtime_optimize', 'Planung optimieren')}")
         
         # Dynamische Durchsatz-Berechnung basierend auf Zielkunden und geplanten Öffnungszeiten
         customers_served = global_stats.get("total_customers_served", 0)
@@ -511,20 +513,23 @@ class KPIDashboardTab(QWidget):
             actual_throughput = customers_served / elapsed_hours
             throughput_ratio = actual_throughput / target_throughput if target_throughput > 0 else 0
             
+            customers_h = self._t("stats.customers_per_hour", "Kunden/h")
+            target_text = self._t("stats.target", "Ziel")
+            
             if throughput_ratio >= 1.0:
-                recommendations.append(f"Durchsatz optimal: {actual_throughput:.1f} Kunden/h (Ziel: {target_throughput:.1f} Kunden/h)")
+                recommendations.append(f"✅{self._t('stats.throughput_optimal', 'Durchsatz optimal')}: {actual_throughput:.1f} {customers_h} ({target_text}: {target_throughput:.1f} {customers_h})")
             elif throughput_ratio >= 0.8:
-                recommendations.append(f"Durchsatz gut: {actual_throughput:.1f} Kunden/h (Ziel: {target_throughput:.1f} Kunden/h)")
+                recommendations.append(f"✅{self._t('stats.throughput_good', 'Durchsatz gut')}: {actual_throughput:.1f} {customers_h} ({target_text}: {target_throughput:.1f} {customers_h})")
             elif throughput_ratio >= 0.6:
-                recommendations.append(f"Durchsatz niedrig: {actual_throughput:.1f} Kunden/h - Effizienz prüfen (Ziel: {target_throughput:.1f} Kunden/h)")
+                recommendations.append(f"⚠️{self._t('stats.throughput_low', 'Durchsatz niedrig')}: {actual_throughput:.1f} {customers_h} - {self._t('stats.throughput_check_efficiency', 'Effizienz prüfen')} ({target_text}: {target_throughput:.1f} {customers_h})")
             else:
-                recommendations.append(f"Durchsatz kritisch: {actual_throughput:.1f} Kunden/h - Prozesse optimieren! (Ziel: {target_throughput:.1f} Kunden/h)")
+                recommendations.append(f"🚨{self._t('stats.throughput_critical', 'Durchsatz kritisch')}: {actual_throughput:.1f} {customers_h} - {self._t('stats.throughput_optimize_processes', 'Prozesse optimieren!')} ({target_text}: {target_throughput:.1f} {customers_h})")
         
         peak = global_stats.get("peak", {})
         peak_hour = peak.get("busiest_hour")
         if peak_hour is not None:
             peak_time = self._format_hour(peak_hour, global_stats.get("open_time", "08:00"))
-            recommendations.append(f" Peak um {peak_time} - Ggf. mehr Kassen zur Stoßzeit?")
+            recommendations.append(f"ℹ️ {self._t('stats.peak_at', 'Peak um')} {peak_time} - {self._t('stats.peak_more_checkouts', 'Ggf. mehr Kassen zur Stoßzeit?')}")
         
         checkouts_stats = stats.get("checkouts", {})
         malfunction_count = sum(
@@ -532,9 +537,9 @@ class KPIDashboardTab(QWidget):
             for c in checkouts_stats.values()
         )
         if malfunction_count > 5:
-            recommendations.append(f" {malfunction_count} Kassenstörungen - Wartung erforderlich!")
+            recommendations.append(f"🚨 {malfunction_count} {self._t('stats.checkout_malfunctions', 'Kassenstörungen')} - {self._t('stats.maintenance_required', 'Wartung erforderlich!')}")
         elif malfunction_count > 0:
-            recommendations.append(f" {malfunction_count} Kassenstörungen erfasst")
+            recommendations.append(f"ℹ️ {malfunction_count} {self._t('stats.malfunctions_recorded', 'Kassenstörungen erfasst')}")
         
         if recommendations:
             self.txt_recommendations.setPlainText("\n".join(recommendations))

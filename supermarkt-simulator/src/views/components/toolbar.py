@@ -21,7 +21,7 @@ from config import COLOR_ACCENT, COLOR_BORDER
 
 class ProgressClock(QLabel):
     def __init__(self, parent=None):
-        super().__init__("08:00", parent)
+        super().__init__("07:00", parent)
         self.progress = 0.0
         self.is_overtime = False
         self.blink_state = False

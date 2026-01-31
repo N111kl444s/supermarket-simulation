@@ -71,28 +71,33 @@ class StatsLiveTab(QWidget):
 
     def _create_customers_card(self, layout, card_style):
         """Create customers KPI card."""
-        self.gb_stats = QGroupBox("KUNDEN")  # Keep as instance variable for compatibility
+        customers_title = (
+            self.translator.get("sidebar.stats.card_customers", "KUNDEN")
+            if self.translator
+            else "KUNDEN"
+        )
+        self.gb_stats = QGroupBox(customers_title)  # Keep as instance variable for compatibility
         self.gb_stats.setStyleSheet(card_style)
         card_layout = QVBoxLayout(self.gb_stats)
         card_layout.setSpacing(10)
 
         # Im Laden
         store_row = self._create_metric_row(
-            "Im Laden:",
+            self.translator.get("sidebar.stats.label_in_store", "Im Laden:") if self.translator else "Im Laden:",
             "lbl_customers_in_store",
             "0",
             "20px",
-            "Kunden"
+            self.translator.get("sidebar.stats.unit_customers", "Kunden") if self.translator else "Kunden"
         )
         card_layout.addLayout(store_row)
 
         # Gesamt bedient
         total_row = self._create_metric_row(
-            "Gesamt bedient:",
+            self.translator.get("sidebar.stats.label_total_served", "Gesamt bedient:") if self.translator else "Gesamt bedient:",
             "lbl_total_customers_served_live",
             "0",
             "20px",
-            "Kunden"
+            self.translator.get("sidebar.stats.unit_customers", "Kunden") if self.translator else "Kunden"
         )
         card_layout.addLayout(total_row)
 
@@ -100,7 +105,11 @@ class StatsLiveTab(QWidget):
         throughput_row = QHBoxLayout()
         throughput_row.setSpacing(6)
 
-        throughput_lbl = QLabel("Durchsatz:")
+        throughput_lbl = QLabel(
+            self.translator.get("sidebar.stats.label_throughput", "Durchsatz:")
+            if self.translator
+            else "Durchsatz:"
+        )
         throughput_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
         throughput_row.addWidget(throughput_lbl)
 
@@ -114,7 +123,11 @@ class StatsLiveTab(QWidget):
 
     def _create_satisfaction_card(self, layout, card_style):
         """Create customer satisfaction card."""
-        card = QGroupBox("KUNDENZUFRIEDENHEIT")
+        card = QGroupBox(
+            self.translator.get("sidebar.stats.card_customer_satisfaction", "KUNDENZUFRIEDENHEIT")
+            if self.translator
+            else "KUNDENZUFRIEDENHEIT"
+        )
         card.setStyleSheet(card_style)
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(10)
@@ -123,7 +136,11 @@ class StatsLiveTab(QWidget):
         wait_row = QHBoxLayout()
         wait_row.setSpacing(6)
 
-        wait_lbl = QLabel("Ø Wartezeit:")
+        wait_lbl = QLabel(
+            self.translator.get("sidebar.stats.label_avg_wait", "Ø Wartezeit:")
+            if self.translator
+            else "Ø Wartezeit:"
+        )
         wait_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
         wait_row.addWidget(wait_lbl)
 
@@ -158,11 +175,11 @@ class StatsLiveTab(QWidget):
 
         # Warteschlange
         queue_row = self._create_metric_row(
-            "In Warteschlange:",
+            self.translator.get("sidebar.stats.label_in_queue", "In Warteschlange:") if self.translator else "In Warteschlange:",
             "lbl_queue_count",
             "0",
             "18px",
-            "Kunden"
+            self.translator.get("sidebar.stats.unit_customers", "Kunden") if self.translator else "Kunden"
         )
         card_layout.addLayout(queue_row)
 
@@ -170,11 +187,15 @@ class StatsLiveTab(QWidget):
         longest_row = QHBoxLayout()
         longest_row.setSpacing(6)
 
-        longest_lbl = QLabel("Längste Queue:")
+        longest_lbl = QLabel(
+            self.translator.get("sidebar.stats.label_longest_queue", "Längste Queue:")
+            if self.translator
+            else "Längste Queue:"
+        )
         longest_lbl.setStyleSheet("font-size: 12px; color: #9CA3AF; font-weight: 600;")
         longest_row.addWidget(longest_lbl)
 
-        self.lbl_longest_queue = QLabel("Kasse #0 (0)")
+        self.lbl_longest_queue = QLabel("-")
         self.lbl_longest_queue.setStyleSheet("font-size: 12px; color: #6B7280; font-weight: 600;")
         longest_row.addWidget(self.lbl_longest_queue)
         longest_row.addStretch()
@@ -184,7 +205,11 @@ class StatsLiveTab(QWidget):
 
     def _create_checkouts_card(self, layout, card_style):
         """Create checkouts status card."""
-        card = QGroupBox("KASSEN-STATUS")
+        card = QGroupBox(
+            self.translator.get("sidebar.stats.card_checkout_status", "KASSEN-STATUS")
+            if self.translator
+            else "KASSEN-STATUS"
+        )
         card.setStyleSheet(card_style)
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(10)
@@ -193,7 +218,11 @@ class StatsLiveTab(QWidget):
         checkouts_grid.setSpacing(8)
 
         # Offen
-        open_lbl = QLabel("Offen:")
+        open_lbl = QLabel(
+            self.translator.get("sidebar.stats.label_open", "Offen:")
+            if self.translator
+            else "Offen:"
+        )
         open_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
         checkouts_grid.addWidget(open_lbl, 0, 0)
 
@@ -201,12 +230,20 @@ class StatsLiveTab(QWidget):
         self.lbl_checkouts_open.setStyleSheet("font-size: 18px; color: #10B981; font-weight: 700;")
         checkouts_grid.addWidget(self.lbl_checkouts_open, 0, 1)
 
-        open_unit = QLabel("Kassen")
+        open_unit = QLabel(
+            self.translator.get("sidebar.stats.unit_checkouts", "Kassen")
+            if self.translator
+            else "Kassen"
+        )
         open_unit.setStyleSheet("font-size: 13px; color: #6B7280;")
         checkouts_grid.addWidget(open_unit, 0, 2)
 
         # Störung
-        malfunction_lbl = QLabel("Störung:")
+        malfunction_lbl = QLabel(
+            self.translator.get("sidebar.stats.label_malfunction", "Störung:")
+            if self.translator
+            else "Störung:"
+        )
         malfunction_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
         checkouts_grid.addWidget(malfunction_lbl, 1, 0)
 
@@ -214,12 +251,20 @@ class StatsLiveTab(QWidget):
         self.lbl_checkouts_malfunction.setStyleSheet("font-size: 18px; color: #EF4444; font-weight: 700;")
         checkouts_grid.addWidget(self.lbl_checkouts_malfunction, 1, 1)
 
-        malfunction_unit = QLabel("Kassen")
+        malfunction_unit = QLabel(
+            self.translator.get("sidebar.stats.unit_checkouts", "Kassen")
+            if self.translator
+            else "Kassen"
+        )
         malfunction_unit.setStyleSheet("font-size: 13px; color: #6B7280;")
         checkouts_grid.addWidget(malfunction_unit, 1, 2)
 
         # Geschlossen
-        closed_lbl = QLabel("Geschlossen:")
+        closed_lbl = QLabel(
+            self.translator.get("sidebar.stats.label_closed", "Geschlossen:")
+            if self.translator
+            else "Geschlossen:"
+        )
         closed_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
         checkouts_grid.addWidget(closed_lbl, 2, 0)
 
@@ -227,7 +272,11 @@ class StatsLiveTab(QWidget):
         self.lbl_checkouts_closed.setStyleSheet("font-size: 18px; color: #9CA3AF; font-weight: 700;")
         checkouts_grid.addWidget(self.lbl_checkouts_closed, 2, 1)
 
-        closed_unit = QLabel("Kassen")
+        closed_unit = QLabel(
+            self.translator.get("sidebar.stats.unit_checkouts", "Kassen")
+            if self.translator
+            else "Kassen"
+        )
         closed_unit.setStyleSheet("font-size: 13px; color: #6B7280;")
         checkouts_grid.addWidget(closed_unit, 2, 2)
 
@@ -240,7 +289,11 @@ class StatsLiveTab(QWidget):
 
     def _create_score_card(self, layout, card_style):
         """Create satisfaction score card."""
-        card = QGroupBox("ZUFRIEDENHEITSSCORE")
+        card = QGroupBox(
+            self.translator.get("sidebar.stats.card_satisfaction_score", "ZUFRIEDENHEITSSCORE")
+            if self.translator
+            else "ZUFRIEDENHEITSSCORE"
+        )
         card.setStyleSheet(card_style)
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(10)
@@ -275,7 +328,12 @@ class StatsLiveTab(QWidget):
         card_layout.addWidget(self.satisfaction_progress)
 
         # Status
-        self.lbl_satisfaction_status = QLabel("Status: GUT")
+        status_text = (
+            f"{self.translator.get('sidebar.stats.status_prefix', 'Status:')} {self.translator.get('sidebar.stats.status_good', 'GUT')}"
+            if self.translator
+            else "Status: GUT"
+        )
+        self.lbl_satisfaction_status = QLabel(status_text)
         self.lbl_satisfaction_status.setStyleSheet("font-size: 13px; color: #10B981; font-weight: 700; text-align: center;")
         self.lbl_satisfaction_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(self.lbl_satisfaction_status)

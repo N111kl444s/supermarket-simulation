@@ -171,7 +171,8 @@ class OperationsTab(QWidget):
         max_ids = peak.get("max_queue_checkouts", [])
         if max_queue > 0 and max_ids:
             ids_text = ", ".join(str(cid) for cid in max_ids)
-            self.lbl_peak_queue.setText(f"{max_queue} (Kasse {ids_text})")
+            checkout_label = self._t("stats.checkout_label", "Kasse")
+            self.lbl_peak_queue.setText(f"{max_queue} ({checkout_label} {ids_text})")
         else:
             self.lbl_peak_queue.setText(str(max_queue))
     

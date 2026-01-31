@@ -24,10 +24,11 @@ class SimulationManager(QObject):
     day_finished = pyqtSignal()
     log_message = pyqtSignal(str, str)
 
-    def __init__(self, map_manager, settings):
+    def __init__(self, map_manager, settings, translator=None):
         super().__init__()
         self.map_mgr = map_manager
         self.settings = settings
+        self.translator = translator
 
         self.sim_time = QTime(*DEFAULT_OPEN_TIME)
         self.open_time = QTime(*DEFAULT_OPEN_TIME)
@@ -136,8 +137,15 @@ class SimulationManager(QObject):
             c_data["conflict"] = False
 
         self.is_initialized = True
+        opened_msg = (
+            self.translator.get("log.store_opened", "Laden geöffnet. Erwarte ca. {0} Kunden.")
+            if self.translator
+            else f"Laden geöffnet. Erwarte ca. {self.target_daily_customers} Kunden."
+        )
+        if self.translator:
+            opened_msg = opened_msg.format(self.target_daily_customers)
         self.log_message.emit(
-            self._format_log_message(f"Laden geöffnet. Erwarte ca. {self.target_daily_customers} Kunden."),
+            self._format_log_message(opened_msg),
             "blue",
         )
         self._emit_live_stats(force=True)
@@ -217,7 +225,12 @@ class SimulationManager(QObject):
         if self.store_is_closed_trigger and not self.customers_model:
             self.pause()
             self.time_updated.emit(self.sim_time.toString("HH:mm"))
-            self.log_message.emit(self._format_log_message("Feierabend! Alle Kunden bedient."), "red")
+            day_finished_msg = (
+                self.translator.get("log.day_finished", "Feierabend! Alle Kunden bedient.")
+                if self.translator
+                else "Feierabend! Alle Kunden bedient."
+            )
+            self.log_message.emit(self._format_log_message(day_finished_msg), "red")
             self._finalize_statistics()
             self.day_finished.emit()
             return
@@ -351,8 +364,15 @@ class SimulationManager(QObject):
                                         self._stats_raw["checkouts"][cid][
                                             "malfunction_events"
                                         ] += 1
+                                    malfunction_msg = (
+                                        self.translator.get("log.malfunction_started", "⚠️ STÖRUNG an Kasse {0}!")
+                                        if self.translator
+                                        else f"⚠️ STÖRUNG an Kasse {cid}!"
+                                    )
+                                    if self.translator:
+                                        malfunction_msg = malfunction_msg.format(cid)
                                     self.log_message.emit(
-                                        self._format_log_message(f"⚠️ STÖRUNG an Kasse {cid}!"), "red"
+                                        self._format_log_message(malfunction_msg), "red"
                                     )
                                 model.malfunction_checked = True
 
@@ -373,8 +393,15 @@ class SimulationManager(QObject):
                                             self._stats_raw["checkouts"][cid][
                                                 "conflict_events"
                                             ] += 1
+                                        annoyed_msg = (
+                                            self.translator.get("log.customer_annoyed", "😠 Verärgerter Kunde an Kasse {0}!")
+                                            if self.translator
+                                            else f"😠 Verärgerter Kunde an Kasse {cid}!"
+                                        )
+                                        if self.translator:
+                                            annoyed_msg = annoyed_msg.format(cid)
                                         self.log_message.emit(
-                                            self._format_log_message(f"😠 Verärgerter Kunde an Kasse {cid}!"),
+                                            self._format_log_message(annoyed_msg),
                                             "orange",
                                         )
                                 model.conflict_checked = True
@@ -422,8 +449,15 @@ class SimulationManager(QObject):
                         repair_min, repair_max
                     )
                     c_data["repair_timer"] = 0.0
+                    repairing_msg = (
+                        self.translator.get("log.repairing_checkout", "🔧 Kassierer repariert Kasse #{0}")
+                        if self.translator
+                        else f"🔧 Kassierer repariert Kasse {c_data['id']}"
+                    )
+                    if self.translator:
+                        repairing_msg = repairing_msg.format(c_data['id'])
                     self.log_message.emit(
-                        self._format_log_message(f"🔧 Kassierer repariert Kasse {c_data['id']}."), "blue"
+                        self._format_log_message(repairing_msg), "blue"
                     )
                 else:
                     # Continue repair
@@ -432,14 +466,28 @@ class SimulationManager(QObject):
                         c_data["malfunction"] = False
                         del c_data["repair_timer"]
                         del c_data["repair_duration"]
+                        resolved_msg = (
+                            self.translator.get("log.malfunction_resolved", "✅ Kasse {0} repariert.")
+                            if self.translator
+                            else f"✅ Kasse {c_data['id']} repariert."
+                        )
+                        if self.translator:
+                            resolved_msg = resolved_msg.format(c_data['id'])
                         self.log_message.emit(
-                            self._format_log_message(f"✅ Kasse {c_data['id']} repariert."), "green"
+                            self._format_log_message(resolved_msg), "green"
                         )
                         if c_data.get("pending_conflict", False):
                             c_data["conflict"] = True
                             del c_data["pending_conflict"]
+                            annoyed_msg2 = (
+                                self.translator.get("log.customer_annoyed", "😠 Verärgerter Kunde an Kasse {0}!")
+                                if self.translator
+                                else f"😠 Verärgerter Kunde an Kasse {c_data['id']}!"
+                            )
+                            if self.translator:
+                                annoyed_msg2 = annoyed_msg2.format(c_data['id'])
                             self.log_message.emit(
-                                self._format_log_message(f"😠 Verärgerter Kunde an Kasse {c_data['id']}!"),
+                                self._format_log_message(annoyed_msg2),
                                 "orange",
                             )
 
@@ -464,8 +512,16 @@ class SimulationManager(QObject):
                         conflict_min, conflict_max
                     )
                     c_data["conflict_timer"] = 0.0
+                    # Log: Cashier starts resolving conflict
+                    resolving_msg = (
+                        self.translator.get("log.cashier_resolves_conflict", "👨‍💼 Kassierer löst Konflikt an Kasse #{0}")
+                        if self.translator
+                        else f"👨‍💼 Kassierer löst Konflikt an Kasse {c_data['id']}"
+                    )
+                    if self.translator:
+                        resolving_msg = resolving_msg.format(c_data['id'])
                     self.log_message.emit(
-                        self._format_log_message(f"🗣️ Kassierer löst Konflikt an Kasse {c_data['id']}."),
+                        self._format_log_message(resolving_msg),
                         "blue",
                     )
                 else:
@@ -478,8 +534,15 @@ class SimulationManager(QObject):
                         print(
                             f"DEBUG: Conflict resolved at checkout {c_data['id']}"
                         )
+                        conflict_resolved_msg = (
+                            self.translator.get("log.cashier_resolves_conflict", "👨‍💼 Kassierer löst Konflikt an Kasse #{0}")
+                            if self.translator
+                            else f"👨‍💼 Kassierer löst Konflikt an Kasse {c_data['id']}"
+                        )
+                        if self.translator:
+                            conflict_resolved_msg = conflict_resolved_msg.format(c_data['id'])
                         self.log_message.emit(
-                            self._format_log_message(f"✅ Konflikt an Kasse {c_data['id']} gelöst."),
+                            self._format_log_message(conflict_resolved_msg),
                             "green",
                         )
 
@@ -596,13 +659,15 @@ class SimulationManager(QObject):
         self.customers_model.append(model)
         self.total_customers_spawned += 1
 
-        type_str = "Kunde"
+        type_str = self.translator.get("log.customer_normal", "Kunde") if self.translator else "Kunde"
         if is_disabled:
-            type_str = "Kunde (eingeschränkt)"
+            type_str = self.translator.get("log.customer_disabled", "Kunde (eingeschränkt)") if self.translator else "Kunde (eingeschränkt)"
         if uses_handheld:
-            type_str += " [Handscanner]"
+            handheld_suffix = f" [{self.translator.get('log.customer_handheld', 'Handscanner')}]" if self.translator else " [Handscanner]"
+            type_str += handheld_suffix
 
-        self.log_message.emit(self._format_log_message(f"{type_str} hat den Laden betreten."), "green")
+        entry_msg = self.translator.get("log.customer_entered", "hat den Laden betreten.") if self.translator else "hat den Laden betreten."
+        self.log_message.emit(self._format_log_message(f"{type_str} {entry_msg}"), "green")
 
     def _try_assign_checkout(self, model):
         candidates = []

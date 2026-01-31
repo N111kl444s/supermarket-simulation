@@ -160,7 +160,7 @@ class MapManager:
                 json.dump(data, f, indent=4)
             return True
         except Exception as e:
-            print(f"Fehler beim Speichern: {e}")
+            print(f"Error saving map: {e}")
             return False
 
     def create_new_map(self, name):

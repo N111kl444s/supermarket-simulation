@@ -130,7 +130,12 @@ class CheckoutConfigDialog(QDialog):
         layout = QVBoxLayout(self)
         form = QFormLayout()
 
-        self.cb_open = QCheckBox("Geöffnet")
+        open_label = (
+            self.translator.get("dialogs.checkout_open", "Geöffnet")
+            if self.translator
+            else "Geöffnet"
+        )
+        self.cb_open = QCheckBox(open_label)
         self.cb_open.setChecked(self.data.get("open", True))
         form.addRow(self.cb_open)
 
@@ -138,17 +143,45 @@ class CheckoutConfigDialog(QDialog):
         self.spin_max_queue = QSpinBox()
         self.spin_max_queue.setRange(1, 20)
         self.spin_max_queue.setValue(self.data.get("max_queue", 5))
-        self.spin_max_queue.setSuffix(" Kunden")
-        form.addRow("Max. Warteschlange:", self.spin_max_queue)
+        queue_unit = (
+            self.translator.get("dialogs.checkout_max_queue_unit", "Kunden")
+            if self.translator
+            else "Kunden"
+        )
+        self.spin_max_queue.setSuffix(f" {queue_unit}")
+        queue_label = (
+            self.translator.get("dialogs.checkout_max_queue", "Max. Warteschlange:")
+            if self.translator
+            else "Max. Warteschlange:"
+        )
+        form.addRow(queue_label, self.spin_max_queue)
 
         # Only show cashier skill for normal checkouts, not for SB (self-checkout)
         checkout_type = self.data.get("type", "Normal")
         if checkout_type != "SB":
             self.combo_skill = QComboBox()
-            self.combo_skill.addItems(["Azubi", "Festangestellter"])
+            newbie_text = (
+                self.translator.get("dialogs.checkout_skill_newbie", "Azubi")
+                if self.translator
+                else "Azubi"
+            )
+            pro_text = (
+                self.translator.get("dialogs.checkout_skill_pro", "Festangestellter")
+                if self.translator
+                else "Festangestellter"
+            )
+            self.combo_skill.addItems([newbie_text, pro_text])
             skill = self.data.get("skill", "Azubi")
-            self.combo_skill.setCurrentText(skill)
-            form.addRow("Personal:", self.combo_skill)
+            # Map skill to translated text
+            skill_map = {"Azubi": newbie_text, "Festangestellter": pro_text}
+            current_text = skill_map.get(skill, newbie_text)
+            self.combo_skill.setCurrentText(current_text)
+            staff_label = (
+                self.translator.get("dialogs.checkout_staff", "Personal:")
+                if self.translator
+                else "Personal:"
+            )
+            form.addRow(staff_label, self.combo_skill)
         else:
             self.combo_skill = None  # No skill selection for SB checkouts
 
@@ -180,7 +213,20 @@ class CheckoutConfigDialog(QDialog):
         }
         # Only include skill if it exists (i.e., not SB checkout)
         if self.combo_skill is not None:
-            result["skill"] = self.combo_skill.currentText()
+            # Map translated text back to internal skill name
+            newbie_text = (
+                self.translator.get("dialogs.checkout_skill_newbie", "Azubi")
+                if self.translator
+                else "Azubi"
+            )
+            pro_text = (
+                self.translator.get("dialogs.checkout_skill_pro", "Festangestellter")
+                if self.translator
+                else "Festangestellter"
+            )
+            current_text = self.combo_skill.currentText()
+            skill_reverse_map = {newbie_text: "Azubi", pro_text: "Festangestellter"}
+            result["skill"] = skill_reverse_map.get(current_text, "Azubi")
         return result
 
     def set_blocked(self, blocked):

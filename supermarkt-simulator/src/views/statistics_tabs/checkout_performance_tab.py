@@ -128,7 +128,7 @@ class CheckoutPerformanceTab(QWidget):
         # Info label (compact)
         info = QLabel(self._t(
             "stats.checkout_performance_desc",
-            "Detaillierte Leistungsübersicht aller Kassen. Klicken Sie auf die Spaltenüberschriften zum Sortieren."
+            "Detaillierte Leistungsübersicht aller Kassen."
         ))
         info.setStyleSheet("color: #64748B; font-size: 12px; font-weight: 500; padding: 4px; margin: 0px;")
         info.setWordWrap(True)
@@ -326,19 +326,31 @@ class CheckoutPerformanceTab(QWidget):
         # Top Performer
         if scores:
             top = scores[0]
-            top_text = f"Kasse #{top[0]} ({top[1]})\n"
-            top_text += f" {top[2]} Kunden bedient\n"
-            top_text += f" Ø Queue: {top[3]:.1f} min\n"
-            top_text += f" Störungen: {top[4]}"
+            # Translate skill name
+            skill_translated = self._translate_skill(top[1])
+            checkout_label = self._t("stats.checkout_with_skill", "Kasse #{0} ({1})").format(top[0], skill_translated)
+            customers_label = self._t("stats.customers_served", "Kunden bedient")
+            queue_label = self._t("stats.avg_queue_short", "Ø Queue:")
+            malfunctions_label = self._t("stats.malfunctions_short", "Störungen:")
+            top_text = f"{checkout_label}\n"
+            top_text += f" {top[2]} {customers_label}\n"
+            top_text += f" {queue_label} {top[3]:.1f} min\n"
+            top_text += f" {malfunctions_label} {top[4]}"
             self.lbl_top_performer.setText(top_text)
         
         # Flop Performer
         if len(scores) > 1:
             flop = scores[-1]
-            flop_text = f"Kasse #{flop[0]} ({flop[1]})\n"
-            flop_text += f" {flop[2]} Kunden bedient\n"
-            flop_text += f" Ø Queue: {flop[3]:.1f} min\n"
-            flop_text += f" Störungen: {flop[4]}"
+            # Translate skill name
+            skill_translated = self._translate_skill(flop[1])
+            checkout_label = self._t("stats.checkout_with_skill", "Kasse #{0} ({1})").format(flop[0], skill_translated)
+            customers_label = self._t("stats.customers_served", "Kunden bedient")
+            queue_label = self._t("stats.avg_queue_short", "Ø Queue:")
+            malfunctions_label = self._t("stats.malfunctions_short", "Störungen:")
+            flop_text = f"{checkout_label}\n"
+            flop_text += f" {flop[2]} {customers_label}\n"
+            flop_text += f" {queue_label} {flop[3]:.1f} min\n"
+            flop_text += f" {malfunctions_label} {flop[4]}"
             self.lbl_flop_performer.setText(flop_text)
         else:
             self.lbl_flop_performer.setText(self._t("stats.only_one_checkout", "Nur eine Kasse aktiv"))
@@ -358,7 +370,8 @@ class CheckoutPerformanceTab(QWidget):
             
             # Skill
             skill = c_stats.get("skill", "-")
-            self.checkout_table.setItem(row, 1, self._make_item(skill))
+            skill_text = self._t(f"dialogs.checkout_skill_{skill.lower()}", skill) if skill != "-" else "-"
+            self.checkout_table.setItem(row, 1, self._make_item(skill_text))
             
             # Customers
             customers = c_stats.get("customers_served", 0)
@@ -388,7 +401,9 @@ class CheckoutPerformanceTab(QWidget):
             # Payment methods
             cash = c_stats.get("payment", {}).get("cash_count", 0)
             card = c_stats.get("payment", {}).get("card_count", 0)
-            payment_text = f"Bar: {cash} / Karte: {card}"
+            cash_label = self._t("dialogs.payment_cash", "Bar")
+            card_label = self._t("dialogs.payment_card", "Karte")
+            payment_text = f"{cash_label}: {cash} / {card_label}: {card}"
             self.checkout_table.setItem(row, 6, self._make_item(payment_text))
             
             # Uptime
@@ -479,7 +494,10 @@ class CheckoutPerformanceTab(QWidget):
             self.skill_canvas.draw_idle()
             return
         
-        skills = ["Pro", "Azubi"]
+        skills = [
+            self._t("dialogs.checkout_skill_pro", "Pro"),
+            self._t("dialogs.checkout_skill_newbie", "Azubi")
+        ]
         scan_times = [pro_scan, newbie_scan]
         colors = ['#10B981', '#F59E0B']
         
@@ -509,8 +527,10 @@ class CheckoutPerformanceTab(QWidget):
         if newbie_scan > 0 and pro_scan > 0:
             ratio = newbie_scan / pro_scan if pro_scan > 0 else 0
             diff_percent = ((newbie_scan - pro_scan) / pro_scan * 100) if pro_scan > 0 else 0
-            insight = f" Effizienz-Ratio: Azubi {ratio:.2f}x langsamer als Pro ({diff_percent:+.0f}%)\n"
-            insight += f" Empfehlung: Mehr Schulungen für Azubis könnten Effizienz um bis zu {diff_percent:.0f}% steigern"
+            ratio_text = self._t("stats.efficiency_ratio_text", "Effizienz-Ratio: Azubi {0}x langsamer als Pro ({1}%)").format(f"{ratio:.2f}", f"{diff_percent:+.0f}")
+            recommendation_text = self._t("stats.efficiency_recommendation", "Empfehlung: Mehr Schulungen für Azubis könnten Effizienz um bis zu {0}% steigern").format(f"{diff_percent:.0f}")
+            insight = f" {ratio_text}\n"
+            insight += f" {recommendation_text}"
             self.lbl_skill_insight.setText(insight)
     
     def _style_table(self, table):
@@ -578,6 +598,16 @@ class CheckoutPerformanceTab(QWidget):
         )
         ax.set_axis_off()
     
+    def _translate_skill(self, skill):
+        """Translate skill name from German to current language."""
+        if not self.translator:
+            return skill
+        skill_map = {
+            "Azubi": "dialogs.checkout_skill_azubi",
+            "Festangestellter": "dialogs.checkout_skill_festangestellter",
+        }
+        return self.translator.get(skill_map.get(skill, ""), skill)
+
     def _t(self, key, fallback):
         """Translate a key or return fallback."""
         if not self.translator:

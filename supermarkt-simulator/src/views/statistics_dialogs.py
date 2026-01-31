@@ -13,7 +13,6 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QPushButton,
-    QFileDialog,
     QProgressBar,
     QHeaderView,
     QAbstractScrollArea,
@@ -117,13 +116,6 @@ class StatisticsReportDialog(QDialog):
             self._t("dialogs.stats_tab_operations", "Betrieb")
         )
         
-        # Add export tab (keep legacy for now)
-        export_tab = self._build_export_tab()
-        self.tabs.addTab(
-            export_tab,
-            "⚙️ " + self._t("dialogs.stats_tab_export", "Export")
-        )
-        
         layout.addWidget(self.tabs)
 
         # Close button
@@ -177,266 +169,7 @@ class StatisticsReportDialog(QDialog):
         self.operations_tab.update_hours(self.stats)
         self.operations_tab.update_peak_chart(self.stats)
 
-    # Legacy tab builders removed - using new component-based tabs
-    # Export tab kept for backward compatibility
-    
-    def _build_export_tab(self):
-        tab = QWidget()
-        l = QVBoxLayout(tab)
-
-        l.addWidget(
-            self._info_label(
-                self._t(
-                    "dialogs.stats_export_desc",
-                    "Exportiere die Statistiken in verschiedenen Formaten für weitere Analysen.",
-                )
-            )
-        )
-
-        # JSON Export
-        btn_json = QPushButton("📊 " + self._t("dialogs.export_json", "Als JSON speichern"))
-        btn_json.setToolTip("Vollständiger Datensatz für Entwickler und API-Integration")
-        btn_json.clicked.connect(self._export_json_comprehensive)
-        
-        # CSV Export
-        btn_csv = QPushButton("📄 " + self._t("dialogs.export_csv", "Als CSV speichern"))
-        btn_csv.setToolTip("Tabellarische Daten für Excel, Pivot-Tabellen, etc.")
-        btn_csv.clicked.connect(self._export_csv_comprehensive)
-        
-        # PDF Export (placeholder for future implementation)
-        btn_pdf = QPushButton("📋 " + self._t("dialogs.export_pdf", "Als PDF-Report exportieren"))
-        btn_pdf.setToolTip("Druckfertiger professioneller Report (in Entwicklung)")
-        btn_pdf.setEnabled(False)  # TODO: Implement PDF export
-        btn_pdf.clicked.connect(self._export_pdf)
-
-        l.addWidget(btn_json)
-        l.addWidget(btn_csv)
-        l.addWidget(btn_pdf)
-        l.addStretch()
-        return tab
-
-    def _export_json_comprehensive(self):
-        """Export comprehensive statistics as JSON covering all tabs."""
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            self._t("dialogs.export_json", "Als JSON speichern"),
-            "statistikbericht.json",
-            "JSON (*.json)",
-        )
-        if not path:
-            return
-        
-        import json
-        from datetime import datetime
-        
-        # Build comprehensive export structure
-        export_data = {
-            "metadata": {
-                "export_date": datetime.now().isoformat(),
-                "simulation_date": self.stats.get("global", {}).get("current_time", ""),
-                "version": "2.0"
-            },
-            "kpis": self._build_kpi_export(),
-            "customers": self._build_customer_export(),
-            "checkouts": self._build_checkout_export(),
-            "operations": self._build_operations_export(),
-            "raw_statistics": self.stats  # Include full raw data for reference
-        }
-
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(export_data, f, ensure_ascii=False, indent=2)
-
-    def _export_csv_comprehensive(self):
-        """Export comprehensive statistics as CSV with multiple sections."""
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            self._t("dialogs.export_csv", "Als CSV speichern"),
-            "statistikbericht.csv",
-            "CSV (*.csv)",
-        )
-        if not path:
-            return
-        
-        import csv
-        
-        with open(path, "w", encoding="utf-8", newline="") as f:
-            writer = csv.writer(f, delimiter=";")  # Use semicolon for better Excel compatibility
-            
-            # Write metadata
-            writer.writerow(["STATISTIKBERICHT"])
-            writer.writerow(["Exportiert am", datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
-            writer.writerow([])
-            
-            # Section 1: KPIs
-            writer.writerow(["=== KPI DASHBOARD ==="])
-            writer.writerow(["Kennzahl", "Wert", "Einheit", "Status"])
-            kpi_data = self._build_kpi_export()
-            for kpi, data in kpi_data.items():
-                writer.writerow([
-                    kpi,
-                    data.get("value", ""),
-                    data.get("unit", ""),
-                    data.get("status", "")
-                ])
-            writer.writerow([])
-            
-            # Section 2: Customer Analysis
-            writer.writerow(["=== KUNDENANALYSE ==="])
-            writer.writerow(["Metrik", "Wert"])
-            customer_data = self._build_customer_export()
-            for key, value in customer_data.items():
-                if isinstance(value, dict):
-                    writer.writerow([key, ""])
-                    for sub_key, sub_val in value.items():
-                        writer.writerow(["  " + sub_key, sub_val])
-                else:
-                    writer.writerow([key, value])
-            writer.writerow([])
-            
-            # Section 3: Checkout Performance
-            writer.writerow(["=== KASSEN-PERFORMANCE ==="])
-            checkout_data = self._build_checkout_export()
-            if "checkouts" in checkout_data:
-                headers = ["Kassen-ID", "Skill", "Kunden", "Artikel", "Ø Queue", "Ø Scan", "Uptime %", "Störungen"]
-                writer.writerow(headers)
-                for checkout in checkout_data["checkouts"]:
-                    writer.writerow([
-                        checkout.get("id", ""),
-                        checkout.get("skill", ""),
-                        checkout.get("customers_served", ""),
-                        checkout.get("items_scanned", ""),
-                        checkout.get("avg_queue_time", ""),
-                        checkout.get("avg_scan_time", ""),
-                        checkout.get("uptime_percent", ""),
-                        checkout.get("failures", "")
-                    ])
-            writer.writerow([])
-            
-            # Section 4: Operations
-            writer.writerow(["=== BETRIEBSSTATISTIK ==="])
-            writer.writerow(["Metrik", "Wert"])
-            operations_data = self._build_operations_export()
-            for key, value in operations_data.items():
-                writer.writerow([key, value])
-
-    def _export_pdf(self):
-        """Placeholder for PDF export functionality."""
-        # TODO: Implement PDF report generation with charts and professional layout
-        pass
-    
-    def _build_kpi_export(self):
-        """Build KPI data structure for export."""
-        global_stats = self.stats.get("global", {})
-        
-        return {
-            "kunden_gesamt": {
-                "value": global_stats.get("customers_total", 0),
-                "unit": "Kunden",
-                "status": "info"
-            },
-            "wartezeit_durchschnitt": {
-                "value": round(global_stats.get("avg_queue_time", 0), 2),
-                "unit": "Minuten",
-                "status": "good" if global_stats.get("avg_queue_time", 0) <= 5 else "warning"
-            },
-            "zufriedenheit": {
-                "value": round(global_stats.get("satisfaction", 0), 1),
-                "unit": "%",
-                "status": "good" if global_stats.get("satisfaction", 0) >= 70 else "critical"
-            },
-            "durchsatz": {
-                "value": round(global_stats.get("throughput", 0), 1),
-                "unit": "Kunden/h",
-                "status": "info"
-            },
-            "ueberzeit": {
-                "value": global_stats.get("overtime_minutes", 0),
-                "unit": "Minuten",
-                "status": "warning" if global_stats.get("overtime_minutes", 0) > 0 else "good"
-            },
-            "kassen_offen": {
-                "value": global_stats.get("checkouts_open", 0),
-                "unit": "Kassen",
-                "status": "info"
-            }
-        }
-    
-    def _build_customer_export(self):
-        """Build customer analysis data for export."""
-        global_stats = self.stats.get("global", {})
-        customers = self.stats.get("customers", [])
-        
-        # Calculate distributions
-        total_customers = len(customers)
-        disabled_count = sum(1 for c in customers if c.get("is_disabled", False))
-        scanner_count = sum(1 for c in customers if c.get("has_handscanner", False))
-        
-        # Payment methods
-        payment_methods = {}
-        for c in customers:
-            payment = c.get("payment_method", "unknown")
-            payment_methods[payment] = payment_methods.get(payment, 0) + 1
-        
-        return {
-            "gesamt": total_customers,
-            "beeintraechtigt": disabled_count,
-            "beeintraechtigt_prozent": round(100 * disabled_count / total_customers, 1) if total_customers > 0 else 0,
-            "handscanner": scanner_count,
-            "handscanner_prozent": round(100 * scanner_count / total_customers, 1) if total_customers > 0 else 0,
-            "zahlungsmethoden": payment_methods,
-            "zeitmetriken": {
-                "wartezeit_min": round(global_stats.get("min_queue_time", 0), 2),
-                "wartezeit_durchschnitt": round(global_stats.get("avg_queue_time", 0), 2),
-                "wartezeit_max": round(global_stats.get("max_queue_time", 0), 2),
-                "verweildauer_min": round(global_stats.get("min_total_time", 0), 2),
-                "verweildauer_durchschnitt": round(global_stats.get("avg_total_time", 0), 2),
-                "verweildauer_max": round(global_stats.get("max_total_time", 0), 2)
-            }
-        }
-    
-    def _build_checkout_export(self):
-        """Build checkout performance data for export."""
-        checkout_stats = self.stats.get("checkouts", {})
-        
-        checkouts_list = []
-        for checkout_id, data in checkout_stats.items():
-            checkouts_list.append({
-                "id": checkout_id,
-                "skill": data.get("skill_level", "unknown"),
-                "customers_served": data.get("customers_served", 0),
-                "items_scanned": data.get("items_scanned", 0),
-                "avg_queue_time": round(data.get("avg_queue_time", 0), 2),
-                "avg_scan_time": round(data.get("avg_scan_time", 0), 2),
-                "uptime_percent": round(data.get("uptime_percent", 0), 1),
-                "failures": data.get("failure_count", 0),
-                "status": data.get("status", "unknown")
-            })
-        
-        return {
-            "checkouts": checkouts_list,
-            "summary": {
-                "total_checkouts": len(checkout_stats),
-                "open_checkouts": sum(1 for d in checkout_stats.values() if d.get("status") == "open"),
-                "failed_checkouts": sum(1 for d in checkout_stats.values() if d.get("status") == "failed")
-            }
-        }
-    
-    def _build_operations_export(self):
-        """Build operations data for export."""
-        global_stats = self.stats.get("global", {})
-        
-        return {
-            "geplante_oeffnungszeit": global_stats.get("planned_open_hours", ""),
-            "tatsaechliche_zeit": global_stats.get("elapsed_time", ""),
-            "ueberzeit_minuten": global_stats.get("overtime_minutes", 0),
-            "kunden_im_laden": global_stats.get("customers_in_store", 0),
-            "kunden_in_warteschlange": global_stats.get("customers_in_queue", 0),
-            "laengste_warteschlange": global_stats.get("longest_queue", 0),
-            "peak_hour": global_stats.get("peak_hour", ""),
-            "peak_customers": global_stats.get("peak_customers", 0)
-        }
-
-    # Legacy helper methods (kept for backward compatibility with export tab)
+    # Legacy helper methods
     
     def _t(self, key, fallback):
         if not self.translator:
@@ -461,7 +194,7 @@ class CheckoutStatsDialog(QDialog):
         self.checkout_id = checkout_id
         self.sim_manager = sim_manager
         title_tpl = (
-            self.translator.get("dialogs.checkout_stats_title")
+            self.translator.get("dialogs.checkout_stats_title", "Kasse #{id} - Live Statistik")
             if self.translator
             else "Kasse #{id} - Live Statistik"
         )
@@ -482,6 +215,8 @@ class CheckoutStatsDialog(QDialog):
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
         self.lbl_status = QLabel("-")
         self.lbl_queue = QLabel("0")
@@ -492,22 +227,55 @@ class CheckoutStatsDialog(QDialog):
         self.lbl_payment_split = QLabel("0% / 0%")
         self.lbl_skill = QLabel("-")
 
+        # Card-based styling like in sidebar
+        card_style = """
+            QGroupBox {
+                font-size: 11px;
+                font-weight: 700;
+                color: #374151;
+                border: 1px solid #D1D5DB;
+                border-radius: 8px;
+                margin-top: 8px;
+                padding-top: 12px;
+                background-color: #FFFFFF;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 10px;
+                padding: 0 5px;
+            }
+            QLabel {
+                font-size: 10px;
+                color: #6B7280;
+            }
+        """
+
         gb_status = QGroupBox(self._t("dialogs.checkout_stats_status_section", "Status"))
+        gb_status.setStyleSheet(card_style)
         f_status = QFormLayout(gb_status)
+        f_status.setSpacing(8)
+        f_status.setContentsMargins(12, 8, 12, 12)
         f_status.addRow(self._t("dialogs.checkout_stats_status", "Status:"), self.lbl_status)
         f_status.addRow(self._t("dialogs.checkout_stats_queue", "Queue-Länge:"), self.lbl_queue)
         f_status.addRow(self._t("dialogs.checkout_stats_skill", "Kassierer:"), self.lbl_skill)
 
         gb_customers = QGroupBox(self._t("dialogs.checkout_stats_customers_section", "Kunden"))
+        gb_customers.setStyleSheet(card_style)
         f_customers = QFormLayout(gb_customers)
+        f_customers.setSpacing(8)
+        f_customers.setContentsMargins(12, 8, 12, 12)
         f_customers.addRow(self._t("dialogs.checkout_stats_customers", "Bedient:"), self.lbl_customers)
         f_customers.addRow(self._t("dialogs.checkout_stats_scan_avg", "Ø Scan-Zeit:"), self.lbl_scan_avg)
         f_customers.addRow(self._t("dialogs.checkout_stats_pay_avg", "Ø Bezahl-Zeit:"), self.lbl_pay_avg)
         f_customers.addRow(self._t("dialogs.checkout_stats_total_items", "Artikel gesamt:"), self.lbl_total_items)
 
         gb_payment = QGroupBox(self._t("dialogs.checkout_stats_payment_section", "Bezahlung"))
+        gb_payment.setStyleSheet(card_style)
         f_payment = QFormLayout(gb_payment)
-        f_payment.addRow(self._t("dialogs.checkout_stats_payment_split", "Bar / Karte:"), self.lbl_payment_split)
+        f_payment.setSpacing(8)
+        f_payment.setContentsMargins(12, 8, 12, 12)
+        f_payment.addRow(self._t("dialogs.checkout_stats_payment_split", "Zahlungsart:"), self.lbl_payment_split)
 
         layout.addWidget(gb_status)
         layout.addWidget(gb_customers)
@@ -525,10 +293,18 @@ class CheckoutStatsDialog(QDialog):
         self.lbl_scan_avg.setText(f"{stats.get('scan_avg_sec', 0.0) / 60.0:.2f} min")
         self.lbl_pay_avg.setText(f"{stats.get('pay_avg_sec', 0.0) / 60.0:.2f} min")
         self.lbl_total_items.setText(str(stats.get("total_items", 0)))
+        
+        # Translate payment split
+        cash_label = self._t("dialogs.payment_cash", "Bar")
+        card_label = self._t("dialogs.payment_card", "Karte")
         self.lbl_payment_split.setText(
-            f"{stats.get('cash_percent', 0.0):.0f}% / {stats.get('card_percent', 0.0):.0f}%"
+            f"{cash_label} {stats.get('cash_percent', 0.0):.0f}% / {card_label} {stats.get('card_percent', 0.0):.0f}%"
         )
-        self.lbl_skill.setText(stats.get("skill", "-"))
+        
+        # Translate skill name
+        skill_raw = stats.get("skill", "-")
+        skill_text = self._translate_skill(skill_raw)
+        self.lbl_skill.setText(skill_text)
 
     def _translate_status(self, status):
         if not self.translator:
@@ -540,6 +316,16 @@ class CheckoutStatsDialog(QDialog):
             "conflict": "dialogs.checkout_status_conflict",
         }
         return self.translator.get(key_map.get(status, ""), status)
+
+    def _translate_skill(self, skill):
+        """Translate skill name from German to current language."""
+        if not self.translator:
+            return skill
+        skill_map = {
+            "Azubi": "dialogs.checkout_skill_azubi",
+            "Festangestellter": "dialogs.checkout_skill_festangestellter",
+        }
+        return self.translator.get(skill_map.get(skill, ""), skill)
 
     def _t(self, key, fallback):
         if not self.translator:

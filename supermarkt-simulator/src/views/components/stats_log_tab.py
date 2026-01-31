@@ -65,6 +65,12 @@ class StatsLogTab(QWidget):
                 padding: 4px;
             }
         """)
+        # Enable infinite scroll by not limiting the number of items
+        # QListWidget doesn't have a default item limit, so it's already infinite
         log_layout.addWidget(self.list_log)
 
         layout.addWidget(gb_log)
+
+    def clear_log(self):
+        """Clear all entries from the event log."""
+        self.list_log.clear()
