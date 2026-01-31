@@ -1,17 +1,9 @@
 - Logik für Skip-Button (mit Statisk-Berechnung)
 
 - Tooltips überarbeiten
-
-- Zufallsbutton sperren bei laufender oder pausierter Simulation. 
- - Zufällig der Öffnungstatus. Maximale Anzahl der Kunden und Kassiertyp zufällig gemacht werden auf der Map 
-
-- Live Update der Uhrzeit (oben und bei Statistiken wenn sich Eingabeparameter verändern)
-- IDs der Kassen ändern
-
-- Anwendung ruckelt in der Bewegung des Live-Berichts.
-
-- Einträge der Liste limitieren und Seitenanzahl machen.
-- Infoboxen verkleinen bei Kunde (Zeiten...)
+- Export bei Statistiken
+- Komplette Übersetzung für Statistik-Dialog.
+- Bericht-Button nach unten und Layout so wie alle anderen Buttons.
 
 
 - Statistiken!!! (Siehe #STATISTIC_DESIGN)
@@ -44,7 +36,6 @@
     - Anzahl gescannter Artikel
     - Bezahlung
 
-- Klick auf Kasse während laufender Simulation (auch Pause) soll Live-Statistiken zeigen von der Kasse
 
 - großes Refactoring (Wichtige Methoden auslagern - wie für Exponentialverteilung - für Unit-Tests)
 

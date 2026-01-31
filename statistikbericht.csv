@@ -1,0 +1,14 @@
+STATISTIKBERICHT
+Exportiert am;2026-01-31 02:21:50
+
+=== KPI DASHBOARD ===
+Kennzahl;Wert;Einheit;Status
+kunden_gesamt;0;Kunden;info
+wartezeit_durchschnitt;0;Minuten;good
+zufriedenheit;0;%;critical
+durchsatz;0;Kunden/h;info
+ueberzeit;0;Minuten;good
+kassen_offen;0;Kassen;info
+
+=== KUNDENANALYSE ===
+Metrik;Wert

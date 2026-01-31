@@ -825,7 +825,7 @@
             "max_queue": 5,
             "angle": 0,
             "cashier_skill": "Festangestellter",
-            "malfunction": true
+            "malfunction": false
         },
         {
             "id": 2,
@@ -837,11 +837,37 @@
             "skill": "Azubi",
             "max_queue": 5,
             "angle": 0,
-            "malfunction": true,
+            "malfunction": false,
             "cashier_skill": "Azubi"
         },
         {
             "id": 3,
+            "x": 192.00000000000006,
+            "y": 55.0,
+            "type": "Normal",
+            "orientation": "Right",
+            "open": true,
+            "skill": "Festangestellter",
+            "max_queue": 5,
+            "angle": 0,
+            "cashier_skill": "Festangestellter",
+            "malfunction": false
+        },
+        {
+            "id": 4,
+            "x": 196.00000000000006,
+            "y": 70.0,
+            "type": "Normal",
+            "orientation": "Right",
+            "open": true,
+            "skill": "Azubi",
+            "max_queue": 5,
+            "angle": 0,
+            "malfunction": false,
+            "cashier_skill": "Azubi"
+        },
+        {
+            "id": 5,
             "x": 175.0,
             "y": 80.0,
             "type": "SB",
@@ -854,7 +880,7 @@
             "cashier_skill": "Azubi"
         },
         {
-            "id": 4,
+            "id": 6,
             "x": 200.0,
             "y": 80.0,
             "type": "SB",
@@ -867,7 +893,7 @@
             "cashier_skill": "Azubi"
         },
         {
-            "id": 5,
+            "id": 7,
             "x": 203.0,
             "y": 107.0,
             "type": "SB",
@@ -880,7 +906,7 @@
             "cashier_skill": "Azubi"
         },
         {
-            "id": 6,
+            "id": 8,
             "x": 228.0,
             "y": 107.0,
             "type": "SB",
@@ -890,32 +916,6 @@
             "max_queue": 5,
             "angle": 180,
             "malfunction": false,
-            "cashier_skill": "Azubi"
-        },
-        {
-            "id": 7,
-            "x": 192.00000000000006,
-            "y": 55.0,
-            "type": "Normal",
-            "orientation": "Right",
-            "open": true,
-            "skill": "Festangestellter",
-            "max_queue": 5,
-            "angle": 0,
-            "cashier_skill": "Festangestellter",
-            "malfunction": true
-        },
-        {
-            "id": 8,
-            "x": 196.00000000000006,
-            "y": 70.0,
-            "type": "Normal",
-            "orientation": "Right",
-            "open": true,
-            "skill": "Azubi",
-            "max_queue": 5,
-            "angle": 0,
-            "malfunction": true,
             "cashier_skill": "Azubi"
         }
     ],

@@ -24,10 +24,17 @@ from PyQt6.QtWidgets import (
     QFrame,
     QApplication,
     QStyle,
+    QGridLayout,
+    QProgressBar,
 )
 from PyQt6.QtCore import QTime, Qt, pyqtSignal
 import random
 from config import COLOR_ACCENT, COLOR_ERROR, COLOR_SUCCESS, COLOR_BG_PANEL
+from .kpi_card import KPICard, LiveIndicator, MetricBox
+from .stats_live_tab import StatsLiveTab
+from .stats_details_tab import StatsDetailsTab
+from .stats_log_tab import StatsLogTab
+from .stats_updater import StatsUpdater
 
 
 class Sidebar(QWidget):
@@ -37,6 +44,9 @@ class Sidebar(QWidget):
         super().__init__(parent)
         self.translator = translator
         self.widget_refs = {}  # Store references to all translatable widgets
+        self.map_manager = None  # Will be set by controller
+        self.visual_controller = None  # Will be set by controller
+        self.controller = None  # Will be set by main_controller
         self.setup_ui()
         self.apply_styles()
 
@@ -399,8 +409,11 @@ class Sidebar(QWidget):
         )
         self._add_gb_header(v_time, dist_none, time_desc)
         f_time = QFormLayout()
-        self.time_open = QTimeEdit(QTime(8, 0))
+        self.time_open = QTimeEdit(QTime(7, 0))
         self.time_close = QTimeEdit(QTime(20, 0))
+        # Connect time changes to update displays immediately
+        self.time_open.timeChanged.connect(self._on_time_changed)
+        self.time_close.timeChanged.connect(self._on_time_changed)
         open_text = (
             self.translator.get("sidebar.input.time_open")
             if self.translator
@@ -451,8 +464,8 @@ class Sidebar(QWidget):
         v_spawn = QVBoxLayout(gb_spawn)
         self._add_gb_header(v_spawn, dist_exponential, cv_desc)
         f_spawn = QFormLayout()
-        self.actor_count_input = self._create_spin(50, 1, 10000)
-        self.disabled_prob_input = self._create_spin(10, 0, 100, " %")
+        self.actor_count_input = self._create_spin(350, 1, 2000)
+        self.disabled_prob_input = self._create_spin(8, 0, 100, " %")
         self.disabled_prob_input.setToolTip(disabled_desc)
         f_spawn.addRow(cv_day, self.actor_count_input)
         f_spawn.addRow(cv_share, self.disabled_prob_input)
@@ -527,10 +540,10 @@ class Sidebar(QWidget):
         )
         f_speed = QFormLayout()
         self.speed_walk_mean, self.speed_walk_std = self._create_dist_row(
-            speed_walk, 2.5, 0.5, f_speed
+            speed_walk, 1.8, 0.5, f_speed
         )
         self.speed_roll_mean, self.speed_roll_std = self._create_dist_row(
-            speed_roll, 1.5, 0.3, f_speed
+            speed_roll, 1.0, 0.3, f_speed
         )
         v_speed.addLayout(f_speed)
         l_gb_cust.addWidget(gb_speed)
@@ -570,7 +583,7 @@ class Sidebar(QWidget):
         v_cart = QVBoxLayout(gb_cart)
         self._add_gb_header(v_cart, dist_normal, cart_desc)
         f_cart = QFormLayout()
-        self.items_mean = self._create_spin(15, 1, 100)
+        self.items_mean = self._create_spin(12, 1, 100)
         self.items_std = self._create_spin(5, 0, 50)
         # Custom Row for Items
         h_it = QHBoxLayout()
@@ -580,7 +593,7 @@ class Sidebar(QWidget):
         h_it.addWidget(self.items_std)
         f_cart.addRow(cart_items, h_it)
 
-        self.hand_scanner_prob = self._create_spin(20, 0, 100, " %")
+        self.hand_scanner_prob = self._create_spin(35, 0, 100, " %")
         self.hand_scanner_prob.setToolTip(handheld_desc)
         f_cart.addRow(cart_scanner, self.hand_scanner_prob)
         v_cart.addLayout(f_cart)
@@ -621,10 +634,10 @@ class Sidebar(QWidget):
         )
         f_scan = QFormLayout()
         self.scan_speed_normal_min, self.scan_speed_normal_max = (
-            self._create_range_row(scan_normal, 0.5, 1.5, f_scan)
+            self._create_range_row(scan_normal, 1.8, 2.0, f_scan)
         )
         self.scan_speed_disabled_min, self.scan_speed_disabled_max = (
-            self._create_range_row(scan_disabled, 1.0, 3.0, f_scan)
+            self._create_range_row(scan_disabled, 2.5, 3.5, f_scan)
         )
         v_scan.addLayout(f_scan)
         l_gb_cust.addWidget(gb_scan)
@@ -804,7 +817,7 @@ class Sidebar(QWidget):
         )
         f_cashier = QFormLayout()
         self.scan_speed_newbie_min, self.scan_speed_newbie_max = (
-            self._create_range_row(cashier_newbie, 1.5, 2.5, f_cashier)
+            self._create_range_row(cashier_newbie, 1.0, 2.5, f_cashier)
         )
         self.scan_speed_pro_min, self.scan_speed_pro_max = (
             self._create_range_row(cashier_pro, 0.8, 1.2, f_cashier)
@@ -840,7 +853,7 @@ class Sidebar(QWidget):
         )
         f_maint = QFormLayout()
         self.worker_repair_min, self.worker_repair_max = (
-            self._create_range_row(conflict_duration, 5.0, 15.0, f_maint)
+            self._create_range_row(conflict_duration, 5.0, 10.0, f_maint)
         )
         v_maint.addLayout(f_maint)
         l_staff.addWidget(gb_maint)
@@ -919,8 +932,8 @@ class Sidebar(QWidget):
             checkout_desc,
         )
         f_co = QFormLayout()
-        self.checkout_fail_rate_normal = self._create_spin(0, 0, 100, " %")
-        self.checkout_fail_rate_sb = self._create_spin(0, 0, 100, " %")
+        self.checkout_fail_rate_normal = self._create_spin(10, 0, 100, " %")
+        self.checkout_fail_rate_sb = self._create_spin(25, 0, 100, " %")
         f_co.addRow(checkout_normal, self.checkout_fail_rate_normal)
         f_co.addRow(checkout_sb, self.checkout_fail_rate_sb)
         v_co.addLayout(f_co)
@@ -935,7 +948,7 @@ class Sidebar(QWidget):
             annoy_desc,
         )
         f_annoy = QFormLayout()
-        self.customer_annoyance_rate = self._create_spin(0, 0, 100, " %")
+        self.customer_annoyance_rate = self._create_spin(30, 0, 100, " %")
         f_annoy.addRow(annoy_rate, self.customer_annoyance_rate)
         v_annoy.addLayout(f_annoy)
         l_conflicts.addWidget(gb_annoy)
@@ -950,173 +963,680 @@ class Sidebar(QWidget):
         self.input_sub_tabs.addTab(tab_conflicts, conflicts_tab)
 
     # ==========================================
-    # TAB 2: STATISTIKEN
+    # TAB 2: STATISTIKEN (REDESIGNED WITH SUBTABS)
     # ==========================================
     def _init_tab_stats(self):
-        tab_stats = QWidget()
-        l_stats = QVBoxLayout(tab_stats)
-        l_stats.setSpacing(15)
-        l_stats.setContentsMargins(10, 10, 10, 10)
+        """Initialize the statistics tab with modern card-based design and subtabs."""
+        tab_stats_container = QWidget()
+        l_stats_root = QVBoxLayout(tab_stats_container)
+        l_stats_root.setContentsMargins(0, 5, 0, 0)
+        
+        # === HEADER: LIVE Indicator (always visible) ===
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(10, 0, 10, 8)
+        
+        live_dashboard_title = (
+            self.translator.get("sidebar.stats.live_dashboard")
+            if self.translator
+            else "LIVE-DASHBOARD"
+        )
+        
+        title_label = QLabel(live_dashboard_title)
+        title_label.setStyleSheet(
+            "font-size: 13px; "
+            "font-weight: 700; "
+            "color: #374151; "
+            "letter-spacing: 0.5px;"
+        )
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        
+        self.live_indicator = LiveIndicator()
+        header_layout.addWidget(self.live_indicator)
+        
+        l_stats_root.addLayout(header_layout)
+        
+        # === SUBTABS ===
+        self.stats_sub_tabs = QTabWidget()
+        l_stats_root.addWidget(self.stats_sub_tabs)
+        
+        # Create statistics tab components
+        self.stats_live_tab = StatsLiveTab(self, self.translator)
+        self.stats_details_tab = StatsDetailsTab(self, self.translator)
+        self.stats_log_tab = StatsLogTab(self, self.translator)
+        
+        # Create stats updater
+        self.stats_updater = StatsUpdater(self.stats_live_tab, self.stats_details_tab)
+        
+        # Add tabs
+        live_tab_label = (
+            self.translator.get("sidebar.stats.live_tab")
+            if self.translator
+            else "Live"
+        )
+        details_tab_label = (
+            self.translator.get("sidebar.stats.details_tab")
+            if self.translator
+            else "Details"
+        )
+        log_tab_label = (
+            self.translator.get("sidebar.stats.log_tab")
+            if self.translator
+            else "Protokoll"
+        )
+        
+        self.stats_sub_tabs.addTab(self.stats_live_tab, live_tab_label)
+        self.stats_sub_tabs.addTab(self.stats_details_tab, details_tab_label)
+        self.stats_sub_tabs.addTab(self.stats_log_tab, log_tab_label)
+        
+        # Expose commonly accessed widgets for compatibility
+        self._expose_stats_widgets()
+        
+        # Add main tab
+        stats_tab = (
+            self.translator.get("sidebar.tabs.stats")
+            if self.translator
+            else "Statistiken"
+        )
+        self.main_tabs.addTab(tab_stats_container, stats_tab)
+    
+    def _expose_stats_widgets(self):
+        """Expose statistics widgets for backward compatibility."""
+        # Live tab widgets
+        self.lbl_customers_in_store = self.stats_live_tab.lbl_customers_in_store
+        self.lbl_total_customers_served_live = self.stats_live_tab.lbl_total_customers_served_live
+        self.lbl_throughput = self.stats_live_tab.lbl_throughput
+        self.lbl_avg_wait = self.stats_live_tab.lbl_avg_wait
+        self.lbl_wait_status = self.stats_live_tab.lbl_wait_status
+        self.wait_progress = self.stats_live_tab.wait_progress
+        self.lbl_queue_count = self.stats_live_tab.lbl_queue_count
+        self.lbl_longest_queue = self.stats_live_tab.lbl_longest_queue
+        self.lbl_checkouts_open = self.stats_live_tab.lbl_checkouts_open
+        self.lbl_checkouts_malfunction = self.stats_live_tab.lbl_checkouts_malfunction
+        self.lbl_checkouts_closed = self.stats_live_tab.lbl_checkouts_closed
+        self.lbl_available_checkouts = self.stats_live_tab.lbl_available_checkouts
+        self.lbl_satisfaction_score = self.stats_live_tab.lbl_satisfaction_score
+        self.satisfaction_progress = self.stats_live_tab.satisfaction_progress
+        self.lbl_satisfaction_status = self.stats_live_tab.lbl_satisfaction_status
+        self.btn_open_report = self.stats_live_tab.btn_open_report
+        
+        # Details tab widgets
+        self.lbl_total_items = self.stats_details_tab.lbl_total_items
+        self.lbl_avg_items_per_customer = self.stats_details_tab.lbl_avg_items_per_customer
+        self.lbl_total_customers = self.stats_details_tab.lbl_total_customers
+        self.lbl_payment_cash = self.stats_details_tab.lbl_payment_cash
+        self.lbl_payment_card = self.stats_details_tab.lbl_payment_card
+        self.lbl_malfunctions = self.stats_details_tab.lbl_malfunctions
+        self.lbl_annoyance = self.stats_details_tab.lbl_annoyance
+        self.lbl_conflicts = self.stats_details_tab.lbl_conflicts
+        self.lbl_elapsed_open = self.stats_details_tab.lbl_elapsed_open
+        self.lbl_scheduled_open = self.stats_details_tab.lbl_scheduled_open
+        self.lbl_overtime = self.stats_details_tab.lbl_overtime
+        
+        # Log tab widgets
+        self.list_log = self.stats_log_tab.list_log
+        self.plot_widget = self.stats_log_tab.plot_widget
+        
+        # Compatibility: Expose gb_stats (the first groupbox in live tab)
+        if hasattr(self.stats_live_tab, 'gb_stats'):
+            self.gb_stats = self.stats_live_tab.gb_stats
+        else:
+            # Create a dummy QGroupBox for compatibility
+            self.gb_stats = QGroupBox("KUNDEN")
+    
+    def _setup_stats_live_tab(self):
+        """Setup Live Overview subtab - most important metrics without scrolling."""
+        tab_live = QWidget()
+        l_live = QVBoxLayout(tab_live)
+        l_live.setAlignment(Qt.AlignmentFlag.AlignTop)
+        l_live.setSpacing(10)
+        l_live.setContentsMargins(8, 8, 8, 8)
 
-        # Translations
-        live_data_title = (
-            self.translator.get("sidebar.stats.live_data")
-            if self.translator
-            else "Live Daten"
-        )
-        overview_title = (
-            self.translator.get("sidebar.stats.overview")
-            if self.translator
-            else "Überblick"
-        )
-        queue_title = (
-            self.translator.get("sidebar.stats.queue_section")
-            if self.translator
-            else "Warteschlange"
-        )
-        performance_title = (
-            self.translator.get("sidebar.stats.performance_section")
-            if self.translator
-            else "Leistung"
-        )
-        time_title = (
-            self.translator.get("sidebar.stats.time_section")
-            if self.translator
-            else "Zeit"
-        )
-        queue_label = (
-            self.translator.get("sidebar.stats.queue_count")
-            if self.translator
-            else "Kunden in Schlange:"
-        )
-        store_label = (
-            self.translator.get("sidebar.stats.customers_in_store")
-            if self.translator
-            else "Kunden im Laden:"
-        )
-        total_label = (
-            self.translator.get("sidebar.stats.total_customers")
-            if self.translator
-            else "Kunden Gesamt:"
-        )
-        longest_queue_label = (
-            self.translator.get("sidebar.stats.longest_queue")
-            if self.translator
-            else "Längste Queue:"
-        )
-        avg_wait_label = (
-            self.translator.get("sidebar.stats.avg_wait")
-            if self.translator
-            else "Ø Wartezeit:"
-        )
-        throughput_label = (
-            self.translator.get("sidebar.stats.throughput")
-            if self.translator
-            else "Durchsatz:"
-        )
-        available_checkouts_label = (
-            self.translator.get("sidebar.stats.available_checkouts")
-            if self.translator
-            else "Kassen verfügbar:"
-        )
-        satisfaction_label = (
-            self.translator.get("sidebar.stats.satisfaction")
-            if self.translator
-            else "Zufriedenheit:"
-        )
-        elapsed_open_label = (
-            self.translator.get("sidebar.stats.elapsed_open")
-            if self.translator
-            else "Geöffnet (bisher):"
-        )
-        scheduled_open_label = (
-            self.translator.get("sidebar.stats.scheduled_open")
-            if self.translator
-            else "Geplant geöffnet:"
-        )
-        overtime_label = (
-            self.translator.get("sidebar.stats.overtime")
-            if self.translator
-            else "Überzeit:"
-        )
+        # === KPI CARDS ===
+        
+        # Card style (reusable)
+        card_style = """
+            QGroupBox {
+                font-size: 11px;
+                font-weight: 700;
+                color: #374151;
+                border: 1px solid #D1D5DB;
+                border-radius: 8px;
+                margin-top: 8px;
+                padding-top: 12px;
+                background-color: #FFFFFF;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """
+        
+        # Card 1: KUNDEN
+        self.gb_stats = QGroupBox("KUNDEN")
+        self.gb_stats.setStyleSheet(card_style)
+        card1_layout = QVBoxLayout(self.gb_stats)
+        card1_layout.setSpacing(10)
+        
+        # Im Laden
+        store_row = QHBoxLayout()
+        store_row.setSpacing(6)
+        
+        store_lbl = QLabel("Im Laden:")
+        store_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        store_row.addWidget(store_lbl)
+        
+        self.lbl_customers_in_store = QLabel("0")
+        self.lbl_customers_in_store.setStyleSheet("font-size: 20px; color: #111827; font-weight: 700;")
+        store_row.addWidget(self.lbl_customers_in_store)
+        
+        store_unit = QLabel("Kunden")
+        store_unit.setStyleSheet("font-size: 13px; color: #6B7280;")
+        store_row.addWidget(store_unit)
+        store_row.addStretch()
+        card1_layout.addLayout(store_row)
+        
+        # Gesamt bedient
+        total_row = QHBoxLayout()
+        total_row.setSpacing(6)
+        
+        total_lbl = QLabel("Gesamt bedient:")
+        total_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        total_row.addWidget(total_lbl)
+        
+        self.lbl_total_customers_served_live = QLabel("0")
+        self.lbl_total_customers_served_live.setStyleSheet("font-size: 20px; color: #111827; font-weight: 700;")
+        total_row.addWidget(self.lbl_total_customers_served_live)
+        
+        total_unit = QLabel("Kunden")
+        total_unit.setStyleSheet("font-size: 13px; color: #6B7280;")
+        total_row.addWidget(total_unit)
+        total_row.addStretch()
+        card1_layout.addLayout(total_row)
+        
+        # Durchsatz
+        throughput_row = QHBoxLayout()
+        throughput_row.setSpacing(6)
+        
+        throughput_lbl = QLabel("Durchsatz:")
+        throughput_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        throughput_row.addWidget(throughput_lbl)
+        
+        self.lbl_throughput = QLabel("0 K/h")
+        self.lbl_throughput.setStyleSheet("font-size: 18px; color: #10B981; font-weight: 700;")
+        throughput_row.addWidget(self.lbl_throughput)
+        throughput_row.addStretch()
+        card1_layout.addLayout(throughput_row)
+        
+        l_live.addWidget(self.gb_stats)
+        
+        # Card 2: Zufriedenheit
+        card2 = QGroupBox("KUNDENZUFRIEDENHEIT")
+        card2.setStyleSheet(card_style)
+        card2_layout = QVBoxLayout(card2)
+        card2_layout.setSpacing(10)
+        
+        wait_row = QHBoxLayout()
+        wait_row.setSpacing(6)
+        
+        wait_lbl = QLabel("Ø Wartezeit:")
+        wait_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        wait_row.addWidget(wait_lbl)
+        
+        self.lbl_avg_wait = QLabel("0.0 min")
+        self.lbl_avg_wait.setStyleSheet("font-size: 22px; color: #111827; font-weight: 700;")
+        wait_row.addWidget(self.lbl_avg_wait)
+        
+        self.lbl_wait_status = QLabel("")
+        self.lbl_wait_status.setStyleSheet("font-size: 22px;")
+        wait_row.addWidget(self.lbl_wait_status)
+        wait_row.addStretch()
+        card2_layout.addLayout(wait_row)
+        
+        # Progress bar for wait time
+        self.wait_progress = QProgressBar()
+        self.wait_progress.setRange(0, 10)  # 0-10 minutes
+        self.wait_progress.setValue(0)
+        self.wait_progress.setTextVisible(False)
+        self.wait_progress.setMaximumHeight(10)
+        self.wait_progress.setStyleSheet("""
+            QProgressBar {
+                border: none;
+                border-radius: 3px;
+                background-color: #E5E7EB;
+            }
+            QProgressBar::chunk {
+                background-color: #10B981;
+                border-radius: 3px;
+            }
+        """)
+        card2_layout.addWidget(self.wait_progress)
+        
+        # Warteschlange
+        queue_row = QHBoxLayout()
+        queue_row.setSpacing(6)
+        
+        queue_lbl = QLabel("In Warteschlange:")
+        queue_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        queue_row.addWidget(queue_lbl)
+        
+        self.lbl_queue_count = QLabel("0")
+        self.lbl_queue_count.setStyleSheet("font-size: 18px; color: #111827; font-weight: 700;")
+        queue_row.addWidget(self.lbl_queue_count)
+        
+        queue_unit = QLabel("Kunden")
+        queue_unit.setStyleSheet("font-size: 13px; color: #6B7280;")
+        queue_row.addWidget(queue_unit)
+        queue_row.addStretch()
+        card2_layout.addLayout(queue_row)
+        
+        # Längste Queue
+        longest_row = QHBoxLayout()
+        longest_row.setSpacing(6)
+        
+        longest_lbl = QLabel("Längste Queue:")
+        longest_lbl.setStyleSheet("font-size: 12px; color: #9CA3AF; font-weight: 600;")
+        longest_row.addWidget(longest_lbl)
+        
+        self.lbl_longest_queue = QLabel("Kasse #0 (0)")
+        self.lbl_longest_queue.setStyleSheet("font-size: 12px; color: #6B7280; font-weight: 600;")
+        longest_row.addWidget(self.lbl_longest_queue)
+        longest_row.addStretch()
+        card2_layout.addLayout(longest_row)
+        
+        l_live.addWidget(card2)
+        
+        # Card 3: Kassen-Status
+        card3 = QGroupBox("� KASSEN-STATUS")
+        card3.setStyleSheet(card_style)
+        card3_layout = QVBoxLayout(card3)
+        card3_layout.setSpacing(10)
+        
+        checkouts_grid = QGridLayout()
+        checkouts_grid.setSpacing(8)
+        
+        open_lbl = QLabel("Offen:")
+        open_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        checkouts_grid.addWidget(open_lbl, 0, 0)
+        
+        self.lbl_checkouts_open = QLabel("0")
+        self.lbl_checkouts_open.setStyleSheet("font-size: 18px; color: #10B981; font-weight: 700;")
+        checkouts_grid.addWidget(self.lbl_checkouts_open, 0, 1)
+        
+        open_unit = QLabel("Kassen")
+        open_unit.setStyleSheet("font-size: 13px; color: #6B7280;")
+        checkouts_grid.addWidget(open_unit, 0, 2)
+        
+        malfunction_lbl = QLabel("Störung:")
+        malfunction_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        checkouts_grid.addWidget(malfunction_lbl, 1, 0)
+        
+        self.lbl_checkouts_malfunction = QLabel("0")
+        self.lbl_checkouts_malfunction.setStyleSheet("font-size: 18px; color: #EF4444; font-weight: 700;")
+        checkouts_grid.addWidget(self.lbl_checkouts_malfunction, 1, 1)
+        
+        malfunction_unit = QLabel("Kassen")
+        malfunction_unit.setStyleSheet("font-size: 13px; color: #6B7280;")
+        checkouts_grid.addWidget(malfunction_unit, 1, 2)
+        
+        closed_lbl = QLabel("Geschlossen:")
+        closed_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        checkouts_grid.addWidget(closed_lbl, 2, 0)
+        
+        self.lbl_checkouts_closed = QLabel("0")
+        self.lbl_checkouts_closed.setStyleSheet("font-size: 18px; color: #9CA3AF; font-weight: 700;")
+        checkouts_grid.addWidget(self.lbl_checkouts_closed, 2, 1)
+        
+        closed_unit = QLabel("Kassen")
+        closed_unit.setStyleSheet("font-size: 13px; color: #6B7280;")
+        checkouts_grid.addWidget(closed_unit, 2, 2)
+        
+        card3_layout.addLayout(checkouts_grid)
+        
+        # Store original label for compatibility
+        self.lbl_available_checkouts = QLabel("0/0")
+        
+        l_live.addWidget(card3)
+        
+        # Card 4: Zufriedenheit (Satisfaction Score)
+        card4 = QGroupBox("ZUFRIEDENHEITSSCORE")
+        card4.setStyleSheet(card_style)
+        card4_layout = QVBoxLayout(card4)
+        card4_layout.setSpacing(10)
+        
+        satisfaction_value_layout = QHBoxLayout()
+        
+        self.lbl_satisfaction_score = QLabel("0%")
+        self.lbl_satisfaction_score.setStyleSheet("font-size: 32px; color: #111827; font-weight: 700;")
+        satisfaction_value_layout.addWidget(self.lbl_satisfaction_score)
+        satisfaction_value_layout.addStretch()
+        
+        card4_layout.addLayout(satisfaction_value_layout)
+        
+        # Progress bar for satisfaction
+        self.satisfaction_progress = QProgressBar()
+        self.satisfaction_progress.setRange(0, 100)
+        self.satisfaction_progress.setValue(0)
+        self.satisfaction_progress.setTextVisible(False)
+        self.satisfaction_progress.setMaximumHeight(12)
+        self.satisfaction_progress.setStyleSheet("""
+            QProgressBar {
+                border: none;
+                border-radius: 5px;
+                background-color: #E5E7EB;
+            }
+            QProgressBar::chunk {
+                background-color: #10B981;
+                border-radius: 5px;
+            }
+        """)
+        card4_layout.addWidget(self.satisfaction_progress)
+        
+        self.lbl_satisfaction_status = QLabel("Status: GUT")
+        self.lbl_satisfaction_status.setStyleSheet("font-size: 13px; color: #10B981; font-weight: 700; text-align: center;")
+        self.lbl_satisfaction_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card4_layout.addWidget(self.lbl_satisfaction_status)
+        
+        l_live.addWidget(card4)
+        
+        # === REPORT BUTTON ===
         report_button_label = (
             self.translator.get("sidebar.stats.open_report")
             if self.translator
-            else "Bericht öffnen"
+            else "📊 Bericht öffnen"
         )
         report_button_tooltip = (
             self.translator.get("sidebar.stats.open_report_tooltip")
             if self.translator
             else "Öffnet die ausführliche Statistikübersicht"
         )
+        
+        self.btn_open_report = QPushButton(report_button_label)
+        self.btn_open_report.setToolTip(report_button_tooltip)
+        self.btn_open_report.setStyleSheet("""
+            QPushButton {
+                background-color: #3B82F6;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 12px;
+                font-size: 13px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background-color: #2563EB;
+            }
+            QPushButton:pressed {
+                background-color: #1D4ED8;
+            }
+        """)
+        l_live.addWidget(self.btn_open_report)
+        
+        l_live.addStretch()
+        
+        live_tab_label = (
+            self.translator.get("sidebar.stats.live_tab")
+            if self.translator
+            else "Live"
+        )
+        self.stats_sub_tabs.addTab(tab_live, live_tab_label)
+    
+    # === OLD METHODS REMOVED - Now using separate component files ===
+    # _setup_stats_live_tab, _setup_stats_details_tab, _setup_stats_log_tab
+    # have been refactored into:
+    # - stats_live_tab.py (StatsLiveTab)
+    # - stats_details_tab.py (StatsDetailsTab)
+    # - stats_log_tab.py (StatsLogTab)
+    # - stats_updater.py (StatsUpdater)
+    
+    def _setup_stats_details_tab(self):
+        """Setup Details subtab - additional metrics and insights."""
+        tab_details = QWidget()
+        l_details = QVBoxLayout(tab_details)
+        l_details.setAlignment(Qt.AlignmentFlag.AlignTop)
+        l_details.setSpacing(10)
+        l_details.setContentsMargins(8, 8, 8, 8)
+        
+        card_style = """
+            QGroupBox {
+                font-size: 11px;
+                font-weight: 700;
+                color: #374151;
+                border: 1px solid #D1D5DB;
+                border-radius: 8px;
+                margin-top: 8px;
+                padding-top: 12px;
+                background-color: #FFFFFF;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """
+        
+        # === KUNDEN-BEREICH ===
+        
+        # Card 1: Artikel-Statistiken
+        card_items = QGroupBox("ARTIKEL-STATISTIKEN")
+        card_items.setStyleSheet(card_style)
+        card_items_layout = QVBoxLayout(card_items)
+        card_items_layout.setSpacing(10)
+        
+        items_grid = QFormLayout()
+        items_grid.setSpacing(8)
+        
+        total_items_lbl = QLabel(
+            self.translator.get("sidebar.stats.total_items")
+            if self.translator
+            else "Artikel Gesamt:"
+        )
+        total_items_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        self.lbl_total_items = QLabel("0")
+        self.lbl_total_items.setStyleSheet("font-size: 18px; color: #374151; font-weight: 700;")
+        items_grid.addRow(total_items_lbl, self.lbl_total_items)
+        
+        avg_items_lbl = QLabel(
+            self.translator.get("sidebar.stats.avg_items_per_customer")
+            if self.translator
+            else "Ø Artikel/Kunde:"
+        )
+        avg_items_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        self.lbl_avg_items_per_customer = QLabel("0.0")
+        self.lbl_avg_items_per_customer.setStyleSheet("font-size: 18px; color: #374151; font-weight: 700;")
+        items_grid.addRow(avg_items_lbl, self.lbl_avg_items_per_customer)
+        
+        card_items_layout.addLayout(items_grid)
+        l_details.addWidget(card_items)
+        
+        # Card 2: Heute Bedient
+        card_customers = QGroupBox("HEUTE BEDIENT")
+        card_customers.setStyleSheet(card_style)
+        card_customers_layout = QVBoxLayout(card_customers)
+        card_customers_layout.setSpacing(8)
+        
+        self.lbl_total_customers = QLabel("0")
+        self.lbl_total_customers.setStyleSheet("font-size: 36px; color: #111827; font-weight: 700; text-align: center;")
+        self.lbl_total_customers.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_customers_layout.addWidget(self.lbl_total_customers)
+        
+        customers_label = QLabel("Kunden")
+        customers_label.setStyleSheet("font-size: 13px; color: #6B7280; text-align: center;")
+        customers_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_customers_layout.addWidget(customers_label)
+        
+        l_details.addWidget(card_customers)
+        
+        # === KASSEN-BEREICH ===
+        
+        # Card 3: Zahlungsmethoden
+        card_payment = QGroupBox("ZAHLUNGSMETHODEN")
+        card_payment.setStyleSheet(card_style)
+        card_payment_layout = QVBoxLayout(card_payment)
+        card_payment_layout.setSpacing(10)
+        
+        payment_grid = QFormLayout()
+        payment_grid.setSpacing(8)
+        
+        cash_lbl = QLabel(
+            self.translator.get("sidebar.stats.cash_percent")
+            if self.translator
+            else "Bar:"
+        )
+        cash_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        self.lbl_payment_cash = QLabel("0%")
+        self.lbl_payment_cash.setStyleSheet("font-size: 18px; color: #374151; font-weight: 700;")
+        payment_grid.addRow(cash_lbl, self.lbl_payment_cash)
+        
+        card_lbl = QLabel(
+            self.translator.get("sidebar.stats.card_percent")
+            if self.translator
+            else "Karte:"
+        )
+        card_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        self.lbl_payment_card = QLabel("0%")
+        self.lbl_payment_card.setStyleSheet("font-size: 18px; color: #374151; font-weight: 700;")
+        payment_grid.addRow(card_lbl, self.lbl_payment_card)
+        
+        card_payment_layout.addLayout(payment_grid)
+        l_details.addWidget(card_payment)
+        
+        # Card 4: Kassen-Probleme
+        card_issues = QGroupBox("KASSEN-PROBLEME")
+        card_issues.setStyleSheet(card_style)
+        card_issues_layout = QVBoxLayout(card_issues)
+        card_issues_layout.setSpacing(10)
+        
+        issues_grid = QFormLayout()
+        issues_grid.setSpacing(8)
+        
+        malfunctions_lbl = QLabel(
+            self.translator.get("sidebar.stats.malfunctions_today")
+            if self.translator
+            else "Störungen:"
+        )
+        malfunctions_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        self.lbl_malfunctions = QLabel("0")
+        self.lbl_malfunctions.setStyleSheet("font-size: 18px; color: #EF4444; font-weight: 700;")
+        issues_grid.addRow(malfunctions_lbl, self.lbl_malfunctions)
+        
+        annoyance_lbl = QLabel("Verärgerungen:")
+        annoyance_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        self.lbl_annoyance = QLabel("0")
+        self.lbl_annoyance.setStyleSheet("font-size: 18px; color: #F59E0B; font-weight: 700;")
+        issues_grid.addRow(annoyance_lbl, self.lbl_annoyance)
+        
+        conflicts_lbl = QLabel(
+            self.translator.get("sidebar.stats.conflicts_today")
+            if self.translator
+            else "Konflikte:"
+        )
+        conflicts_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        self.lbl_conflicts = QLabel("0")
+        self.lbl_conflicts.setStyleSheet("font-size: 18px; color: #DC2626; font-weight: 700;")
+        issues_grid.addRow(conflicts_lbl, self.lbl_conflicts)
+        
+        card_issues_layout.addLayout(issues_grid)
+        l_details.addWidget(card_issues)
+        
+        # === ALLGEMEIN ===
+        
+        # Card 5: Öffnungszeiten
+        card_time = QGroupBox("ÖFFNUNGSZEITEN")
+        card_time.setStyleSheet(card_style)
+        card_time_layout = QVBoxLayout(card_time)
+        card_time_layout.setSpacing(10)
+        
+        time_grid = QFormLayout()
+        time_grid.setSpacing(8)
+        
+        elapsed_lbl = QLabel("Verstrichen:")
+        elapsed_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        self.lbl_elapsed_open = QLabel("0:00")
+        self.lbl_elapsed_open.setStyleSheet("font-size: 16px; color: #374151; font-weight: 600;")
+        time_grid.addRow(elapsed_lbl, self.lbl_elapsed_open)
+        
+        scheduled_lbl = QLabel("Geplant:")
+        scheduled_lbl.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 600;")
+        self.lbl_scheduled_open = QLabel("0:00")
+        self.lbl_scheduled_open.setStyleSheet("font-size: 16px; color: #374151; font-weight: 600;")
+        time_grid.addRow(scheduled_lbl, self.lbl_scheduled_open)
+        
+        overtime_lbl = QLabel("Überzeit:")
+        overtime_lbl.setStyleSheet("font-size: 13px; color: #F59E0B; font-weight: 600;")
+        self.lbl_overtime = QLabel("+0:00")
+        self.lbl_overtime.setStyleSheet("font-size: 16px; color: #F59E0B; font-weight: 700;")
+        time_grid.addRow(overtime_lbl, self.lbl_overtime)
+        
+        card_time_layout.addLayout(time_grid)
+        l_details.addWidget(card_time)
+        
+        l_details.addStretch()
+        
+        details_tab_label = (
+            self.translator.get("sidebar.stats.details_tab")
+            if self.translator
+            else "Details"
+        )
+        self.stats_sub_tabs.addTab(tab_details, details_tab_label)
+    
+    def _setup_stats_log_tab(self):
+        """Setup Log subtab - event protocol."""
+        tab_log = QWidget()
+        l_log_root = QVBoxLayout(tab_log)
+        l_log_root.setContentsMargins(8, 8, 8, 8)
+        
         event_log_title = (
             self.translator.get("sidebar.stats.event_log")
             if self.translator
             else "Ereignis-Protokoll"
         )
-
-        self.gb_stats = QGroupBox(live_data_title)
-        self.lbl_queue_count = QLabel("0")
-        self.lbl_customers_in_store = QLabel("0")
-        self.lbl_total_customers = QLabel("0")
-        self.lbl_longest_queue = QLabel("0")
-        self.lbl_avg_wait = QLabel("0.0 min")
-        self.lbl_throughput = QLabel("0.0 /h")
-        self.lbl_available_checkouts = QLabel("0/0")
-        self.lbl_satisfaction_score = QLabel("0%")
-        self.lbl_elapsed_open = QLabel("0:00")
-        self.lbl_scheduled_open = QLabel("0:00")
-        self.lbl_overtime = QLabel("0:00")
-
-        f_stats_grid = QVBoxLayout(self.gb_stats)
-
-        gb_overview = QGroupBox(overview_title)
-        f_overview = QFormLayout(gb_overview)
-        f_overview.addRow(store_label, self.lbl_customers_in_store)
-        f_overview.addRow(total_label, self.lbl_total_customers)
-
-        gb_queue = QGroupBox(queue_title)
-        f_queue = QFormLayout(gb_queue)
-        f_queue.addRow(queue_label, self.lbl_queue_count)
-        f_queue.addRow(longest_queue_label, self.lbl_longest_queue)
-        f_queue.addRow(avg_wait_label, self.lbl_avg_wait)
-
-        gb_perf = QGroupBox(performance_title)
-        f_perf = QFormLayout(gb_perf)
-        f_perf.addRow(throughput_label, self.lbl_throughput)
-        f_perf.addRow(available_checkouts_label, self.lbl_available_checkouts)
-        f_perf.addRow(satisfaction_label, self.lbl_satisfaction_score)
-
-        gb_time = QGroupBox(time_title)
-        f_time = QFormLayout(gb_time)
-        f_time.addRow(elapsed_open_label, self.lbl_elapsed_open)
-        f_time.addRow(scheduled_open_label, self.lbl_scheduled_open)
-        f_time.addRow(overtime_label, self.lbl_overtime)
-
-        f_stats_grid.addWidget(gb_overview)
-        f_stats_grid.addWidget(gb_queue)
-        f_stats_grid.addWidget(gb_perf)
-        f_stats_grid.addWidget(gb_time)
-        self.btn_open_report = QPushButton(report_button_label)
-        self.btn_open_report.setToolTip(report_button_tooltip)
-        f_stats_grid.addWidget(self.btn_open_report)
-        l_stats.addWidget(self.gb_stats)
-
+        
+        # === EVENT LOG ===
         gb_log = QGroupBox(event_log_title)
-        l_log = QVBoxLayout(gb_log)
+        gb_log.setStyleSheet("""
+            QGroupBox {
+                font-size: 11px;
+                font-weight: 700;
+                color: #374151;
+                border: 1px solid #D1D5DB;
+                border-radius: 8px;
+                margin-top: 8px;
+                padding-top: 12px;
+                background-color: #FFFFFF;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """)
+        l_log_inner = QVBoxLayout(gb_log)
         self.list_log = QListWidget()
-        self.list_log.setMinimumHeight(200)
-        l_log.addWidget(self.list_log)
-        l_stats.addWidget(gb_log)
+        self.list_log.setStyleSheet("""
+            QListWidget {
+                background-color: #F9FAFB;
+                border: 1px solid #E5E7EB;
+                border-radius: 6px;
+                font-size: 10px;
+                padding: 4px;
+            }
+        """)
+        l_log_inner.addWidget(self.list_log)
+        l_log_root.addWidget(gb_log)
 
         self.plot_widget = None
-        l_stats.addStretch()
-        stats_tab = (
-            self.translator.get("sidebar.tabs.stats")
+        
+        log_tab_label = (
+            self.translator.get("sidebar.stats.log_tab")
             if self.translator
-            else "Statistiken"
+            else "Protokoll"
         )
-        self.main_tabs.addTab(tab_stats, stats_tab)
+        self.stats_sub_tabs.addTab(tab_log, log_tab_label)
 
     # ==========================================
     # TAB 3: EDITOR
@@ -1745,6 +2265,51 @@ class Sidebar(QWidget):
         if hasattr(self, "customer_annoyance_rate"):
             rand_spin(self.customer_annoyance_rate)
 
+        # Checkouts - randomize configurations
+        if self.map_manager is not None and hasattr(self.map_manager, "checkouts_data"):
+            for checkout in self.map_manager.checkouts_data:
+                # Randomize open/closed
+                checkout["open"] = random.choice([True, False])
+                # Randomize max queue length (1-5)
+                checkout["max_queue"] = random.randint(1, 5)
+                # Randomize skill only for Normal checkouts
+                if checkout.get("type") == "Normal":
+                    checkout["skill"] = random.choice(["Pro", "Azubi"])
+            
+            # Redraw map to reflect changes
+            if self.visual_controller is not None:
+                self.visual_controller.draw_map_elements(self.map_manager)
+
+        # Staff
+        if hasattr(self, "scan_speed_newbie_min"):
+            rand_double(self.scan_speed_newbie_min)
+        if hasattr(self, "scan_speed_newbie_max"):
+            rand_double(self.scan_speed_newbie_max)
+        if hasattr(self, "scan_speed_pro_min"):
+            rand_double(self.scan_speed_pro_min)
+        if hasattr(self, "scan_speed_pro_max"):
+            rand_double(self.scan_speed_pro_max)
+        if hasattr(self, "pay_duration_cash_min"):
+            rand_double(self.pay_duration_cash_min)
+        if hasattr(self, "pay_duration_cash_max"):
+            rand_double(self.pay_duration_cash_max)
+        if hasattr(self, "pay_duration_card_min"):
+            rand_double(self.pay_duration_card_min)
+        if hasattr(self, "pay_duration_card_max"):
+            rand_double(self.pay_duration_card_max)
+        if hasattr(self, "worker_repair_min"):
+            rand_double(self.worker_repair_min)
+        if hasattr(self, "worker_repair_max"):
+            rand_double(self.worker_repair_max)
+
+        # Conflicts
+        if hasattr(self, "checkout_fail_rate_normal"):
+            rand_spin(self.checkout_fail_rate_normal)
+        if hasattr(self, "checkout_fail_rate_sb"):
+            rand_spin(self.checkout_fail_rate_sb)
+        if hasattr(self, "customer_annoyance_rate"):
+            rand_spin(self.customer_annoyance_rate)
+
     def _create_dist_row(self, label, val_mean, val_std, layout):
         h = QHBoxLayout()
         h.setContentsMargins(0, 0, 0, 0)
@@ -2025,6 +2590,10 @@ class Sidebar(QWidget):
 
         # Disable/enable all input widgets recursively
         self._set_widgets_enabled(self.input_sub_tabs, not blocked)
+        
+        # Also disable/enable the random button
+        if hasattr(self, "btn_randomize"):
+            self.btn_randomize.setEnabled(not blocked)
 
     def _set_widgets_enabled(self, widget, enabled):
         """Recursively enable/disable input widgets, but keep tabs clickable."""
@@ -2069,3 +2638,40 @@ class Sidebar(QWidget):
                 self.input_sub_tabs.setCurrentIndex(i)
             # Return to the original tab
             self.input_sub_tabs.setCurrentIndex(current_index)
+
+    def _on_time_changed(self):
+        """Called when time_open or time_close is changed. Updates clock widget and statistics displays."""
+        # Use direct controller reference
+        if self.controller is None:
+            return
+            
+        # Get current time values
+        open_time = self.time_open.time()
+        close_time = self.time_close.time()
+        
+        # Only update if simulation not initialized (to avoid conflicts with running sim)
+        if self.controller.sim_manager.is_initialized:
+            return
+        
+        # Update toolbar clock widget
+        if hasattr(self.controller.view, "clock_widget"):
+            # Show opening time in clock
+            self.controller.view.clock_widget.setText(open_time.toString("HH:mm"))
+        
+        # Calculate new scheduled open time string
+        open_secs = open_time.hour() * 3600 + open_time.minute() * 60
+        close_secs = close_time.hour() * 3600 + close_time.minute() * 60
+        scheduled_open_secs = close_secs - open_secs
+        if scheduled_open_secs < 0:
+            scheduled_open_secs += 24 * 3600  # Handle overnight
+        
+        scheduled_hours = int(scheduled_open_secs // 3600)
+        scheduled_mins = int((scheduled_open_secs % 3600) // 60)
+        scheduled_formatted = f"{scheduled_hours}:{scheduled_mins:02d}"
+        
+        # Update live stats display
+        if hasattr(self, "stats_live_tab"):
+            if hasattr(self.stats_live_tab, "lbl_elapsed_time"):
+                self.stats_live_tab.lbl_elapsed_time.setText("0:00")
+            if hasattr(self.stats_live_tab, "lbl_scheduled_time"):
+                self.stats_live_tab.lbl_scheduled_time.setText(scheduled_formatted)

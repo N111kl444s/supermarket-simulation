@@ -3,7 +3,7 @@ Checkout item visualization.
 Refactored: Renamed light parameters to screen.
 """
 
-from PyQt6.QtWidgets import QGraphicsObject, QStyle
+from PyQt6.QtWidgets import QGraphicsObject, QStyle, QGraphicsSimpleTextItem
 from PyQt6.QtCore import Qt, QRectF, pyqtSignal, QPointF
 from PyQt6.QtGui import (
     QPen,
@@ -51,8 +51,10 @@ class CheckoutItem(QGraphicsObject):
         self.width = width
         self.height = height
         self.angle = angle
+        
+        self.id_text_item = None  # Will hold the ID text item
 
-        self.setZValue(6)
+        self.setZValue(10)  # Base checkout layer
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFlag(QGraphicsObject.GraphicsItemFlag.ItemIsSelectable, True)
         self.setAcceptedMouseButtons(
@@ -68,6 +70,7 @@ class CheckoutItem(QGraphicsObject):
             self.setTransform(trans, combine=True)
 
         self._load_images()
+        self._create_id_text()
 
     @classmethod
     def _load_images(cls):
@@ -80,6 +83,36 @@ class CheckoutItem(QGraphicsObject):
         if p_s.exists():
             cls._pixmap_sb = QPixmap(str(p_s))
         cls._images_loaded = True
+    
+    def _create_id_text(self):
+        """Create ID text as a separate graphics item on top of everything."""
+        if self.data_id is not None and self.show_id:
+            # Create ID text background (black) as separate item
+            id_text_bg = QGraphicsSimpleTextItem(f"#{self.data_id}", parent=self)
+            font = QFont()
+            font.setPixelSize(10)
+            font.setBold(True)
+            id_text_bg.setFont(font)
+            id_text_bg.setBrush(QBrush(Qt.GlobalColor.black))
+            
+            # Create ID text foreground (white) slightly offset
+            id_text_fg = QGraphicsSimpleTextItem(f"#{self.data_id}", parent=self)
+            id_text_fg.setFont(font)
+            id_text_fg.setBrush(QBrush(Qt.GlobalColor.white))
+            
+            # Center the text at the top
+            text_width = id_text_bg.boundingRect().width()
+            x_pos = (self.width - text_width) / 2
+            y_pos = 2
+            
+            id_text_bg.setPos(x_pos, y_pos)
+            id_text_fg.setPos(x_pos - 1, y_pos - 1)
+            
+            # Set Z-values to be on top of everything
+            id_text_bg.setZValue(40)  # Highest layer
+            id_text_fg.setZValue(41)  # Even higher for white text
+            
+            self.id_text_item = (id_text_bg, id_text_fg)
 
     def boundingRect(self):
         return QRectF(0, 0, self.width, self.height)
@@ -129,32 +162,7 @@ class CheckoutItem(QGraphicsObject):
                 painter.drawRect(rect.adjusted(1, 1, -1, -1))
 
         # SCREEN IS DRAWN EXTERNALLY IN VISUAL CONTROLLER
-
-        if self.data_id is not None and self.show_id:
-            painter.save()
-            font = QFont()
-            font.setPixelSize(10)
-            font.setBold(True)
-            painter.setFont(font)
-            painter.translate(self.width / 2, self.height / 2)
-            painter.rotate(-self.angle)
-            if self.orientation == "Left":
-                painter.scale(-1, 1)
-            painter.translate(-self.width / 2, -self.height / 2)
-            text_rect = rect.adjusted(2, 2, 2, 2)
-            painter.setPen(QPen(Qt.GlobalColor.black))
-            painter.drawText(
-                text_rect,
-                Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
-                f"#{self.data_id}",
-            )
-            painter.setPen(QPen(Qt.GlobalColor.white))
-            painter.drawText(
-                text_rect.translated(-1, -1),
-                Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
-                f"#{self.data_id}",
-            )
-            painter.restore()
+        # ID TEXT IS DRAWN AS SEPARATE CHILD ITEM
 
     def mousePressEvent(self, event):
         event.accept()

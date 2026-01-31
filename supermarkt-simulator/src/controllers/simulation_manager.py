@@ -69,6 +69,8 @@ class SimulationManager(QObject):
         self._max_queue_checkout_ids = set()
         self._max_queue_time_sec = None
         self._time_series_acc_sec = 0.0
+        self._skip_mode_active = False
+        self._skip_mode_original_factor = FACTOR_1X
         self._reset_statistics()
 
     def set_param_accessor(self, func):
@@ -135,7 +137,7 @@ class SimulationManager(QObject):
 
         self.is_initialized = True
         self.log_message.emit(
-            f"Laden geöffnet. Erwarte ca. {self.target_daily_customers} Kunden.",
+            self._format_log_message(f"Laden geöffnet. Erwarte ca. {self.target_daily_customers} Kunden."),
             "blue",
         )
         self._emit_live_stats(force=True)
@@ -148,6 +150,11 @@ class SimulationManager(QObject):
         if seconds_open < 0:
             return seconds_open + 24 * 60 * 60
         return seconds_open
+    
+    def _format_log_message(self, message):
+        """Format log message with current simulation time prefix."""
+        time_str = self.sim_time.toString("H:mm")
+        return f"{time_str} - {message}"
 
     def get_open_duration_seconds(self):
         return self._get_open_duration_seconds()
@@ -161,12 +168,11 @@ class SimulationManager(QObject):
         return elapsed
 
     def skip_day(self):
-        self.pause()
-        self.sim_time = self.close_time
-        self.time_updated.emit(self.sim_time.toString("HH:mm"))
-        self.log_message.emit("Tag übersprungen.", "orange")
-        self._finalize_statistics()
-        self.day_finished.emit()
+        """
+        Skip day functionality - currently disabled.
+        Will be implemented in a future update.
+        """
+        pass
 
     def _tick(self):
         real_dt = ANIMATION_TICK_MS / 1000.0
@@ -203,7 +209,7 @@ class SimulationManager(QObject):
 
             if is_closing_time:
                 self.log_message.emit(
-                    "Ladenschluss! Eingang geschlossen...", "orange"
+                    self._format_log_message("Ladenschluss! Eingang geschlossen..."), "orange"
                 )
                 self.store_is_closed_trigger = True
 
@@ -211,7 +217,7 @@ class SimulationManager(QObject):
         if self.store_is_closed_trigger and not self.customers_model:
             self.pause()
             self.time_updated.emit(self.sim_time.toString("HH:mm"))
-            self.log_message.emit("Feierabend! Alle Kunden bedient.", "red")
+            self.log_message.emit(self._format_log_message("Feierabend! Alle Kunden bedient."), "red")
             self._finalize_statistics()
             self.day_finished.emit()
             return
@@ -346,7 +352,7 @@ class SimulationManager(QObject):
                                             "malfunction_events"
                                         ] += 1
                                     self.log_message.emit(
-                                        f"⚠️ STÖRUNG an Kasse {cid}!", "red"
+                                        self._format_log_message(f"⚠️ STÖRUNG an Kasse {cid}!"), "red"
                                     )
                                 model.malfunction_checked = True
 
@@ -368,7 +374,7 @@ class SimulationManager(QObject):
                                                 "conflict_events"
                                             ] += 1
                                         self.log_message.emit(
-                                            f"😠 Verärgerter Kunde an Kasse {cid}!",
+                                            self._format_log_message(f"😠 Verärgerter Kunde an Kasse {cid}!"),
                                             "orange",
                                         )
                                 model.conflict_checked = True
@@ -417,7 +423,7 @@ class SimulationManager(QObject):
                     )
                     c_data["repair_timer"] = 0.0
                     self.log_message.emit(
-                        f"🔧 Kassierer repariert Kasse {c_data['id']}.", "blue"
+                        self._format_log_message(f"🔧 Kassierer repariert Kasse {c_data['id']}."), "blue"
                     )
                 else:
                     # Continue repair
@@ -427,13 +433,13 @@ class SimulationManager(QObject):
                         del c_data["repair_timer"]
                         del c_data["repair_duration"]
                         self.log_message.emit(
-                            f"✅ Kasse {c_data['id']} repariert.", "green"
+                            self._format_log_message(f"✅ Kasse {c_data['id']} repariert."), "green"
                         )
                         if c_data.get("pending_conflict", False):
                             c_data["conflict"] = True
                             del c_data["pending_conflict"]
                             self.log_message.emit(
-                                f"😠 Verärgerter Kunde an Kasse {c_data['id']}!",
+                                self._format_log_message(f"😠 Verärgerter Kunde an Kasse {c_data['id']}!"),
                                 "orange",
                             )
 
@@ -459,7 +465,7 @@ class SimulationManager(QObject):
                     )
                     c_data["conflict_timer"] = 0.0
                     self.log_message.emit(
-                        f"🗣️ Kassierer löst Konflikt an Kasse {c_data['id']}.",
+                        self._format_log_message(f"🗣️ Kassierer löst Konflikt an Kasse {c_data['id']}."),
                         "blue",
                     )
                 else:
@@ -473,7 +479,7 @@ class SimulationManager(QObject):
                             f"DEBUG: Conflict resolved at checkout {c_data['id']}"
                         )
                         self.log_message.emit(
-                            f"✅ Konflikt an Kasse {c_data['id']} gelöst.",
+                            self._format_log_message(f"✅ Konflikt an Kasse {c_data['id']} gelöst."),
                             "green",
                         )
 
@@ -596,7 +602,7 @@ class SimulationManager(QObject):
         if uses_handheld:
             type_str += " [Handscanner]"
 
-        self.log_message.emit(f"{type_str} hat den Laden betreten.", "green")
+        self.log_message.emit(self._format_log_message(f"{type_str} hat den Laden betreten."), "green")
 
     def _try_assign_checkout(self, model):
         candidates = []
@@ -760,6 +766,9 @@ class SimulationManager(QObject):
 
     def _handle_state_transition(self, model, prev_state):
         now_sec = self.get_elapsed_open_seconds(self.sim_time)
+        if model.state == "WAITING_AREA" and prev_state != "WAITING_AREA":
+            if model.waiting_area_entry_time_sec is None:
+                model.waiting_area_entry_time_sec = now_sec
         if model.state == "PAYING" and prev_state != "PAYING":
             if model.payment_start_time_sec is None:
                 model.payment_start_time_sec = now_sec
@@ -781,8 +790,15 @@ class SimulationManager(QObject):
         store_stay = self._normalize_duration(
             model.entry_time_sec, model.exit_time_sec
         )
+        # Queue wait includes waiting area time + checkout queue time
+        # Use waiting_area_entry_time if available, otherwise fall back to queue_join_time
+        queue_start_time = (
+            model.waiting_area_entry_time_sec 
+            if model.waiting_area_entry_time_sec is not None 
+            else model.queue_join_time_sec
+        )
         queue_wait = self._normalize_duration(
-            model.queue_join_time_sec, model.service_start_time_sec
+            queue_start_time, model.service_start_time_sec
         )
         service_time = self._normalize_duration(
             model.service_start_time_sec, model.service_end_time_sec
@@ -798,6 +814,8 @@ class SimulationManager(QObject):
         if service_time is not None:
             self._stats_raw["service_times"].append(service_time)
 
+        # Per-customer satisfaction based on time thresholds (used for customer analytics)
+        # Note: Global satisfaction score includes annoyances as well
         satisfied = None
         if store_stay is not None and queue_wait is not None:
             store_min = store_stay / 60.0
@@ -884,14 +902,39 @@ class SimulationManager(QObject):
 
         model.stats_finalized = True
 
-    def _calculate_satisfaction(self, avg_store_min, avg_queue_min):
+    def _calculate_satisfaction(self, avg_store_min, avg_queue_min, num_annoyances=0, total_customers=0):
+        """
+        Calculate customer satisfaction score (0-100).
+        
+        Factors:
+        - Store stay time: Target is satisfaction_store_target_min (default 15 min)
+        - Queue wait time: Target is satisfaction_queue_target_min (default 5 min)
+        - Customer annoyances: Each annoyance reduces satisfaction (10 points per annoyance)
+        
+        Formula:
+        - Base score: 100
+        - Deduction for long store stay: up to 50 points
+        - Deduction for long queue wait: up to 50 points
+        - Deduction for customer annoyances: 10 points per annoyed customer
+        """
         target_store = self.satisfaction_store_target_min
         target_queue = self.satisfaction_queue_target_min
         score = 100.0
+        
+        # Penalty for long store stay (up to 50 points)
         if avg_store_min > target_store:
             score -= min(50.0, (avg_store_min - target_store) / target_store * 50)
+        
+        # Penalty for long queue wait (up to 50 points)
         if avg_queue_min > target_queue:
             score -= min(50.0, (avg_queue_min - target_queue) / target_queue * 50)
+        
+        # Penalty for customer annoyances (up to 20 points)
+        # Each annoyed customer reduces score by 10 points, max 20 points penalty
+        if total_customers > 0:
+            annoyance_ratio = num_annoyances / total_customers
+            score -= min(20.0, annoyance_ratio * 100 * 0.2)
+        
         return max(0.0, min(100.0, score))
 
     def _emit_live_stats(self, game_dt=0.0, force=False):
@@ -944,16 +987,29 @@ class SimulationManager(QObject):
 
         avg_queue_wait = self._avg(self._stats_raw["queue_wait_times"]) / 60.0
         avg_store_stay = self._avg(self._stats_raw["store_stay_times"]) / 60.0
+        
+        # Count annoyances (customer dissatisfaction events)
+        annoyance_count = self._stats_raw.get("annoyance_today", 0) or sum(
+            1 for c in self._stats_raw.get("checkouts", {}).values() 
+            if c.get("conflict_time_sec", 0) > 0
+        )
+        total_customers_for_satisfaction = self._stats_raw.get("total_customers_served", 1)
+        
         satisfaction = self._calculate_satisfaction(
-            avg_store_stay, avg_queue_wait
+            avg_store_stay, avg_queue_wait, annoyance_count, total_customers_for_satisfaction
         )
 
         open_checkouts = 0
         available_checkouts = 0
+        malfunction_checkouts = 0
+        total_checkouts = len(self.map_mgr.checkouts_data)
+        
         for c_data in self.map_mgr.checkouts_data:
             if c_data.get("open", True):
                 open_checkouts += 1
-                if not c_data.get("malfunction") and not c_data.get("conflict"):
+                if c_data.get("malfunction") or c_data.get("conflict"):
+                    malfunction_checkouts += 1
+                else:
                     available_checkouts += 1
 
             cid = c_data.get("id")
@@ -979,10 +1035,39 @@ class SimulationManager(QObject):
                     c_stats["conflict_time_sec"] += game_dt
                     c_stats["downtime_time_sec"] += game_dt
 
+        # Calculate additional metrics with safe fallbacks
+        # Use the direct counters instead of non-existent item_counts list
+        total_items_processed = self._stats_raw.get("total_items_processed", 0)
+        customers_served = self._stats_raw.get("total_customers_served", 0)
+        avg_items_per_customer = total_items_processed / customers_served if customers_served > 0 else 0.0
+        
+        cash_count = self._stats_raw.get("cash_count", 0)
+        card_count = self._stats_raw.get("card_count", 0)
+        total_payments = cash_count + card_count
+        cash_percent = (cash_count / total_payments * 100) if total_payments > 0 else 0.0
+        card_percent = (card_count / total_payments * 100) if total_payments > 0 else 0.0
+        
+        # Count malfunctions, annoyances and conflicts (conflicts = malfunctions + annoyances)
+        checkout_stats = self._stats_raw.get("checkouts", {})
+        malfunctions_today = sum(1 for c in checkout_stats.values() if c.get("malfunction_time_sec", 0) > 0)
+        annoyance_today = sum(1 for c in checkout_stats.values() if c.get("conflict_time_sec", 0) > 0)
+        conflicts_today = malfunctions_today + annoyance_today
+
+        # Format times for display
+        elapsed_hours = int(elapsed // 3600)
+        elapsed_mins = int((elapsed % 3600) // 60)
+        elapsed_formatted = f"{elapsed_hours}:{elapsed_mins:02d}"
+        
+        scheduled_hours = int(scheduled_open // 3600)
+        scheduled_mins = int((scheduled_open % 3600) // 60)
+        scheduled_formatted = f"{scheduled_hours}:{scheduled_mins:02d}"
+
         self.live_stats_cache = {
             "queue_count": total_queue,
             "customers_in_store": len(self.customers_model),
-            "total_customers": self.total_customers_spawned,
+            "total_customers": self.total_customers_spawned,  # Alle erzeugten Kunden
+            "total_customers_served": self._stats_raw.get("total_customers_served", 0),  # Bedienet Kunden
+            "target_customers": self.target_daily_customers,  # Ziel-Kundenanzahl
             "longest_queue": self._max_queue_len,
             "longest_queue_checkouts": sorted(self._max_queue_checkout_ids),
             "longest_queue_time_sec": self._max_queue_time_sec,
@@ -990,10 +1075,23 @@ class SimulationManager(QObject):
             "throughput_per_hour": throughput,
             "checkouts_open": open_checkouts,
             "checkouts_available": available_checkouts,
+            "checkouts_malfunction": malfunction_checkouts,
+            "total_checkouts": total_checkouts,
             "satisfaction_score": satisfaction,
             "elapsed_open_seconds": elapsed,
             "scheduled_open_seconds": scheduled_open,
             "overtime_seconds": overtime,
+            "total_items_processed": total_items_processed,
+            "avg_items_per_customer": avg_items_per_customer,
+            "payment_cash_count": cash_count,
+            "payment_card_count": card_count,
+            "payment_cash_percent": cash_percent,
+            "payment_card_percent": card_percent,
+            "malfunctions_today": malfunctions_today,
+            "annoyance_today": annoyance_today,
+            "conflicts_today": conflicts_today,
+            "elapsed_time": elapsed_formatted,
+            "scheduled_time": scheduled_formatted,
         }
         self.live_stats_updated.emit(self.live_stats_cache)
 
@@ -1052,16 +1150,27 @@ class SimulationManager(QObject):
                 avg_customers_by_hour[h] = sum(values) / len(values)
 
         busiest_hour = None
-        if max_customers_time_sec is not None:
-            busiest_hour = int((max_customers_time_sec // 3600) % 24)
+        # Verwende die Stunde mit dem höchsten Durchschnitt (passend zum Diagramm)
+        if avg_customers_by_hour:
+            busiest_hour = max(avg_customers_by_hour.keys(), key=lambda h: avg_customers_by_hour[h])
+        
+        # Calculate throughput
+        served = self._stats_raw["total_customers_served"]
+        throughput = 0.0
+        if actual_open > 0:
+            throughput = served / (actual_open / 3600.0)
+        
         stats["global"] = {
             "total_customers_spawned": self.total_customers_spawned,
             "total_customers_served": self._stats_raw["total_customers_served"],
+            "target_customers": self.target_daily_customers,
             "total_normal_customers": self._stats_raw["total_normal_customers"],
             "total_disabled_customers": self._stats_raw["total_disabled_customers"],
             "total_handheld_customers": self._stats_raw["handheld_customers"],
             "total_items_processed": self._stats_raw["total_items_processed"],
             "avg_items_per_customer": avg_items,
+            "throughput_per_hour": throughput,
+            "elapsed_sim_hours": actual_open / 3600.0,
             "open_time": self.open_time.toString("HH:mm"),
             "close_time": self.close_time.toString("HH:mm"),
             "scheduled_open_seconds": scheduled_open,
@@ -1080,7 +1189,9 @@ class SimulationManager(QObject):
             },
             "payment": payment,
             "satisfaction_score": self._calculate_satisfaction(
-                avg_store_min, avg_queue_min
+                avg_store_min, avg_queue_min,
+                num_annoyances=sum(1 for c in self._stats_raw.get("checkouts", {}).values() if c.get("conflict_time_sec", 0) > 0),
+                total_customers=self._stats_raw.get("total_customers_served", 1)
             ),
             "peak": {
                 "max_queue_len": self._max_queue_len,
@@ -1104,7 +1215,22 @@ class SimulationManager(QObject):
                 ),
                 None,
             )
+            
+            # Determine checkout status
+            if c_data:
+                if not c_data.get("open", True):
+                    checkout_status = "closed"
+                elif c_data.get("malfunction", False):
+                    checkout_status = "malfunction"
+                elif c_data.get("conflict", False):
+                    checkout_status = "conflict"
+                else:
+                    checkout_status = "open"
+            else:
+                checkout_status = "closed"
+            
             stats["checkouts"][cid] = {
+                "status": checkout_status,
                 "type": c_data.get("type", "Normal") if c_data else "Normal",
                 "customers_served": c_stats["customers_served"],
                 "normal_customers": c_stats["normal_customers"],

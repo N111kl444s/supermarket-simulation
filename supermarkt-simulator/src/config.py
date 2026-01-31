@@ -121,6 +121,7 @@ FACTOR_6X = 360.0
 FACTOR_8X = 480.0
 FACTOR_16X = 960.0
 FACTOR_32X = 1920.0
+FACTOR_100X = 6000.0
 
 WALK_SPEED_PPS = 100.0
 WALK_SPEED_DISABLED_FACTOR = 0.6
@@ -162,41 +163,48 @@ if not IMG_CASHIERS_PRO:
 
 # --- DEFAULT SETTINGS DICT ---
 DEFAULT_SETTINGS = {
-    "show_routes": True,
+    "show_routes": False,
     "show_shelves": True,
-    "show_shelf_numbers": True,
+    "show_shelf_numbers": False,
     "show_checkouts": True,
     "show_checkout_numbers": False,
     "show_cashiers": True,
     "show_queues": False,
-    "show_waiting_area": True,
-    "show_start_area": True,
-    "show_exit_area": True,
-    "size_shelf": SHELF_SIZE,
-    "size_cashier": CASHIER_SIZE,
-    "size_customer": CUSTOMER_SIZE,
-    "size_checkout_width": CHECKOUT_WIDTH,
-    "size_checkout_height": CHECKOUT_HEIGHT,
-    "size_queue_dot": 4,
-    "dist_queue_spacing": 20,
-    "size_screen_normal_width": 15,
-    "size_screen_normal_height": 10,
-    "size_screen_sb_width": 10,
-    "size_screen_sb_height": 10,
-    "customer_path_offset": 10,
-    "offset_queue_left": [0, 0],
-    "offset_queue_right": [0, 0],
-    "offset_queue_sb_left": [0, 0],
-    "offset_queue_sb_right": [0, 0],
-    "offset_cashier_left": [0, 0],
-    "offset_cashier_right": [0, 0],
-    "offset_screen_normal_left": [0, 0],
-    "offset_screen_normal_right": [0, 0],
-    "offset_screen_sb_left": [0, 0],
-    "offset_screen_sb_right": [0, 0],
-    "satisfaction_store_target_min": 20.0,
-    "satisfaction_queue_target_min": 5.0,
+    "show_waiting_area": False,
+    "show_start_area": False,
+    "show_exit_area": False,
+    "size_shelf": 26,
+    "size_cashier": 10,
+    "size_customer": 10,
+    "size_checkout_width": 28,
+    "size_checkout_height": 14,
+    "size_queue_dot": 1,
+    "dist_queue_spacing": 5,
+    "size_screen_normal_width": 1.87,
+    "size_screen_normal_height": 1.02,
+    "size_screen_sb_width": 3.83,
+    "size_screen_sb_height": 2.45,
+    "customer_path_offset": 4.0,
+    "offset_queue_left": [24.0, 65.0],
+    "offset_queue_right": [18.0, -1.5],
+    "offset_queue_sb_left": [43.0, 14.0],
+    "offset_queue_sb_right": [13.0, 15.0],
+    "offset_cashier_left": [96.0, 50.0],
+    "offset_cashier_right": [18.0, 8.0],
+    "offset_screen_normal_left": [0.0, 0.0],
+    "offset_screen_normal_right": [17.5, 3.8],
+    "offset_screen_sb_left": [44.37, 3.3],
+    "offset_screen_sb_right": [11.63, 3.25],
+    "satisfaction_store_target_min": 40.0,
+    "satisfaction_queue_target_min": 10.0,
     "language": "de",
+    # KPI Thresholds
+    "kpi_overtime_good_max": 5.0,  # minutes
+    "kpi_overtime_warning_max": 15.0,  # minutes
+    "kpi_wait_time_good_max": 3.0,  # minutes
+    "kpi_wait_time_warning_max": 10.0,  # minutes
+    "kpi_satisfaction_good_min": 80.0,  # percent
+    "kpi_satisfaction_warning_min": 50.0,  # percent
 }
 
 # --- LANGUAGE ---

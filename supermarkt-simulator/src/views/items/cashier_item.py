@@ -36,7 +36,7 @@ class CashierItem(QGraphicsPixmapItem):
         self.center_y = y
         self._apply_position()
 
-        self.setZValue(25)
+        self.setZValue(30)  # Cashier above screen, below ID
         self.setAcceptHoverEvents(True)
 
     def update_skill(self, new_skill):

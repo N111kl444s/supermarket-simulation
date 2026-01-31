@@ -150,6 +150,24 @@ class MainWindow(QMainWindow):
         self.btn_open_report = s.btn_open_report
         self.gb_stats = s.gb_stats
         self.plot_widget = s.plot_widget
+        
+        # New statistics components (redesigned sidebar)
+        if hasattr(s, 'live_indicator'):
+            self.live_indicator = s.live_indicator
+        if hasattr(s, 'wait_progress'):
+            self.wait_progress = s.wait_progress
+        if hasattr(s, 'lbl_wait_status'):
+            self.lbl_wait_status = s.lbl_wait_status
+        if hasattr(s, 'lbl_checkouts_open'):
+            self.lbl_checkouts_open = s.lbl_checkouts_open
+        if hasattr(s, 'lbl_checkouts_malfunction'):
+            self.lbl_checkouts_malfunction = s.lbl_checkouts_malfunction
+        if hasattr(s, 'lbl_checkouts_closed'):
+            self.lbl_checkouts_closed = s.lbl_checkouts_closed
+        if hasattr(s, 'satisfaction_progress'):
+            self.satisfaction_progress = s.satisfaction_progress
+        if hasattr(s, 'lbl_satisfaction_status'):
+            self.lbl_satisfaction_status = s.lbl_satisfaction_status
 
         self.btn_new_map = s.btn_new_map
         self.btn_save_map = s.btn_save_map
@@ -213,7 +231,8 @@ class MainWindow(QMainWindow):
 
         self.btn_play_pause.setEnabled(is_sim)
         self.btn_reset.setEnabled(is_sim)
-        self.btn_skip.setEnabled(is_sim)
+        # Skip button always disabled for now
+        # self.btn_skip.setEnabled(is_sim)
         self.btn_speed_1.setEnabled(is_sim)
         self.btn_speed_2.setEnabled(is_sim)
         self.btn_speed_3.setEnabled(is_sim)

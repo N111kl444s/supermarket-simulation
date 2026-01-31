@@ -174,11 +174,12 @@ class TopToolbar(QWidget):
         self.btn_skip.setToolTip(
             self.translator.get("toolbar.skip_tooltip")
             if self.translator
-            else "Tag überspringen"
+            else "Kommt beim nächsten Update."
         )
         self.btn_skip.setFixedSize(60, 44)
         self.btn_skip.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSkipForward))
         self.btn_skip.setIconSize(icon_size)
+        self.btn_skip.setEnabled(False)  # Disabled for now
 
         center_layout.addWidget(self.btn_reset)
         center_layout.addWidget(self.btn_play_pause)
@@ -253,6 +254,7 @@ class TopToolbar(QWidget):
             translator.get("toolbar.play_pause_tooltip")
         )
         self.btn_skip.setToolTip(translator.get("toolbar.skip_tooltip"))
+        self.btn_skip.setEnabled(False)  # Keep disabled
         self.btn_reset_zoom.setText(translator.get("toolbar.reset_zoom"))
         self.btn_reset_zoom.setToolTip(
             translator.get("toolbar.reset_zoom_tooltip")

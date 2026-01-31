@@ -95,6 +95,7 @@ class CustomerModel:
 
         # --- STATISTICS TIMESTAMPS ---
         self.entry_time_sec = None
+        self.waiting_area_entry_time_sec = None  # Zeit beim Betreten des Wartebereichs
         self.queue_join_time_sec = None
         self.service_start_time_sec = None
         self.payment_start_time_sec = None
@@ -218,6 +219,7 @@ class CustomerModel:
             dist = self._move_to_target(dt)
             if dist < 5.0:
                 self.state = "WAITING_AREA"
+                # Setze Zeitstempel für Wartebereich-Eintritt (wird später vom Manager gesetzt)
         elif self.state == "IN_QUEUE":
             self._move_to_target(dt)
         elif self.state == "SCANNING":

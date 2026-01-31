@@ -691,58 +691,6 @@
     "checkouts": [
         {
             "id": 1,
-            "x": 190.0,
-            "y": 1.0,
-            "type": "SB",
-            "orientation": "Right",
-            "open": true,
-            "skill": "Azubi",
-            "max_queue": 3,
-            "angle": 0.0,
-            "malfunction": false,
-            "conflict": false
-        },
-        {
-            "id": 2,
-            "x": 170.0,
-            "y": 1.0,
-            "type": "SB",
-            "orientation": "Right",
-            "open": true,
-            "skill": "Azubi",
-            "max_queue": 3,
-            "angle": 0,
-            "malfunction": false,
-            "conflict": false
-        },
-        {
-            "id": 3,
-            "x": 199.0,
-            "y": 26.0,
-            "type": "SB",
-            "orientation": "Left",
-            "open": true,
-            "skill": "Azubi",
-            "max_queue": 3,
-            "angle": 180.0,
-            "malfunction": false,
-            "conflict": false
-        },
-        {
-            "id": 4,
-            "x": 218.0,
-            "y": 26.0,
-            "type": "SB",
-            "orientation": "Left",
-            "open": true,
-            "skill": "Azubi",
-            "max_queue": 3,
-            "angle": 180.0,
-            "malfunction": false,
-            "conflict": false
-        },
-        {
-            "id": 5,
             "x": 180.0,
             "y": 63.0,
             "type": "Normal",
@@ -756,7 +704,7 @@
             "cashier_skill": "Festangestellter"
         },
         {
-            "id": 6,
+            "id": 2,
             "x": 180.0,
             "y": 80.0,
             "type": "Normal",
@@ -768,6 +716,58 @@
             "malfunction": false,
             "conflict": false,
             "cashier_skill": "Azubi"
+        },
+        {
+            "id": 3,
+            "x": 170.0,
+            "y": 1.0,
+            "type": "SB",
+            "orientation": "Right",
+            "open": true,
+            "skill": "Azubi",
+            "max_queue": 3,
+            "angle": 0,
+            "malfunction": false,
+            "conflict": false
+        },
+        {
+            "id": 4,
+            "x": 190.0,
+            "y": 1.0,
+            "type": "SB",
+            "orientation": "Right",
+            "open": true,
+            "skill": "Azubi",
+            "max_queue": 3,
+            "angle": 0.0,
+            "malfunction": false,
+            "conflict": false
+        },
+        {
+            "id": 5,
+            "x": 199.0,
+            "y": 26.0,
+            "type": "SB",
+            "orientation": "Left",
+            "open": true,
+            "skill": "Azubi",
+            "max_queue": 3,
+            "angle": 180.0,
+            "malfunction": false,
+            "conflict": false
+        },
+        {
+            "id": 6,
+            "x": 218.0,
+            "y": 26.0,
+            "type": "SB",
+            "orientation": "Left",
+            "open": true,
+            "skill": "Azubi",
+            "max_queue": 3,
+            "angle": 180.0,
+            "malfunction": false,
+            "conflict": false
         }
     ],
     "waiting_area": [

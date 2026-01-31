@@ -366,7 +366,7 @@ class VisualController:
 
             screen_item.setPos(screen_x, screen_y)
             screen_item.setRotation(angle)
-            screen_item.setZValue(15)
+            screen_item.setZValue(20)  # Screen above checkout, below cashier
             screen_item.setParentItem(self.map_group)
             screen_item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
             self.screen_items.append(screen_item)

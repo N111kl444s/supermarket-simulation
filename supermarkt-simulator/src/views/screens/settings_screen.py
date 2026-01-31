@@ -37,9 +37,9 @@ class SettingsScreen(QWidget):
         self.title_label.setFont(title_font)
         main_layout.addWidget(self.title_label)
         
-        # Settings Group
-        self.settings_group = QGroupBox()
-        form_layout = QFormLayout(self.settings_group)
+        # === ALLGEMEIN GROUP ===
+        self.general_group = QGroupBox()
+        general_layout = QFormLayout(self.general_group)
         
         # Language dropdown
         self.lang_label = QLabel()
@@ -54,12 +54,17 @@ class SettingsScreen(QWidget):
         # Connect language change for live preview
         self.lang_combo.currentIndexChanged.connect(self._on_language_preview)
         
-        form_layout.addRow(self.lang_label, self.lang_combo)
-        main_layout.addWidget(self.settings_group)
+        general_layout.addRow(self.lang_label, self.lang_combo)
+        main_layout.addWidget(self.general_group)
 
-        # Satisfaction Group
-        self.satisfaction_group = QGroupBox()
-        sat_layout = QFormLayout(self.satisfaction_group)
+        # === STATISTIKEN GROUP ===
+        self.statistics_group = QGroupBox()
+        stats_main_layout = QVBoxLayout(self.statistics_group)
+        
+        # Satisfaction Settings (Zufriedenheit)
+        self.satisfaction_box = QGroupBox()
+        sat_layout = QFormLayout(self.satisfaction_box)
+        
         self.sat_store_label = QLabel()
         self.sat_queue_label = QLabel()
         self.sat_store_spin = QDoubleSpinBox()
@@ -78,7 +83,81 @@ class SettingsScreen(QWidget):
         )
         sat_layout.addRow(self.sat_store_label, self.sat_store_spin)
         sat_layout.addRow(self.sat_queue_label, self.sat_queue_spin)
-        main_layout.addWidget(self.satisfaction_group)
+        stats_main_layout.addWidget(self.satisfaction_box)
+        
+        # KPI: Überzeit
+        self.overtime_box = QGroupBox()
+        overtime_layout = QFormLayout(self.overtime_box)
+        
+        self.kpi_overtime_good_label = QLabel()
+        self.kpi_overtime_warning_label = QLabel()
+        self.kpi_overtime_good_spin = QDoubleSpinBox()
+        self.kpi_overtime_good_spin.setRange(1.0, 60.0)
+        self.kpi_overtime_good_spin.setSingleStep(1.0)
+        self.kpi_overtime_good_spin.setSuffix(" min")
+        self.kpi_overtime_good_spin.setValue(
+            float(self.settings.get("kpi_overtime_good_max", 5.0))
+        )
+        self.kpi_overtime_warning_spin = QDoubleSpinBox()
+        self.kpi_overtime_warning_spin.setRange(1.0, 120.0)
+        self.kpi_overtime_warning_spin.setSingleStep(1.0)
+        self.kpi_overtime_warning_spin.setSuffix(" min")
+        self.kpi_overtime_warning_spin.setValue(
+            float(self.settings.get("kpi_overtime_warning_max", 15.0))
+        )
+        overtime_layout.addRow(self.kpi_overtime_good_label, self.kpi_overtime_good_spin)
+        overtime_layout.addRow(self.kpi_overtime_warning_label, self.kpi_overtime_warning_spin)
+        stats_main_layout.addWidget(self.overtime_box)
+        
+        # KPI: Wartezeit
+        self.wait_box = QGroupBox()
+        wait_layout = QFormLayout(self.wait_box)
+        
+        self.kpi_wait_good_label = QLabel()
+        self.kpi_wait_warning_label = QLabel()
+        self.kpi_wait_good_spin = QDoubleSpinBox()
+        self.kpi_wait_good_spin.setRange(1.0, 30.0)
+        self.kpi_wait_good_spin.setSingleStep(0.5)
+        self.kpi_wait_good_spin.setSuffix(" min")
+        self.kpi_wait_good_spin.setValue(
+            float(self.settings.get("kpi_wait_time_good_max", 5.0))
+        )
+        self.kpi_wait_warning_spin = QDoubleSpinBox()
+        self.kpi_wait_warning_spin.setRange(1.0, 60.0)
+        self.kpi_wait_warning_spin.setSingleStep(0.5)
+        self.kpi_wait_warning_spin.setSuffix(" min")
+        self.kpi_wait_warning_spin.setValue(
+            float(self.settings.get("kpi_wait_time_warning_max", 8.0))
+        )
+        wait_layout.addRow(self.kpi_wait_good_label, self.kpi_wait_good_spin)
+        wait_layout.addRow(self.kpi_wait_warning_label, self.kpi_wait_warning_spin)
+        stats_main_layout.addWidget(self.wait_box)
+        
+        # KPI: Zufriedenheit
+        self.kpi_sat_box = QGroupBox()
+        kpi_sat_layout = QFormLayout(self.kpi_sat_box)
+        
+        self.kpi_satisfaction_good_label = QLabel()
+        self.kpi_satisfaction_warning_label = QLabel()
+        self.kpi_satisfaction_good_spin = QDoubleSpinBox()
+        self.kpi_satisfaction_good_spin.setRange(0.0, 100.0)
+        self.kpi_satisfaction_good_spin.setSingleStep(1.0)
+        self.kpi_satisfaction_good_spin.setSuffix(" %")
+        self.kpi_satisfaction_good_spin.setValue(
+            float(self.settings.get("kpi_satisfaction_good_min", 75.0))
+        )
+        self.kpi_satisfaction_warning_spin = QDoubleSpinBox()
+        self.kpi_satisfaction_warning_spin.setRange(0.0, 100.0)
+        self.kpi_satisfaction_warning_spin.setSingleStep(1.0)
+        self.kpi_satisfaction_warning_spin.setSuffix(" %")
+        self.kpi_satisfaction_warning_spin.setValue(
+            float(self.settings.get("kpi_satisfaction_warning_min", 50.0))
+        )
+        kpi_sat_layout.addRow(self.kpi_satisfaction_good_label, self.kpi_satisfaction_good_spin)
+        kpi_sat_layout.addRow(self.kpi_satisfaction_warning_label, self.kpi_satisfaction_warning_spin)
+        stats_main_layout.addWidget(self.kpi_sat_box)
+        
+        main_layout.addWidget(self.statistics_group)
         
         main_layout.addStretch()
         
@@ -173,6 +252,12 @@ class SettingsScreen(QWidget):
             "language": language,
             "satisfaction_store_target_min": self.sat_store_spin.value(),
             "satisfaction_queue_target_min": self.sat_queue_spin.value(),
+            "kpi_overtime_good_max": self.kpi_overtime_good_spin.value(),
+            "kpi_overtime_warning_max": self.kpi_overtime_warning_spin.value(),
+            "kpi_wait_time_good_max": self.kpi_wait_good_spin.value(),
+            "kpi_wait_time_warning_max": self.kpi_wait_warning_spin.value(),
+            "kpi_satisfaction_good_min": self.kpi_satisfaction_good_spin.value(),
+            "kpi_satisfaction_warning_min": self.kpi_satisfaction_warning_spin.value(),
         }
         self.settings_changed.emit(settings)
         self.back_requested.emit()
@@ -194,23 +279,63 @@ class SettingsScreen(QWidget):
         """Update UI texts with current translations."""
         if self.translator:
             self.title_label.setText(self.translator.get("settings.title", "Einstellungen"))
-            self.settings_group.setTitle(self.translator.get("settings.language_group", "Spracheinstellungen"))
+            
+            # General Group
+            self.general_group.setTitle(self.translator.get("settings.general_group", "Allgemein"))
             self.lang_label.setText(self.translator.get("settings.language_label", "Sprache:"))
-            self.satisfaction_group.setTitle(
-                self.translator.get("settings.satisfaction_group", "Zufriedenheit")
+            
+            # Statistics Group
+            self.statistics_group.setTitle(
+                self.translator.get("settings.statistics_group", "Statistiken")
+            )
+            self.satisfaction_box.setTitle(
+                self.translator.get("settings.satisfaction_box", "Zufriedenheit")
             )
             self.sat_store_label.setText(
                 self.translator.get(
                     "settings.satisfaction_store",
-                    "Verweildauer Grenzwert (min):",
+                    "Verweildauer Grenzwert:",
                 )
             )
             self.sat_queue_label.setText(
                 self.translator.get(
                     "settings.satisfaction_queue",
-                    "Wartezeit Grenzwert (min):",
+                    "Wartezeit Grenzwert:",
                 )
             )
+            
+            # KPI Thresholds
+            self.overtime_box.setTitle(
+                self.translator.get("settings.kpi_overtime_box", "KPI: Überzeit")
+            )
+            self.kpi_overtime_good_label.setText(
+                self.translator.get("settings.kpi_overtime_good", "Gut (max):")
+            )
+            self.kpi_overtime_warning_label.setText(
+                self.translator.get("settings.kpi_overtime_warning", "Warnung (max):")
+            )
+            
+            self.wait_box.setTitle(
+                self.translator.get("settings.kpi_wait_box", "KPI: Wartezeit")
+            )
+            self.kpi_wait_good_label.setText(
+                self.translator.get("settings.kpi_wait_good", "Gut (max):")
+            )
+            self.kpi_wait_warning_label.setText(
+                self.translator.get("settings.kpi_wait_warning", "Warnung (max):")
+            )
+            
+            self.kpi_sat_box.setTitle(
+                self.translator.get("settings.kpi_satisfaction_box", "KPI: Zufriedenheit")
+            )
+            self.kpi_satisfaction_good_label.setText(
+                self.translator.get("settings.kpi_satisfaction_good", "Gut (min):")
+            )
+            self.kpi_satisfaction_warning_label.setText(
+                self.translator.get("settings.kpi_satisfaction_warning", "Warnung (min):")
+            )
+            
+            # Buttons
             self.btn_save.setText(self.translator.get("settings.save", "Speichern"))
             self.btn_cancel.setText(self.translator.get("settings.cancel", "Abbrechen"))
             self.btn_save.setToolTip(
@@ -221,11 +346,19 @@ class SettingsScreen(QWidget):
             )
         else:
             self.title_label.setText("Einstellungen")
-            self.settings_group.setTitle("Spracheinstellungen")
+            self.general_group.setTitle("Allgemein")
             self.lang_label.setText("Sprache:")
-            self.satisfaction_group.setTitle("Zufriedenheit")
+            self.statistics_group.setTitle("Statistiken")
             self.sat_store_label.setText("Verweildauer Grenzwert (min):")
             self.sat_queue_label.setText("Wartezeit Grenzwert (min):")
+            self.kpi_overtime_good_label.setText("Überzeit Gut (max):")
+            self.kpi_overtime_warning_label.setText("Überzeit Warnung (max):")
+            self.kpi_wait_good_label.setText("Wartezeit Gut (max):")
+            self.kpi_wait_warning_label.setText("Wartezeit Warnung (max):")
+            self.kpi_satisfaction_good_label.setText("Zufriedenheit Gut (min):")
+            self.kpi_satisfaction_warning_label.setText("Zufriedenheit Warnung (min):")
+            self.kpi_throughput_good_label.setText("Durchsatz Gut (min):")
+            self.kpi_throughput_warning_label.setText("Durchsatz Warnung (min):")
             self.btn_save.setText("Speichern")
             self.btn_cancel.setText("Abbrechen")
             self.btn_save.setToolTip("Einstellungen speichern")

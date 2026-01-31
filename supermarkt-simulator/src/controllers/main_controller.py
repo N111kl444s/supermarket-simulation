@@ -60,6 +60,11 @@ class MainController:
         self.visual_controller = VisualController(
             self.view.sim_scene, self.settings, translator=self.translator
         )
+        
+        # Give sidebar access to controller, map_manager and visual_controller
+        self.view.sidebar_component.controller = self
+        self.view.sidebar_component.map_manager = self.map_manager
+        self.view.sidebar_component.visual_controller = self.visual_controller
 
         self.interaction_controller = InteractionController(
             self.view.sim_scene,
@@ -108,14 +113,7 @@ class MainController:
         )
 
         self.sim_manager.time_updated.connect(self._update_clock_ui)
-        self.sim_manager.stats_updated.connect(
-            lambda w, c, t: (
-                self.view.lbl_queue_count.setText(str(w)),
-                self.view.lbl_customers_in_store.setText(str(c)),
-                self.view.lbl_total_customers.setText(str(t)),
-                self._check_overtime(c),
-            )
-        )
+        self.sim_manager.stats_updated.connect(self._on_stats_updated)
         self.sim_manager.live_stats_updated.connect(
             self._on_live_stats_updated
         )
@@ -210,6 +208,17 @@ class MainController:
             self.on_object_selected
         )
 
+    def _on_stats_updated(self, queue_count, customers_in_store, total_customers):
+        """Handle basic stats update signal (backwards compatibility)."""
+        sb = self.view.sidebar_component
+        if hasattr(sb, 'lbl_queue_count'):
+            sb.lbl_queue_count.setText(str(queue_count))
+        if hasattr(sb, 'lbl_customers_in_store'):
+            sb.lbl_customers_in_store.setText(str(customers_in_store))
+        # Note: total_customers from this signal is total_spawned, not served
+        # For "Gesamt bedient" we use live_stats_updated which has total_customers_served
+        self._check_overtime(customers_in_store)
+
     def _update_clock_ui(self, time_str):
         self.view.clock_widget.setText(time_str)
         current = self.sim_manager.sim_time
@@ -222,28 +231,195 @@ class MainController:
             self.view.clock_widget.set_overtime(False)
 
     def _on_live_stats_updated(self, stats):
+        """Update all statistics widgets with live data using StatsUpdater."""
+        # Quick alias for sidebar component
+        sb = self.view.sidebar_component
+        
+        # Use StatsUpdater for clean, thematic updates
+        if hasattr(sb, 'stats_updater'):
+            sb.stats_updater.update_all(stats)
+        else:
+            # Fallback to old method if stats_updater not available
+            self._update_stats_legacy(stats)
+        
+        # Check overtime status
+        customers_in_store = stats.get("customers_in_store", 0)
+        self._check_overtime(customers_in_store)
+    
+    def _update_stats_legacy(self, stats):
+        """Legacy method for updating stats (fallback)."""
+        sb = self.view.sidebar_component
+        
+        # Update queue count in live tab
+        queue_count = stats.get("queue_count", 0)
+        if hasattr(sb, 'lbl_queue_count'):
+            sb.lbl_queue_count.setText(str(queue_count))
+        
+        # Update customers in store
+        customers_in_store = stats.get("customers_in_store", 0)
+        if hasattr(sb, 'lbl_customers_in_store'):
+            sb.lbl_customers_in_store.setText(str(customers_in_store))
+        
+        # Update total customers SERVED (Live tab: "Gesamt bedient")
+        total_customers_served = stats.get("total_customers_served", 0)
+        if hasattr(sb, 'lbl_total_customers_served_live'):
+            sb.lbl_total_customers_served_live.setText(str(total_customers_served))
+        
+        # Update total customers SERVED (Details tab: "HEUTE BEDIENT")
+        if hasattr(sb, 'lbl_total_customers'):
+            sb.lbl_total_customers.setText(str(total_customers_served))
+        
+        # Longest queue
         max_len = stats.get("longest_queue", 0)
         checkout_ids = stats.get("longest_queue_checkouts", [])
         if max_len > 0 and checkout_ids:
             ids_text = ", ".join(str(cid) for cid in checkout_ids)
-            self.view.lbl_longest_queue.setText(f"{max_len} (Kasse {ids_text})")
+            if hasattr(sb, 'lbl_longest_queue'):
+                sb.lbl_longest_queue.setText(f"Kasse #{ids_text} ({max_len})")
         else:
-            self.view.lbl_longest_queue.setText(str(max_len))
+            if hasattr(sb, 'lbl_longest_queue'):
+                sb.lbl_longest_queue.setText(f"Kasse #0 ({max_len})")
+        
+        # Average wait time
         avg_wait = stats.get("avg_wait_time_min", 0.0)
-        self.view.lbl_avg_wait.setText(f"{avg_wait:.1f} min")
+        if hasattr(sb, 'lbl_avg_wait'):
+            sb.lbl_avg_wait.setText(f"{avg_wait:.1f} min")
+        
+        # Update wait time progress bar and status
+        if hasattr(sb, 'wait_progress'):
+            wait_value = min(int(avg_wait), 10)
+            sb.wait_progress.setValue(wait_value)
+            
+            # Update progress bar color based on wait time
+            if avg_wait <= 3:
+                color = "#10B981"  # Green
+            elif avg_wait <= 5:
+                color = "#F59E0B"  # Orange
+            else:
+                color = "#EF4444"  # Red
+            
+            sb.wait_progress.setStyleSheet(f"""
+                QProgressBar {{
+                    border: none;
+                    border-radius: 3px;
+                    background-color: #E5E7EB;
+                }}
+                QProgressBar::chunk {{
+                    background-color: {color};
+                    border-radius: 3px;
+                }}
+            """)
+        
+        # Throughput
         throughput = stats.get("throughput_per_hour", 0.0)
-        self.view.lbl_throughput.setText(f"{throughput:.1f} /h")
+        if hasattr(sb, 'lbl_throughput'):
+            sb.lbl_throughput.setText(f"{throughput:.0f} Kunden/h")
+        
+        # Checkouts status
         open_c = stats.get("checkouts_open", 0)
         avail_c = stats.get("checkouts_available", 0)
-        self.view.lbl_available_checkouts.setText(f"{avail_c}/{open_c}")
+        total_c = stats.get("total_checkouts", open_c)
+        malfunction_c = stats.get("checkouts_malfunction", 0)
+        closed_c = total_c - open_c
+        
+        if hasattr(sb, 'lbl_available_checkouts'):
+            sb.lbl_available_checkouts.setText(f"{avail_c}/{open_c}")
+        
+        # Update new checkout status labels
+        if hasattr(sb, 'lbl_checkouts_open'):
+            sb.lbl_checkouts_open.setText(str(avail_c))
+        if hasattr(sb, 'lbl_checkouts_malfunction'):
+            sb.lbl_checkouts_malfunction.setText(str(malfunction_c))
+        if hasattr(sb, 'lbl_checkouts_closed'):
+            sb.lbl_checkouts_closed.setText(str(closed_c))
+        
+        # Satisfaction
         satisfaction = stats.get("satisfaction_score", 0.0)
-        self.view.lbl_satisfaction_score.setText(f"{satisfaction:.0f}%")
+        if hasattr(sb, 'lbl_satisfaction_score'):
+            sb.lbl_satisfaction_score.setText(f"{satisfaction:.0f}%")
+        
+        # Update satisfaction progress and status
+        if hasattr(sb, 'satisfaction_progress'):
+            sb.satisfaction_progress.setValue(int(satisfaction))
+            
+            # Update progress bar color based on satisfaction
+            if satisfaction >= 80:
+                color = "#10B981"  # Green
+            elif satisfaction >= 60:
+                color = "#F59E0B"  # Orange
+            else:
+                color = "#EF4444"  # Red
+            
+            sb.satisfaction_progress.setStyleSheet(f"""
+                QProgressBar {{
+                    border: none;
+                    border-radius: 5px;
+                    background-color: #E5E7EB;
+                }}
+                QProgressBar::chunk {{
+                    background-color: {color};
+                    border-radius: 5px;
+                }}
+            """)
+        
+        if hasattr(sb, 'lbl_satisfaction_status'):
+            if satisfaction >= 80:
+                sb.lbl_satisfaction_status.setText("Status: SEHR GUT")
+                sb.lbl_satisfaction_status.setStyleSheet("font-size: 13px; color: #10B981; font-weight: 700; text-align: center;")
+            elif satisfaction >= 60:
+                sb.lbl_satisfaction_status.setText("Status: GUT")
+                sb.lbl_satisfaction_status.setStyleSheet("font-size: 13px; color: #F59E0B; font-weight: 700; text-align: center;")
+            else:
+                sb.lbl_satisfaction_status.setText("Status: KRITISCH")
+                sb.lbl_satisfaction_status.setStyleSheet("font-size: 11px; color: #EF4444; font-weight: 700; text-align: center;")
+        
+        # Time tracking
         elapsed = stats.get("elapsed_open_seconds", 0.0)
         scheduled = stats.get("scheduled_open_seconds", 0.0)
         overtime = stats.get("overtime_seconds", 0.0)
-        self.view.lbl_elapsed_open.setText(self._format_duration(elapsed))
-        self.view.lbl_scheduled_open.setText(self._format_duration(scheduled))
-        self.view.lbl_overtime.setText(self._format_duration(overtime))
+        if hasattr(sb, 'lbl_elapsed_open'):
+            sb.lbl_elapsed_open.setText(self._format_duration(elapsed))
+        if hasattr(sb, 'lbl_scheduled_open'):
+            sb.lbl_scheduled_open.setText(self._format_duration(scheduled))
+        
+        # Format overtime with sign
+        if overtime > 0:
+            if hasattr(sb, 'lbl_overtime'):
+                sb.lbl_overtime.setText(f"+{self._format_duration(overtime)}")
+        else:
+            if hasattr(sb, 'lbl_overtime'):
+                sb.lbl_overtime.setText(self._format_duration(0))
+        
+        # Details Tab: Article statistics
+        if hasattr(sb, 'lbl_total_items'):
+            total_items = stats.get("total_items_processed", 0)
+            sb.lbl_total_items.setText(str(total_items))
+        
+        if hasattr(sb, 'lbl_avg_items_per_customer'):
+            avg_items = stats.get("avg_items_per_customer", 0.0)
+            sb.lbl_avg_items_per_customer.setText(f"{avg_items:.1f}")
+        
+        # Details Tab: Payment methods
+        if hasattr(sb, 'lbl_payment_cash'):
+            cash_percent = stats.get("payment_cash_percent", 0.0)
+            sb.lbl_payment_cash.setText(f"{cash_percent:.0f}%")
+        
+        if hasattr(sb, 'lbl_payment_card'):
+            card_percent = stats.get("payment_card_percent", 0.0)
+            sb.lbl_payment_card.setText(f"{card_percent:.0f}%")
+        
+        # Details Tab: Problems (Störungen, Verärgerungen, Konflikte)
+        if hasattr(sb, 'lbl_malfunctions'):
+            malfunctions = stats.get("malfunctions_today", 0)
+            sb.lbl_malfunctions.setText(str(malfunctions))
+        
+        if hasattr(sb, 'lbl_annoyance'):
+            annoyance = stats.get("annoyance_today", 0)
+            sb.lbl_annoyance.setText(str(annoyance))
+        
+        if hasattr(sb, 'lbl_conflicts'):
+            conflicts = stats.get("conflicts_today", 0)
+            sb.lbl_conflicts.setText(str(conflicts))
 
     def _format_duration(self, seconds):
         total = int(round(seconds))
@@ -281,6 +457,7 @@ class MainController:
             parent=self.view,
             translator=self.translator,
             sim_manager=None,
+            settings=self.settings,
         )
         dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self._attach_report_checkout_ids(dlg)
@@ -297,6 +474,7 @@ class MainController:
             parent=self.view,
             translator=self.translator,
             sim_manager=self.sim_manager,
+            settings=self.settings,
         )
         dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         dlg.show()
@@ -607,6 +785,8 @@ class MainController:
             self.view.sidebar_component.set_input_blocked(
                 True, self.translator
             )
+            # Switch to statistics tab when simulation starts
+            self.view.sidebar_component.main_tabs.setCurrentIndex(1)
 
     def reset_simulation(self):
         ot = self.view.time_open.time()
@@ -623,12 +803,66 @@ class MainController:
 
         # Unblock input when simulation is reset
         self.view.sidebar_component.set_input_blocked(False)
+        
+        # Switch back to Input tab after reset
+        self.view.sidebar_component.main_tabs.setCurrentIndex(0)
 
     def skip_day(self):
-        if self.sim_manager.is_initialized:
-            self.sim_manager.skip_day()
-            self.view.btn_play_pause.setChecked(False)
-            self._set_play_pause_icon(False)
+        """
+        Skip the day by simulating in the background.
+        If the simulation hasn't started yet, initialize it first.
+        """
+        if not self.sim_manager.is_initialized:
+            # Check if at least one checkout is open
+            has_open_checkout = any(
+                c.get("open", True)
+                for c in self.map_manager.checkouts_data
+            )
+            if not has_open_checkout:
+                title = (
+                    self.translator.get(
+                        "errors.no_open_checkout_title", "Fehler"
+                    )
+                    if self.translator
+                    else "Fehler"
+                )
+                message = (
+                    self.translator.get(
+                        "errors.no_open_checkout_message",
+                        "Mindestens eine Kasse (Normal oder SB) muss geöffnet sein, um den Tag zu überspringen.",
+                    )
+                    if self.translator
+                    else "Mindestens eine Kasse (Normal oder SB) muss geöffnet sein, um den Tag zu überspringen."
+                )
+                QMessageBox.warning(self.view, title, message)
+                return
+            
+            try:
+                # Initialize the simulation first
+                count = self.view.actor_count_input.value()
+                prob = self.view.disabled_prob_input.value()
+                ot = self.view.time_open.time()
+                ct = self.view.time_close.time()
+                self.sim_manager.init_day(count, prob, ot, ct)
+                
+                # Preload all input tabs before blocking
+                self.view.sidebar_component.preload_all_input_tabs()
+                # Block input when simulation starts
+                self.view.sidebar_component.set_input_blocked(
+                    True, self.translator
+                )
+                # Switch to statistics tab
+                self.view.sidebar_component.main_tabs.setCurrentIndex(1)
+            except Exception as e:
+                QMessageBox.warning(
+                    self.view, "Fehler", f"Ungültige Parameter: {e}"
+                )
+                return
+        
+        # Now skip the day (simulate in background)
+        self.sim_manager.skip_day()
+        self.view.btn_play_pause.setChecked(False)
+        self._set_play_pause_icon(False)
 
     def set_speed(self, factor):
         self.sim_manager.set_time_factor(factor)
